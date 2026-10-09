@@ -1,0 +1,47 @@
+{
+  "name": "mpc-qa-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wallet connection, SIWE sign-in, and wallet failure QA for the MPC waitlist app",
+  "scripts": {
+    "test": "playwright test --project=chromium",
+    "test:wallet": "playwright test tests/wallet",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report",
+    "check:copy": "node scripts/check-copy.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:ui": "playwright test --ui",
+    "test:watch": "QA_SLOW_MO=400 playwright test --headed --workers=1",
+    "test:reporting": "node --test tests/reporting/*.test.mjs",
+    "test:nightly": "QA_RUN_LABEL=\"Nightly regression\" playwright test tests/wallet",
+    "analyze:ai": "node scripts/analyze-regression.mjs",
+    "qa": "node pipeline/orchestrator.mjs",
+    "qa:smoke": "node pipeline/orchestrator.mjs --suite smoke",
+    "qa:api": "node pipeline/orchestrator.mjs --suite api",
+    "qa:regression": "node pipeline/orchestrator.mjs --suite regression",
+    "qa:uat": "node pipeline/orchestrator.mjs --suite uat",
+    "qa:load": "node pipeline/orchestrator.mjs --suite load",
+    "qa:full": "node pipeline/orchestrator.mjs --suite full",
+    "qa:scheduler": "node pipeline/scheduler.mjs",
+    "qa:scheduler:start": "node pipeline/scheduler.mjs --start",
+    "qa:scheduler:status": "node pipeline/scheduler.mjs --status",
+    "report:combined": "node scripts/share-combined-report.mjs",
+    "stack:up": "node pipeline/stack.mjs up",
+    "stack:down": "node pipeline/stack.mjs down",
+    "stack:status": "node pipeline/stack.mjs status"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^22.10.0",
+    "allure": "^3.20.1",
+    "allure-playwright": "^3.13.0",
+    "dotenv": "^16.4.7",
+    "typescript": "^5.7.0",
+    "viem": "^2.22.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

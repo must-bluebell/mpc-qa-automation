@@ -1,0 +1,130 @@
+name: MPC QA regression and schedules
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 */4 * * *'
+      timezone: Asia/Seoul
+    - cron: '0 1 * * *'
+      timezone: Asia/Seoul
+  repository_dispatch:
+    types: [webapp-merged]
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Test suite
+        type: choice
+        options: [regression, api, load]
+        default: regression
+      app_ref:
+        description: Application branch or exact commit (empty uses WEBAPP_REF or main)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+# One delivery-state writer. Each job gets a fresh, isolated Docker project.
+concurrency:
+  group: mpc-qa-regression-and-schedules
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: qa
+    env:
+      TZ: Asia/Seoul
+      WEBAPP_REPOSITORY: ${{ vars.WEBAPP_REPOSITORY }}
+      WEBAPP_REF: ${{ vars.WEBAPP_REF || 'main' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: qa
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: qa/package-lock.json
+      - run: npm ci
+      - name: Select test suite and application revision
+        id: plan
+        run: node scripts/github-qa.mjs plan
+      - name: Check out application under test
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.plan.outputs.appRepository }}
+          ref: ${{ steps.plan.outputs.appRef }}
+          path: WEB MPC
+          token: ${{ secrets.WEBAPP_READ_TOKEN || github.token }}
+          persist-credentials: false
+      - run: npm run typecheck
+      - run: npm run test:reporting
+      - run: npm run check:copy -- --webapp '../WEB MPC'
+      - name: Restore Slack incident and delivery state
+        uses: actions/cache/restore@v4
+        with:
+          path: qa/runs/slack-bot-state.json
+          key: mpc-qa-slack-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: mpc-qa-slack-v1-${{ github.ref_name }}-
+      - name: Install Chromium
+        if: steps.plan.outputs.suite == 'regression'
+        run: npx playwright install --with-deps chromium
+      - name: Install k6
+        if: steps.plan.outputs.suite == 'load'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://dl.k6.io/key.gpg | gpg --dearmor > "$RUNNER_TEMP/k6.gpg"
+          sudo install -m 644 "$RUNNER_TEMP/k6.gpg" /usr/share/keyrings/k6-archive-keyring.gpg
+          echo 'deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main' | sudo tee /etc/apt/sources.list.d/k6.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y k6
+      - name: Prepare disposable Docker configuration
+        run: node scripts/github-qa.mjs prepare
+      - name: Build and start application stack
+        run: npm run stack:up
+      - name: Run assertions and publish Slack summary
+        env:
+          QA_SUITE: ${{ steps.plan.outputs.suite }}
+          QA_SEED_PHRASE: ${{ secrets.QA_SEED_PHRASE }}
+          WALLET_ADDRESS: ${{ vars.QA_WALLET_ADDRESS }}
+          WALLET_ADDRESS_INDEX: ${{ vars.QA_WALLET_ADDRESS_INDEX || '0' }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
+          QA_OWNER_SLACK_ID: ${{ vars.QA_OWNER_SLACK_ID }}
+          QA_GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node pipeline/orchestrator.mjs --suite "$QA_SUITE" --env local-docker --trigger "github-$GITHUB_EVENT_NAME" --run-id "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+      - name: Add sanitized results to GitHub summary
+        if: always()
+        shell: bash
+        run: |
+          report="runs/published/gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.md"
+          if [ -f "$report" ]; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'QA did not produce results. Check the failed setup step; no passing result is inferred.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload sanitized report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpc-qa-sanitized-${{ github.run_id }}-${{ github.run_attempt }}
+          path: qa/runs/published/*.md
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Save Slack incident and delivery state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: qa/runs/slack-bot-state.json
+          key: mpc-qa-slack-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Stop disposable stack
+        if: always()
+        run: npm run stack:down

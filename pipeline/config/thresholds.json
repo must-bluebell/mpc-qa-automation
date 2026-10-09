@@ -1,0 +1,18 @@
+{
+  "description": "Agreed load SLOs for the isolated local stack. A breach marks PERF-01 failed. Regression vs baseline is a breach when p95 grows by more than maxP95RegressionPct.",
+  "maxP95RegressionPct": 25,
+  "maxErrorRateRegressionPct": 2,
+  "profiles": {
+    "baseline": { "vus": 5, "duration": "60s" },
+    "stress": { "stages": [["30s", 10], ["60s", 50], ["30s", 0]] }
+  },
+  "endpoints": {
+    "GET /api/home":           { "p95Ms": 1500, "maxErrorRate": 0.01 },
+    "GET /api/quests":         { "p95Ms": 1500, "maxErrorRate": 0.01 },
+    "GET /api/vote/proposals": { "p95Ms": 1500, "maxErrorRate": 0.01 },
+    "GET /api/auth/session":   { "p95Ms": 500,  "maxErrorRate": 0.01 },
+    "POST /api/auth/nonce":    { "p95Ms": 800,  "maxErrorRate": 0.01 },
+    "GET /api/notifications":  { "p95Ms": 1500, "maxErrorRate": 0.01 }
+  },
+  "minThroughputRps": 5
+}

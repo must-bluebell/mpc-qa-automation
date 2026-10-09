@@ -1,0 +1,9 @@
+{
+  "timezone": "Asia/Seoul",
+  "schedules": [
+    { "id": "web-30m", "suite": "regression", "env": "local-docker", "cron": "*/30 * * * *", "graceMinutes": 60, "enabled": true },
+    { "id": "api-4h", "suite": "api", "env": "local-docker", "cron": "0 */4 * * *", "graceMinutes": 120, "enabled": true },
+    { "id": "uat-4h", "suite": "uat", "env": "local-docker", "cron": "0 */4 * * *", "graceMinutes": 180, "enabled": true },
+    { "id": "load-nightly", "suite": "load", "env": "local-docker", "cron": "0 1 * * *", "graceMinutes": 240, "enabled": true }
+  ]
+}

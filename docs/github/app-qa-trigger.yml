@@ -1,0 +1,24 @@
+# Copy into the APPLICATION repository as .github/workflows/mpc-qa-trigger.yml.
+name: Request MPC QA after app merge
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  request-regression:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger QA against this exact application commit
+        env:
+          GH_TOKEN: ${{ secrets.QA_DISPATCH_TOKEN }}
+          APP_REPOSITORY: ${{ github.repository }}
+          APP_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n --arg repo "$APP_REPOSITORY" --arg sha "$APP_SHA" \
+            '{event_type:"webapp-merged",client_payload:{repository:$repo,sha:$sha}}' \
+            | gh api --method POST repos/must-bluebell/mpc-qa-automation/dispatches --input -

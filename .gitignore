@@ -1,0 +1,21 @@
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+allure-results/
+allure-report/
+allure-history.jsonl
+playwright/.cache/
+
+# 🔴 Never commit. QA_SEED_PHRASE is a real seed phrase.
+.env
+.env.local
+*.tsbuildinfo
+
+# Run history, evidence and logs (may contain wallet addresses, cookies in transit, app output)
+runs/
+*.log
+.DS_Store
+.claude/
+.env.*
+!.env.example

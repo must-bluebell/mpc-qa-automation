@@ -1,0 +1,91 @@
+{
+  "smoke": {
+    "description": "Fast health check: wallet discovery UI plus read-only API contract checks.",
+    "steps": [
+      {
+        "adapter": "playwright",
+        "project": "api",
+        "grep": "@smoke"
+      },
+      {
+        "adapter": "playwright",
+        "project": "chromium",
+        "grep": "@smoke"
+      }
+    ],
+    "timeoutMs": 900000,
+    "tags": [
+      "@smoke"
+    ]
+  },
+  "api": {
+    "description": "API tests: authentication, permissions, validation, duplicates, state and balances. Write checks run only where the environment allows writes.",
+    "steps": [
+      {
+        "adapter": "playwright",
+        "project": "api"
+      }
+    ],
+    "timeoutMs": 1200000,
+    "tags": [
+      "@api"
+    ]
+  },
+  "regression": {
+    "description": "All existing wallet UI tests (W01-W24).",
+    "steps": [
+      {
+        "adapter": "playwright",
+        "project": "chromium"
+      }
+    ],
+    "timeoutMs": 1800000,
+    "tags": [
+      "@ui",
+      "@regression"
+    ]
+  },
+  "uat": {
+    "description": "Automated UAT journeys from the WEB MPC local scenario suite (connect, dig, send cart, confirm, recover) against the isolated stack.",
+    "steps": [
+      {
+        "adapter": "webmpc-scenarios",
+        "command": "scenario:local"
+      }
+    ],
+    "requiresIsolated": true,
+    "timeoutMs": 2700000,
+    "tags": [
+      "@uat"
+    ]
+  },
+  "load": {
+    "description": "Controlled k6 load against the isolated stack, compared with the stored baseline and agreed thresholds.",
+    "steps": [
+      {
+        "adapter": "k6",
+        "script": "mpc-mix",
+        "sessions": 10
+      }
+    ],
+    "requiresIsolated": true,
+    "requiresLoad": true,
+    "timeoutMs": 1200000,
+    "tags": [
+      "@load"
+    ]
+  },
+  "full": {
+    "description": "smoke + api + regression + uat + load in one run.",
+    "include": [
+      "api",
+      "regression",
+      "uat",
+      "load"
+    ],
+    "timeoutMs": 7200000,
+    "tags": [
+      "@full"
+    ]
+  }
+}
