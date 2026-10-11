@@ -1,5 +1,5 @@
 # Copy into the APPLICATION repository as .github/workflows/mpc-qa-trigger.yml.
-name: Request MPC QA after app merge
+name: Request MPC quality checks after app merge
 on:
   pull_request:
     types: [closed]
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 jobs:
-  request-regression:
+  request-quality:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:

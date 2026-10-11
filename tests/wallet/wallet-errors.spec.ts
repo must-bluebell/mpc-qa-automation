@@ -74,6 +74,42 @@ const WRONG_CHAIN = 1
 test.describe('Wallet connection errors', { tag: ['@ui', '@feature-wallet', '@critical', '@regression', '@WALLET-01'] }, () => {
   test.skip(() => !process.env.QA_SEED_PHRASE, 'QA_SEED_PHRASE is not set')
 
+  test('W25 - Recover from a failed connection without reloading', async ({ page }) => {
+    await stubAnalytics(page)
+    const wallet = await injectTestWallet(page, {
+      account: getConfiguredWallet(), chainId: t.chainId,
+      failOn: { eth_requestAccounts: 'rejected', personal_sign: 'rejected' },
+    })
+    await page.goto('/')
+    const sheet = new JoinSheet(page)
+    await sheet.open()
+    await sheet.connectWith(wallet.walletName)
+    await expect(sheet.error()).toHaveText(copy.join.failRejected)
+    await sheet.expectStep(copy.join.stepWallet)
+    await setWalletFailure(page, 'eth_requestAccounts', null)
+    await sheet.connectWith(wallet.walletName)
+    await sheet.expectStep(copy.join.stepSign)
+    await expect(sheet.addressChip(wallet.address)).toBeVisible()
+  })
+
+  test('W26 - Repeated connection failures never create a signed-in session', async ({ page }) => {
+    await stubAnalytics(page)
+    const wallet = await injectTestWallet(page, {
+      account: getConfiguredWallet(), chainId: t.chainId, failOn: { eth_requestAccounts: 'rejected' },
+    })
+    await page.goto('/')
+    const sheet = new JoinSheet(page)
+    await sheet.open()
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await sheet.connectWith(wallet.walletName)
+      await expect(sheet.error()).toHaveText(copy.join.failRejected)
+      await sheet.expectStep(copy.join.stepWallet)
+    }
+    const session = await page.request.get('/api/auth/session')
+    expect(session.status()).toBe(200)
+    expect((await session.json()).address).toBeNull()
+  })
+
   for (const { failure, expected } of CONNECT_CELLS) {
     test(errorCaseName(4, 'Explain failed wallet connection', failure), async ({ page }, testInfo) => {
       await stubAnalytics(page)

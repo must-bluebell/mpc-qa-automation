@@ -6,7 +6,7 @@ import { getConfiguredWallet } from '../../utils/wallet-generator'
 async function closeJoinIfOpen(page: Page): Promise<void> {
   const join = page.getByRole('dialog', { name: 'Join', exact: true })
   if (await join.isVisible()) {
-    await join.getByRole('button', { name: 'Close Join', exact: true }).click()
+    await join.getByRole('button', { name: usesActivities() ? 'Later' : 'Close Join', exact: true }).click({ timeout: 3_000 })
     await expect(join).not.toBeVisible()
   }
 }

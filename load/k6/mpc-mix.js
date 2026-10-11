@@ -24,7 +24,7 @@ const shape = profile.stages ? { executor: 'ramping-vus', startVUs: 1, stages: p
   : { executor: 'constant-vus', vus: profile.vus, duration: profile.duration }
 
 export const options = {
-  scenarios: { read: { ...shape, exec: 'read' }, auth: { ...shape, exec: 'auth' } },
+  scenarios: { read: { ...shape, exec: 'read' }, auth: { ...shape, exec: 'auth' }, boundaries: { ...shape, exec: 'boundaries' } },
   thresholds,
   summaryTrendStats: ['avg', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
   noConnectionReuse: false,
@@ -45,10 +45,27 @@ export function auth() {
   const jar = new http.CookieJar()
   const session = http.get(`${BASE}/api/auth/session`, { headers: { cookie: s.cookie }, jar, tags: { name: 'GET /api/auth/session' } })
   check(session, { 'session belongs to wallet': r => r.status === 200 && (r.json('address') || '').toLowerCase() === s.address })
+  check(session, { 'signed-in session cannot be cached': r => (r.headers['Cache-Control'] || '').includes('no-store') })
   const notes = http.get(`${BASE}/api/notifications`, { headers: { cookie: s.cookie }, jar, tags: { name: 'GET /api/notifications' } })
   check(notes, { 'notifications 200': r => r.status === 200 })
-  const nonce = http.post(`${BASE}/api/auth/nonce`, '{}', { headers: { origin: ORIGIN, 'content-type': 'application/json' }, jar: new http.CookieJar(), tags: { name: 'POST /api/auth/nonce' } })
-  check(nonce, { 'nonce issued': r => r.status === 200 && !!r.json('nonce') })
+  const nonce = http.post(`${BASE}/api/auth/nonce`, '{}', { headers: { origin: ORIGIN, 'content-type': 'application/json' }, jar: new http.CookieJar(),
+    responseCallback: http.expectedStatuses(200, 429), tags: { name: 'POST /api/auth/nonce' } })
+  check(nonce, { 'nonce issued or explicitly rate limited': r => r.status === 200 ? !!r.json('nonce')
+    : r.status === 429 && r.json('error') === 'rate_limited' && Number(r.headers['Retry-After']) > 0 })
+  sleep(0.5)
+}
+
+/** Expected denials use separate names so they never dilute the successful-request SLOs. */
+export function boundaries() {
+  const jar = new http.CookieJar()
+  const session = http.get(`${BASE}/api/auth/session`, { jar, tags: { name: 'anonymous session' } })
+  check(session, { 'anonymous traffic never inherits a wallet': r => r.status === 200 && r.json('address') === null,
+    'anonymous identity cannot be cached': r => (r.headers['Cache-Control'] || '').includes('no-store') })
+  const notes = http.get(`${BASE}/api/notifications`, { jar, responseCallback: http.expectedStatuses(401), tags: { name: 'anonymous notifications denied' } })
+  check(notes, { 'notifications remain private under load': r => r.status === 401 && r.json('error') === 'not_signed_in' })
+  const foreign = http.post(`${BASE}/api/auth/nonce`, '{}', { jar, responseCallback: http.expectedStatuses(403),
+    headers: { origin: 'https://attacker.example', 'content-type': 'application/json' }, tags: { name: 'foreign nonce denied' } })
+  check(foreign, { 'foreign-origin writes remain blocked under load': r => r.status === 403 })
   sleep(0.5)
 }
 

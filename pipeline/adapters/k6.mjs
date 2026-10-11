@@ -1,5 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
 import { join, relative } from 'node:path'
 import { ROOT, config, isLoopback } from '../lib/env.mjs'
 import { appendEvent } from '../lib/run-store.mjs'
@@ -16,6 +17,11 @@ export function assertLoadAllowed(env, targetUrl) {
 
 const metric = (summary, name, tag) => summary.metrics?.[`${name}{name:${tag}}`]?.values ?? null
 
+/** A traffic-mix change needs its own baseline; app changes still compare with that baseline. */
+export function loadWorkloadId(script, profile, endpoints, sessions) {
+  return createHash('sha256').update(JSON.stringify({ script, profile, endpoints, sessions })).digest('hex').slice(0, 16)
+}
+
 /** Pure evaluation of a k6 summary against thresholds and an optional baseline (unit-tested). */
 export function evaluateLoad(summary, thresholds, baseline) {
   const endpoints = {}
@@ -26,6 +32,8 @@ export function evaluateLoad(summary, thresholds, baseline) {
     const c = metric(summary, 'http_reqs', name)
     const row = { p95Ms: d?.['p(95)'] ?? null, p99Ms: d?.['p(99)'] ?? null, avgMs: d?.avg ?? null, errorRate: f?.rate ?? null, requests: c?.count ?? 0, slo, breaches: [] }
     if (!row.requests) row.breaches.push('no requests recorded')
+    if (!Number.isFinite(row.p95Ms) || row.p95Ms < 0) row.breaches.push('missing or invalid latency metric')
+    if (!Number.isFinite(row.errorRate) || row.errorRate < 0 || row.errorRate > 1) row.breaches.push('missing or invalid error-rate metric')
     if (row.p95Ms != null && row.p95Ms > slo.p95Ms) row.breaches.push(`p95 ${Math.round(row.p95Ms)}ms > ${slo.p95Ms}ms`)
     if (row.errorRate != null && row.errorRate > slo.maxErrorRate) row.breaches.push(`error rate ${(row.errorRate * 100).toFixed(2)}% > ${(slo.maxErrorRate * 100).toFixed(2)}%`)
     const base = baseline?.endpoints?.[name]
@@ -49,6 +57,8 @@ export async function runK6Step(step, ctx) {
   const profileName = process.env.QA_LOAD_PROFILE || step.profile || 'baseline'
   const profile = { ...thresholds.profiles[profileName] }
   if (process.env.QA_LOAD_DURATION && profile.duration) profile.duration = process.env.QA_LOAD_DURATION
+  const scriptPath = join(ROOT, 'load/k6', `${step.script}.js`)
+  const workloadId = loadWorkloadId(readFileSync(scriptPath, 'utf8'), profile, Object.keys(thresholds.endpoints), step.sessions ?? 10)
   // Sessions are signed in against the real app (not the chaos proxy) so seeded faults only affect measured traffic.
   const sessions = []
   for (let i = 0; i < (step.sessions ?? 10); i++) sessions.push(await signInFresh({ baseUrl: ctx.env.baseUrl, appOrigin: ctx.env.appOrigin, chainId: ctx.env.chainId }))
@@ -58,7 +68,7 @@ export async function runK6Step(step, ctx) {
   writeFileSync(sessionsFile, JSON.stringify(sessions), { mode: 0o600 })
   const summaryFile = join(ctx.stepDir, 'k6-summary.json')
   try {
-    const result = await runProcess('k6', ['run', '--quiet', join(ROOT, 'load/k6', `${step.script}.js`)], {
+    const result = await runProcess('k6', ['run', '--quiet', scriptPath], {
       cwd: ROOT, timeoutMs: ctx.remainingMs(), logFile: join(ctx.stepDir, 'output.log'), echo: ctx.echo,
       env: { BASE_URL: ctx.targetUrl, APP_ORIGIN: ctx.env.appOrigin, SESSIONS_FILE: sessionsFile, SUMMARY_FILE: summaryFile,
         K6_PROFILE: JSON.stringify(profile), K6_ENDPOINTS: JSON.stringify(Object.keys(thresholds.endpoints)), K6_NO_USAGE_REPORT: 'true' },
@@ -68,7 +78,7 @@ export async function runK6Step(step, ctx) {
       return { tests: [], errors: [`k6 produced no summary (exit ${result.code}): ${result.tail.slice(-1200)}`], infra: /not found|ENOENT/.test(result.tail) ? 'load tool missing' : 'load run did not complete', timedOut: result.timedOut }
     }
     const summary = JSON.parse(readFileSync(summaryFile, 'utf8'))
-    const baselinePath = join(ROOT, 'pipeline/baselines', `${ctx.env.name}-${profileName}.json`)
+    const baselinePath = join(ROOT, 'pipeline/baselines', `${ctx.env.name}-${profileName}-${workloadId}.json`)
     const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : null
     const load = evaluateLoad(summary, thresholds, baseline)
     const evidence = [{ name: 'k6 summary', path: `${base}/k6-summary.json` }, { name: 'k6 output', path: `${base}/output.log` }]
@@ -85,13 +95,14 @@ export async function runK6Step(step, ctx) {
     tests.push({ key: `k6:${profileName}:checks`, title: `PERF-01 functional checks hold under load (${profileName})`, adapter: 'k6', project: profileName, tags: tag,
       status: checksOk ? 'passed' : 'failed', durationMs: null, retries: 0, errors: checksOk ? [] : [`Only ${((load.checkPassRate ?? 0) * 100).toFixed(1)}% of functional checks passed under load`], annotations: [], evidence })
     let baselineAction = 'compared'
-    if (!ctx.seededDefect && !load.breaches.length && (!baseline || process.env.QA_UPDATE_BASELINE === '1')) {
-      writeFileSync(baselinePath, JSON.stringify({ createdAt: new Date().toISOString(), runId: ctx.runId, profile: profileName, profileSpec: profile,
+    if (!ctx.seededDefect && !result.timedOut && result.code === 0 && tests.every(t => t.status === 'passed') && (!baseline || process.env.QA_UPDATE_BASELINE === '1')) {
+      writeFileSync(baselinePath, JSON.stringify({ createdAt: new Date().toISOString(), runId: ctx.runId, profile: profileName, profileSpec: profile, workloadId,
         appVersion: ctx.versions.app.id, endpoints: Object.fromEntries(Object.entries(load.endpoints).map(([k, v]) => [k, { p95Ms: v.p95Ms, errorRate: v.errorRate, requests: v.requests }])),
         throughputRps: load.throughputRps }, null, 2))
       baselineAction = baseline ? 'updated' : 'created'
     } else if (!baseline) baselineAction = 'none'
-    return { tests, errors: [], timedOut: result.timedOut, load: { profile: profileName, profileSpec: profile, ...load, baselineAction, baseline }, artifacts: { log: `${base}/output.log` } }
+    return { tests, errors: result.code === 0 && !result.timedOut ? [] : [`k6 did not complete successfully (exit ${result.code})`],
+      exitCode: result.code, timedOut: result.timedOut, load: { profile: profileName, profileSpec: profile, workloadId, ...load, baselineAction, baseline }, artifacts: { log: `${base}/output.log` } }
   } finally {
     rmSync(secretDir, { recursive: true, force: true })
     appendEvent('load-runs.jsonl', { runId: ctx.runId, env: ctx.env.name, target: ctx.targetUrl, profile: profileName })

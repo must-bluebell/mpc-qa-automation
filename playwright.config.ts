@@ -51,6 +51,13 @@ export default defineConfig({
 
   projects: [
     {
+      name: 'uat',
+      testDir: './tests/uat',
+      testMatch: '*.spec.ts',
+      timeout: 60_000,
+      use: { baseURL: t.baseUrl },
+    },
+    {
       name: 'chromium',
       testDir: './tests/wallet',
       testMatch: ['wallet-flow.spec.ts', 'wallet-errors.spec.ts'],

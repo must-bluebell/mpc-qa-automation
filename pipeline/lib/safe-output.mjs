@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { config, knownSecrets, RUNS_DIR } from './env.mjs'
+import { qualityRates, formatRate } from './quality-rates.mjs'
 
 const testNames=JSON.parse(readFileSync(new URL('../config/test-case-names.json',import.meta.url),'utf8'))
 export const opaqueId = value => createHash('sha256').update(String(value)).digest('hex').slice(0, 16)
@@ -48,11 +49,11 @@ function categoryOf(t,run) {
   const label=REPORT_CATEGORIES.find(c=>c.suite===suite)?.label??(suite==='uat'?'UAT scenarios':null)
   if(label)return label
   if(t.adapter==='k6')return 'Load testing'
-  if(t.adapter==='playwright')return t.project==='api'?'API testing':'Web automation regression testing'
+  if(t.adapter==='playwright')return t.project==='uat'?'UAT scenarios':t.project==='api'?'API testing':'Web automation regression testing'
   if(t.adapter==='webmpc-scenarios')return 'UAT scenarios'
   return 'Other checks'
 }
-const LOAD_BREACH=/^(no requests recorded|p95 \d+ms > \d+ms|error rate [\d.]+% > [\d.]+%|p95 regressed -?\d+% vs baseline \d+ms|error rate rose -?[\d.]+ points vs baseline)$/
+const LOAD_BREACH=/^(no requests recorded|missing or invalid latency metric|missing or invalid error-rate metric|p95 \d+ms > \d+ms|error rate [\d.]+% > [\d.]+%|p95 regressed -?\d+% vs baseline \d+ms|error rate rose -?[\d.]+ points vs baseline)$/
 /** Load checks are named from allowlisted config (endpoint keys in thresholds.json), never from raw output. */
 function loadCheck(t,run,thresholds) {
   const name=(t.key??'').split(':').slice(2).join(':'),pct=v=>`${(v*100).toFixed(2)}%`
@@ -89,7 +90,7 @@ export function publicSummary(run) {
       const requirementId=confirmation?.description?.match(/^([A-Z]+-\d+):/)?.[1]
       const confirmed=t.status==='failed'&&approved.has(requirementId)
       const load=t.adapter==='k6'?loadCheck(t,run,thresholds):null
-      return {id:opaqueId(t.key),name:load?.name??testNames[(t.title??'').split(' > ').at(-1)?.match(/^([WAPMC]\d{2}) - /)?.[1]]??`Check ${opaqueId(t.key)}`,status:field(t.status),
+      return {id:opaqueId(t.key),name:load?.name??testNames[(t.title??'').split(' > ').at(-1)?.match(/^([WAPMCU]\d{2}) - /)?.[1]]??`Check ${opaqueId(t.key)}`,status:field(t.status),
         category:categoryOf(t,run),detail:load?.detail??null,
         reason:['failed','blocked','skipped'].includes(t.status)?(load?.detail&&t.status==='failed'?`${load.breaches?.length?`Breached: ${load.breaches.join('; ')}. Measured`:'SLO breached'}: ${load.detail}`:diagnosticReason(t)):null,
         requirementIds:(t.requirementIds??[]).filter(id=>approved.has(id)),
@@ -97,6 +98,9 @@ export function publicSummary(run) {
         critical:confirmed&&annotations.some(a=>a.type==='severity'&&a.description==='critical')}
     }),
     aiStatus:field(run.ai?.status || 'not-requested') }
+  summary.quality=qualityRates(summary.counts)
+  summary.categoryRates=groupChecks(summary.checks).map(([category,checks])=>({category,...qualityRates(Object.fromEntries(
+    ['passed','failed','skipped','blocked'].map(status=>[status,checks.filter(c=>c.status===status).length])))}))
   summary.pipeline=pipelineStages(run,summary.checks,{field,count})
   return summary
 }
@@ -136,6 +140,10 @@ export function publishSummary(run) {
     ...(s.reportOnly?['Recorded results preview. These checks ran in the source run; this preview does not execute new tests.','']:[]),
     `Version: ${s.applicationVersion}`,s.finishedAt,
     `${c.passed} passed | ${c.failed} failed | ${c.skipped} skipped | ${c.blocked} blocked`,'',
+    `Test pass rate: ${formatRate(s.quality.passRate)} | Execution coverage: ${formatRate(s.quality.executionRate)}`,
+    'Pass rate = passed / (passed + failed). Execution coverage = executed / all checks; skipped and blocked checks are not passes. These are test rates for this run, not historical PR success rates.','',
+    '| Testing | Test pass rate | Execution coverage |','| --- | ---: | ---: |',
+    ...s.categoryRates.map(r=>`| ${r.category} | ${formatRate(r.passRate)} | ${formatRate(r.executionRate)} |`),'',
     ...(s.sections.length?['| Testing | Status | Passed | Failed | Skipped | Blocked |','| --- | --- | ---: | ---: | ---: | ---: |',
       ...s.sections.map(r=>`| ${r.label} | ${r.status} | ${r.counts.passed} | ${r.counts.failed} | ${r.counts.skipped} | ${r.counts.blocked} |`),'',
       ...s.sections.map(r=>`${r.label}: source ${r.sourceRunId}; completed ${r.finishedAt}.`),'']:[]),

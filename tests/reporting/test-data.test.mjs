@@ -1,12 +1,38 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { prepareTestData } from '../../pipeline/lib/test-data.mjs'
+import { prepareTestData, examAnswers } from '../../pipeline/lib/test-data.mjs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { ROOT } from '../../pipeline/lib/env.mjs'
 import { publicSummary } from '../../pipeline/lib/safe-output.mjs'
 
 test('shared environments are never written to',async()=>{
   let called=false
   const result=await prepareTestData({isolated:false,allowWrites:false,baseUrl:'https://staging.example'},{fetchImpl:async()=>{called=true}})
   assert.equal(result.status,'skipped'); assert.equal(called,false)
+})
+test('exam source loads with the target chain without changing the parent environment', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'qa-exam-'))
+  const previous = process.env.NEXT_PUBLIC_CHAIN_ID
+  try {
+    mkdirSync(join(root, 'src/modules/my-mine/glossary'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"type":"module"}')
+    // Use the installed application loader; the source fixture reproduces its fail-loud chain guard.
+    const { symlinkSync } = await import('node:fs')
+    symlinkSync(join(ROOT, 'node_modules'), join(root, 'node_modules'))
+    writeFileSync(join(root, 'src/modules/my-mine/glossary/text.ts'), `
+      if (process.env.NEXT_PUBLIC_CHAIN_ID !== '97') throw new Error('Wrong exam chain')
+      export const WAY_QUIZ = [{ a: 2 }, { a: 0 }]
+    `)
+    process.env.NEXT_PUBLIC_CHAIN_ID = '56'
+    assert.deepEqual(await examAnswers({ chainId: 97, stack: { webmpcPath: root } }), [2, 0])
+    assert.equal(process.env.NEXT_PUBLIC_CHAIN_ID, '56')
+  } finally {
+    if (previous === undefined) delete process.env.NEXT_PUBLIC_CHAIN_ID
+    else process.env.NEXT_PUBLIC_CHAIN_ID = previous
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 test('non-loopback or wrong-chain RPC fails preparation instead of funding',async()=>{
   const prev=process.env.QA_SEED_PHRASE,prevAddr=process.env.WALLET_ADDRESS

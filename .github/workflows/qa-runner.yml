@@ -15,7 +15,7 @@ on:
       suite:
         description: Test suite
         type: choice
-        options: [regression, api, load]
+        options: [regression, api, load, uat, full]
         default: regression
       app_ref:
         description: Application branch or exact commit (empty uses WEBAPP_REF or main)
@@ -31,9 +31,73 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  code-security:
+    name: Application code and dependency security
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: qa
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: qa
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Select exact application revision
+        id: plan
+        run: node scripts/github-qa.mjs plan
+        env:
+          WEBAPP_REPOSITORY: ${{ vars.WEBAPP_REPOSITORY }}
+          WEBAPP_REF: ${{ vars.WEBAPP_REF || 'main' }}
+      - name: Verify application repository access
+        env:
+          GH_TOKEN: ${{ secrets.WEBAPP_READ_TOKEN }}
+          APP_REPOSITORY: ${{ steps.plan.outputs.appRepository }}
+          APP_REF: ${{ steps.plan.outputs.appRef }}
+        run: node scripts/github-qa.mjs verify-access
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.plan.outputs.appRepository }}
+          ref: ${{ steps.plan.outputs.appRef }}
+          path: WEB MPC
+          token: ${{ secrets.WEBAPP_READ_TOKEN }}
+          persist-credentials: false
+      - name: Install application dependencies
+        working-directory: WEB MPC
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+      - name: Application typecheck
+        id: types
+        continue-on-error: true
+        working-directory: WEB MPC
+        run: corepack pnpm exec tsc --noEmit
+      - name: Application lint and boundaries
+        id: lint
+        continue-on-error: true
+        working-directory: WEB MPC
+        run: corepack pnpm run lint
+      - name: Application dependency vulnerability audit
+        id: audit
+        continue-on-error: true
+        working-directory: WEB MPC
+        run: corepack pnpm audit --audit-level high
+      - name: Publish code and security gate results
+        if: always()
+        env:
+          TYPES_RESULT: ${{ steps.types.outcome }}
+          LINT_RESULT: ${{ steps.lint.outcome }}
+          AUDIT_RESULT: ${{ steps.audit.outcome }}
+        run: |
+          echo '### Application code and security gates' >> "$GITHUB_STEP_SUMMARY"
+          echo "Typecheck: $TYPES_RESULT; lint: $LINT_RESULT; dependency audit: $AUDIT_RESULT" >> "$GITHUB_STEP_SUMMARY"
+          test "$TYPES_RESULT" = success && test "$LINT_RESULT" = success && test "$AUDIT_RESULT" = success
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 150
     defaults:
       run:
         working-directory: qa
@@ -42,11 +106,11 @@ jobs:
       WEBAPP_REPOSITORY: ${{ vars.WEBAPP_REPOSITORY }}
       WEBAPP_REF: ${{ vars.WEBAPP_REF || 'main' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: qa
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -55,28 +119,44 @@ jobs:
       - name: Select test suite and application revision
         id: plan
         run: node scripts/github-qa.mjs plan
+      - name: Verify application repository access
+        env:
+          GH_TOKEN: ${{ secrets.WEBAPP_READ_TOKEN }}
+          APP_REPOSITORY: ${{ steps.plan.outputs.appRepository }}
+          APP_REF: ${{ steps.plan.outputs.appRef }}
+        run: node scripts/github-qa.mjs verify-access
       - name: Check out application under test
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ steps.plan.outputs.appRepository }}
           ref: ${{ steps.plan.outputs.appRef }}
           path: WEB MPC
-          token: ${{ secrets.WEBAPP_READ_TOKEN || github.token }}
+          token: ${{ secrets.WEBAPP_READ_TOKEN }}
           persist-credentials: false
       - run: npm run typecheck
       - run: npm run test:reporting
       - run: npm run check:copy -- --webapp '../WEB MPC'
+      - name: Install application scenario dependencies
+        if: contains(fromJSON('["uat","full"]'), steps.plan.outputs.suite)
+        working-directory: WEB MPC
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
       - name: Restore Slack incident and delivery state
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: qa/runs/slack-bot-state.json
           key: mpc-qa-slack-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: mpc-qa-slack-v1-${{ github.ref_name }}-
       - name: Install Chromium
-        if: steps.plan.outputs.suite == 'regression'
+        if: contains(fromJSON('["regression","uat","full"]'), steps.plan.outputs.suite)
         run: npx playwright install --with-deps chromium
+      - name: Install application scenario Chromium
+        if: contains(fromJSON('["uat","full"]'), steps.plan.outputs.suite)
+        working-directory: WEB MPC
+        run: corepack pnpm exec playwright install --with-deps chromium
       - name: Install k6
-        if: steps.plan.outputs.suite == 'load'
+        if: contains(fromJSON('["load","full"]'), steps.plan.outputs.suite)
         shell: bash
         run: |
           set -euo pipefail
@@ -88,6 +168,7 @@ jobs:
       - name: Prepare disposable Docker configuration
         run: node scripts/github-qa.mjs prepare
       - name: Build and start application stack
+        id: stack
         run: npm run stack:up
       - name: Run assertions and publish Slack summary
         env:
@@ -113,18 +194,18 @@ jobs:
           fi
       - name: Upload sanitized report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mpc-qa-sanitized-${{ github.run_id }}-${{ github.run_attempt }}
           path: qa/runs/published/*.md
           if-no-files-found: ignore
           retention-days: 14
       - name: Save Slack incident and delivery state
-        if: always()
-        uses: actions/cache/save@v4
+        if: always() && hashFiles('qa/runs/slack-bot-state.json') != ''
+        uses: actions/cache/save@v6
         with:
           path: qa/runs/slack-bot-state.json
           key: mpc-qa-slack-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Stop disposable stack
-        if: always()
+        if: always() && (steps.stack.outcome == 'success' || steps.stack.outcome == 'failure')
         run: npm run stack:down

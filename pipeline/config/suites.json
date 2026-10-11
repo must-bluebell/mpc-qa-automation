@@ -32,7 +32,7 @@
     ]
   },
   "regression": {
-    "description": "All existing wallet UI tests (W01-W24).",
+    "description": "Wallet UI regression and connection recovery checks.",
     "steps": [
       {
         "adapter": "playwright",
@@ -48,6 +48,10 @@
   "uat": {
     "description": "Automated UAT journeys from the WEB MPC local scenario suite (connect, dig, send cart, confirm, recover) against the isolated stack.",
     "steps": [
+      {
+        "adapter": "playwright",
+        "project": "uat"
+      },
       {
         "adapter": "webmpc-scenarios",
         "command": "scenario:local"

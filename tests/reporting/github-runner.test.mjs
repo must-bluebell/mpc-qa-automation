@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { planGitHubRun, ciProfile } from '../../scripts/github-qa.mjs'
+import { planGitHubRun, ciProfile, verifyAppAccess } from '../../scripts/github-qa.mjs'
 const config={appRepository:'team/web-app',appRef:'main'}
 test('main updates run regression and KST schedules select API and load',()=>{
   assert.equal(planGitHubRun('push',{},config).suite,'regression')
@@ -12,12 +12,15 @@ test('app merge dispatch tests the exact commit only from the configured app',()
   const client_payload={repository:'team/web-app',sha:'a'.repeat(40)}
   const plan=planGitHubRun('repository_dispatch',{action:'webapp-merged',client_payload},config)
   assert.equal(plan.appRef,client_payload.sha)
+  assert.equal(plan.suite,'full')
   assert.throws(()=>planGitHubRun('repository_dispatch',{action:'webapp-merged',client_payload:{...client_payload,repository:'other/app'}},config))
   assert.throws(()=>planGitHubRun('repository_dispatch',{action:'webapp-merged',client_payload:{...client_payload,sha:'main; echo unsafe'}},config))
 })
 test('PR code never enters a credential-bearing Docker job',()=>{
   assert.throws(()=>planGitHubRun('pull_request',{},config))
-  assert.throws(()=>planGitHubRun('workflow_dispatch',{inputs:{suite:'full'}},config))
+  assert.equal(planGitHubRun('workflow_dispatch',{inputs:{suite:'full'}},config).suite,'full')
+  assert.equal(planGitHubRun('workflow_dispatch',{inputs:{suite:'uat'}},config).suite,'uat')
+  assert.throws(()=>planGitHubRun('workflow_dispatch',{inputs:{suite:'unknown'}},config))
   assert.throws(()=>planGitHubRun('push',{},{}))
 })
 test('CI uses its own disposable compose project and retains isolation guards',()=>{
@@ -26,4 +29,29 @@ test('CI uses its own disposable compose project and retains isolation guards',(
   assert.equal(env.stack.webmpcPath,'../WEB MPC')
   assert.equal(env.isolated,true)
   assert.throws(()=>ciProfile({},'unsafe-project','1'))
+})
+
+test('checkout preflight requires an application token without making an anonymous request', async () => {
+  await assert.rejects(verifyAppAccess({ ...config, fetchImpl: () => { throw new Error('must not fetch') } }), /WEBAPP_READ_TOKEN.*Contents: read/)
+})
+
+test('checkout preflight checks content access to the exact revision, not just repository metadata', async () => {
+  const sha = 'a'.repeat(40)
+  const result = await verifyAppAccess({ ...config, appRef: sha, token: 'test-private-token', fetchImpl: async (url, options) => {
+    assert.equal(url, `https://api.github.com/repos/team/web-app/commits/${sha}`)
+    assert.equal(options.headers.Authorization, 'Bearer test-private-token')
+    return { ok: true, json: async () => ({ sha }) }
+  } })
+  assert.equal(result.sha, sha)
+})
+
+test('checkout failures explain token access and ref errors without leaking credentials', async () => {
+  for (const status of [401, 403, 404, 422]) {
+    await assert.rejects(verifyAppAccess({ ...config, token: 'private-token', fetchImpl: async () => ({ ok: false, status }) }), error => {
+      assert.match(error.message, /WEBAPP_READ_TOKEN/)
+      assert.match(error.message, /team\/web-app/)
+      assert.ok(!error.message.includes('private-token'))
+      return true
+    })
+  }
 })

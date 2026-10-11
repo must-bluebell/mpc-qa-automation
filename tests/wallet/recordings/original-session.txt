@@ -1,0 +1,20 @@
+import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.goto('https://app.globalmpc.tech/');
+  await page.getByRole('main').getByRole('button', { name: 'Join Unity' }).click();
+  await page.getByRole('button', { name: 'WalletConnect Connect a' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.goto('https://app.globalmpc.tech/?view=dig');
+  await page.getByRole('button', { name: 'Reject' }).click();
+  await page.getByRole('button', { name: 'Open user account' }).click();
+  await page.getByRole('button', { name: 'Ventures' }).click();
+  await page.getByRole('button', { name: 'Copy' }).click();
+  await page.getByRole('button', { name: 'Claim crew' }).click();
+  const page1Promise = page.waitForEvent('popup');
+  await page.goto('https://app.globalmpc.tech/?view=vote&proposal=1');
+  const page1 = await page1Promise;
+  await page2.goto('https://pre-check-in.globalmpc.tech/');
+  await page1.goto('https://x.com/MPC_Global_X');
+  await page.goto('https://app.globalmpc.tech/?view=dig');
+});

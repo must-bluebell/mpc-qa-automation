@@ -1,10 +1,41 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cronMatches, enqueueDue, nextSlots, completeJob } from '../../pipeline/scheduler.mjs'
+import { cronMatches, enqueueDue, nextSlots, completeJob, enqueueRotation, rotationSlot } from '../../pipeline/scheduler.mjs'
 import { classifyFailure } from '../../pipeline/lib/classify.mjs'
 import { redactValue } from '../../pipeline/lib/safe-output.mjs'
 
 const schedules = [{ id: 'web-30m', suite: 'regression', env: 'local-docker', cron: '*/30 * * * *', graceMinutes: 60, enabled: true }]
+const rotation={id:'qa-rotation',suites:['regression','uat','api','load'],env:'local-docker',gapMinutes:30,enabled:true}
+test('rotation starts with web, waits thirty minutes after completion and repeats in order',()=>{
+  const state={jobs:[]},start=new Date('2026-10-10T05:00:00Z')
+  enqueueRotation(state,rotation,start)
+  assert.equal(state.jobs[0].suite,'regression')
+  enqueueRotation(state,rotation,start)
+  assert.equal(state.jobs.length,1)
+  for(const suite of ['uat','api','load','regression']) {
+    const last=state.jobs.at(-1)
+    last.status='finished';last.finishedAt=new Date(Date.parse(last.at)+10*60_000).toISOString()
+    const due=new Date(Date.parse(last.finishedAt)+30*60_000)
+    assert.equal(rotationSlot(state,rotation,due).suite,suite)
+    enqueueRotation(state,rotation,new Date(due.getTime()-1))
+    assert.equal(state.jobs.at(-1),last)
+    enqueueRotation(state,rotation,due)
+    assert.equal(state.jobs.at(-1).suite,suite)
+    assert.equal(state.jobs.at(-1).at,due.toISOString())
+  }
+})
+test('rotation survives restart and never overlaps running or notifying work',()=>{
+  const state={jobs:[]},now=new Date('2026-10-10T05:00:00Z')
+  enqueueRotation(state,rotation,now)
+  for(const status of ['queued','running','notifying']) {
+    state.jobs[0].status=status
+    const restarted=JSON.parse(JSON.stringify(state))
+    enqueueRotation(restarted,rotation,new Date(now.getTime()+86400000))
+    assert.equal(restarted.jobs.length,1)
+    assert.equal(rotationSlot(restarted,rotation,now),null)
+  }
+  assert.equal(rotationSlot(state,{...rotation,enabled:false},now),null)
+})
 test('cron evaluates Korean midnight independent of machine timezone', () => {
   assert.equal(cronMatches('0 1 * * *', new Date('2026-10-09T16:00:00Z'), 'Asia/Seoul'), true)
   assert.equal(cronMatches('0 1 * * *', new Date('2026-10-09T01:00:00Z'), 'Asia/Seoul'), false)

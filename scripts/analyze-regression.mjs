@@ -2,18 +2,19 @@ import dotenv from 'dotenv'
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { aiSchema, validateAiAnalysis } from '../utils/regression-analysis.ts'
-import { requestAnalysis } from '../utils/ai-client.mjs'
+import { aiConfig, requestAnalysisWith } from '../pipeline/ai/providers.mjs'
 
 dotenv.config()
 try {
-  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL) {
-    throw new Error('AI model review has not run. Set OPENAI_API_KEY and OPENAI_MODEL locally in .env; do not paste the key into chat. The automatic evidence brief is in playwright-report/ai-analysis.md.')
+  const cfg=aiConfig()
+  if (!cfg.configured) {
+    throw new Error('AI model review has not run. Set QA_AI_PROVIDER=ollama for local analysis, or configure a cloud provider. The automatic evidence brief is in playwright-report/ai-analysis.md.')
   }
   const folder = resolve('playwright-report')
   const input = JSON.parse(await readFile(resolve(folder, 'ai-analysis-input.json'), 'utf8'))
-  const raw = await requestAnalysis({ key: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL, input, schema: aiSchema })
+  const raw = await requestAnalysisWith(cfg, { input, schema: aiSchema })
   const analysis = validateAiAnalysis(raw, input, input.requirements)
-  const output = { ...analysis, model: process.env.OPENAI_MODEL, runGeneratedAt: input.generatedAt, generatedAt: new Date().toISOString() }
+  const output = { ...analysis, provider:cfg.provider,model: cfg.model, runGeneratedAt: input.generatedAt, generatedAt: new Date().toISOString() }
   await writeFile(resolve(folder, 'ai-analysis.json'), JSON.stringify(output, null, 2))
   const lines = ['AI analysis — advisory review', '', `Model: ${output.model}`, '', output.summary, '', output.decisionBasis, '', 'Findings:']
   for (const f of output.findings) lines.push(`- **${f.classification}**: ${f.title}. ${f.rationale} Evidence IDs: ${f.evidenceIds.join(', ')}`)

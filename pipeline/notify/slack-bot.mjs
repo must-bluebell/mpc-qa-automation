@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { RUNS_DIR, config } from '../lib/env.mjs'
 import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS } from '../lib/safe-output.mjs'
+import { formatRate } from '../lib/quality-rates.mjs'
 
 function settings(options) {
   return { stateDir:RUNS_DIR, token:process.env.SLACK_BOT_TOKEN, channel:process.env.SLACK_CHANNEL_ID,
@@ -122,7 +123,7 @@ function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
     ...(s.reportOnly?['_Recorded results preview — previous execution, not a fresh run._']:[]),
     `Version: ${s.applicationVersion} · ${s.finishedAt}`,
     `Trigger: ${triggerText(s)} · Env: ${s.pipeline.environment.name}`,'',
-    `*Overall:* ${c.passed} passed · ${c.failed} failed · ${c.skipped} skipped · ${c.blocked} blocked${total?` (${total} checks, ${Math.round(c.passed/total*100)}% pass rate)`:''}`,'',
+    `*Overall:* ${c.passed} passed · ${c.failed} failed · ${c.skipped} skipped · ${c.blocked} blocked${total?` (${total} checks, ${formatRate(s.quality.passRate)} test pass rate; ${formatRate(s.quality.executionRate)} executed)`:''}`,'',
     ...(rows.length?[...rows.map(row),'']:[]),
     ...(s.pipeline.comparison?[`*Vs previous run:* ${comparisonText(s.pipeline.comparison)}`]:[]),
     ...(infraProblem(s)?[`⚠️ *Execution problem:* ${infraProblem(s)}`]:[]),
@@ -259,4 +260,15 @@ export async function checkBot(options={}) {
     const result=await api(o,'auth.test',{})
     return {ok:result.ok===true,error:result.error,teamId:result.team_id,botUserId:result.user_id,channel:o.channel,owner:o.owner}
   }catch{return {ok:false,error:'network_or_timeout'}}
+}
+
+/** A single explicit dashboard test; never retries an uncertain send automatically. */
+export async function sendBotTest(options={}) {
+  const o=settings(options)
+  if(!o.token?.startsWith('xoxb-'))return {ok:false,code:'missing_or_invalid_bot_token',attempts:0}
+  if(!/^C[A-Z0-9]+$/.test(o.channel??''))return {ok:false,code:'missing_or_invalid_channel',attempts:0}
+  try {
+    const r=await api(o,'chat.postMessage',{channel:o.channel,text:'[TEST] MPC QA dashboard: Slack bot delivery works. No test run was started.'})
+    return {ok:r.ok===true,code:r.ok?'ok':r.error||'slack_error',attempts:1}
+  }catch{return {ok:false,code:'network_or_timeout',attempts:1}}
 }

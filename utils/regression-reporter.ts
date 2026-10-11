@@ -60,7 +60,7 @@ export default class RegressionReporter implements Reporter {
     const input = { ...full, requirements: requirements.filter(r => r.approved),
       records: records.map(({ evidence, ...record }) => ({ ...record, evidence: evidence.map(e => e.name) })) }
     await writeFile(join(output, 'ai-analysis-input.json'), JSON.stringify(input, null, 2))
-    await writeFile(join(output, 'ai-analysis.md'), `AI review brief — model not run\n\n${formatSummary(run)}\nRun npm run analyze:ai with OPENAI_API_KEY and OPENAI_MODEL configured locally.\nAI suggestions require review and a reproduced failing assertion before becoming acceptance checks.\n`)
+    await writeFile(join(output, 'ai-analysis.md'), `AI review brief — model not run\n\n${formatSummary(run)}\nRun npm run analyze:ai with QA_AI_PROVIDER=ollama for local analysis, or configure a cloud provider.\nAI suggestions require review and a reproduced failing assertion before becoming acceptance checks.\n`)
     console.log(`\nRegression summary: ${join(output, 'regression-summary.md')}`)
   }
 }

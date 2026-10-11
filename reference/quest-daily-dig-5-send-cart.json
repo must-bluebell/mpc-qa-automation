@@ -1,0 +1,32 @@
+{
+  "batch": "daily-dig-cart-v1",
+  "items": [
+    {
+      "key": "daily-dig-cart",
+      "kind": "daily",
+      "type": "mine",
+      "amount": 10,
+      "rewardAsset": "crew",
+      "content": {
+        "en": {
+          "title": "Dig five and send the cart",
+          "description": "Complete at least five digs today, then send those results from the cart. Only confirmed cart records count."
+        }
+      },
+      "linkUrl": null,
+      "openGapSeconds": 0,
+      "icon": null,
+      "requiresKey": null,
+      "opensAt": null,
+      "closesAt": null,
+      "featured": false,
+      "sortOrder": 50,
+      "onchain": null,
+      "activity": {
+        "source": "mine",
+        "metric": "digsSentToday",
+        "atLeast": 5
+      }
+    }
+  ]
+}

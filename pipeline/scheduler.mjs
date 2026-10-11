@@ -32,6 +32,27 @@ export function cronMatches(cron,date,timezone='Asia/Seoul') {
   return matches[0]&&matches[1]&&matches[3]&&dayMatch
 }
 const minute=value=>Math.floor(new Date(value).getTime()/60_000)*60_000
+/** One durable sequence: the next suite becomes due only after completion plus the idle gap. */
+export function rotationSlot(state,rotation,now=new Date()) {
+  if(!rotation?.enabled)return null
+  if(!/^[\w-]{1,40}$/.test(rotation.id)||!Array.isArray(rotation.suites)||!rotation.suites.length
+    ||!Number.isFinite(rotation.gapMinutes)||rotation.gapMinutes<0)throw new Error('Invalid rotation configuration')
+  const jobs=state.jobs.filter(j=>j.scheduleId===rotation.id)
+  if(jobs.some(j=>['queued','running','notifying'].includes(j.status)))return null
+  const last=jobs.at(-1)
+  if(last&&(!last.finishedAt||last.status!=='finished'))throw new Error('Rotation requires a completed prior job')
+  const index=last?(last.rotationIndex+1)%rotation.suites.length:0
+  const at=last?new Date(Date.parse(last.finishedAt)+rotation.gapMinutes*60_000):now
+  if(!Number.isFinite(at.getTime()))throw new Error('Invalid rotation completion time')
+  return {suite:rotation.suites[index],rotationIndex:index,at:at.toISOString()}
+}
+export function enqueueRotation(state,rotation,now=new Date()) {
+  const slot=rotationSlot(state,rotation,now)
+  if(!slot||Date.parse(slot.at)>now.getTime())return state
+  const id=`rot-${rotation.id}-${Date.parse(slot.at)}`
+  if(!state.jobs.some(j=>j.id===id))state.jobs.push({id,runId:id,scheduleId:rotation.id,env:rotation.env,...slot,status:'queued'})
+  return state
+}
 export function enqueueDue(state,schedules,now=new Date(),timezone='Asia/Seoul') {
   const end=minute(now),start=state.cursor?minute(state.cursor)+60_000:end
   const known=new Set(state.jobs.map(j=>j.id))
@@ -103,6 +124,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
     console.log(`MPC QA scheduler started (pid ${process.pid}); timezone Asia/Seoul; Slack ${process.env.SLACK_BOT_TOKEN?.startsWith('xoxb-')?'configured':'pending xoxb bot token'}.`)
     while(!stopped) {
       enqueueDue(state,spec.schedules,new Date(),spec.timezone)
+      enqueueRotation(state,spec.rotation,new Date())
       state.pid=process.pid;state.heartbeatAt=new Date().toISOString();persist(state)
       await flushBotOutbox()
       for(const job of state.jobs.filter(j=>j.status==='notifying'))await finish(job,job.exitCode)
@@ -112,7 +134,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
         // An interactive pipeline run owns the shared account. Keep queued work for the next tick.
       }else if(!state.jobs.some(j=>j.status==='running')) {
         const now=Date.now()
-        for(const job of state.jobs.filter(j=>j.status==='queued'))if(now-Date.parse(job.at)>job.graceMinutes*60_000){job.status='missed';persist(state)}
+        for(const job of state.jobs.filter(j=>j.status==='queued'&&j.rotationIndex===undefined))if(now-Date.parse(job.at)>job.graceMinutes*60_000){job.status='missed';persist(state)}
         const job=state.jobs.find(j=>j.status==='queued')
         if(job) {
           const prior=readRun(job.runId)
@@ -138,8 +160,8 @@ async function main() {
   const {values}=parseArgs({options:{once:{type:'boolean'},'run-now':{type:'string'},'dry-run':{type:'boolean'},'check-slack':{type:'boolean'},status:{type:'boolean'},start:{type:'boolean'},stop:{type:'boolean'}}})
   if(values.stop){const lock=readLock('scheduler');if(!lock||lock.stale){console.log('Scheduler is not running.');return}process.kill(lock.pid,'SIGTERM');console.log(`Stopped scheduler pid ${lock.pid}.`);return}
   if(values['check-slack']){const result=await checkBot();console.log(JSON.stringify(result,null,2));if(!result.ok)process.exitCode=1;return}
-  if(values['dry-run']){console.log(JSON.stringify(nextSlots(config.schedules().schedules,new Date(),config.schedules().timezone),null,2));return}
-  if(values.status){const state=loadState();console.log(JSON.stringify({lock:readLock('scheduler'),heartbeat:state.heartbeatAt,jobs:state.jobs.slice(-10)},null,2));return}
+  if(values['dry-run']){const spec=config.schedules();console.log(JSON.stringify({cron:nextSlots(spec.schedules,new Date(),spec.timezone),rotation:rotationSlot(loadState(),spec.rotation)},null,2));return}
+  if(values.status){const state=loadState();console.log(JSON.stringify({lock:readLock('scheduler'),heartbeat:state.heartbeatAt,rotation:config.schedules().rotation,next:rotationSlot(state,config.schedules().rotation),jobs:state.jobs.slice(-10)},null,2));return}
   if(values.start) {
     const lock=readLock('scheduler');if(lock&&!lock.stale)throw new Error(`Scheduler is already running (pid ${lock.pid}).`)
     mkdirSync(RUNS_DIR,{recursive:true,mode:0o700})

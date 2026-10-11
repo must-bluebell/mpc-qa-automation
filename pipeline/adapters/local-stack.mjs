@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { resolve } from 'node:path'
 import { ROOT } from '../lib/env.mjs'
@@ -50,5 +51,10 @@ export async function stackUp(env, {build=true}={}) {
 
 export async function stackDown(env, { volumes = false } = {}) {
   const { cwd, env: ports, args } = composeArgs(env, ['down', '--remove-orphans', ...(volumes ? ['--volumes'] : [])])
+  // No application checkout means no stack was ever started from it, so there is nothing to stop.
+  if (!existsSync(resolve(cwd, 'docker/docker-compose.yml'))) {
+    console.log(`No docker/docker-compose.yml in ${cwd}; nothing to stop.`)
+    return { code: 0 }
+  }
   return runProcess('docker', args, { cwd, env: ports, timeoutMs: 300_000 })
 }

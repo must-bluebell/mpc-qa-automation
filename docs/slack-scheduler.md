@@ -2,13 +2,32 @@
 
 The scheduler uses Asia/Seoul (KST, UTC+9). User-visible Slack and sanitized report times use KST. Internal state uses UTC for unambiguous comparisons.
 
-| Suite | Schedule in KST |
+| Order | Suite |
 | --- | --- |
-| Web regression | Every hour at :00 and :30 |
-| API and automated UAT | 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 |
-| Controlled load | Daily at 01:00 |
+| 1 | Web regression |
+| 2 | Automated UAT |
+| 3 | API |
+| 4 | Controlled load |
+
+The active rotation starts web regression immediately, waits 30 minutes after it finishes, then runs UAT, API and load in order with the same completion-to-start gap. After load it waits 30 minutes and repeats from web. Failures still produce Slack reports and advance the rotation. Durable state preserves the current run and gap across scheduler restarts. The separate cron schedules are disabled while this rotation is active.
 
 All suites currently use the isolated local Docker stack. The global pipeline lock serializes suites using the shared account. Runs queued past their grace period are visibly marked missed in scheduler-state.json instead of being replayed indefinitely. A first start does not backfill earlier runs. Restarting never reruns a claimed slot; interrupted jobs remain visible. Keep the host awake and Docker running. This local process does not install an OS startup service.
+
+The current environment is `local-docker`, Compose project `mpc-qa-rotation-20261011`:
+
+| Service | Host endpoint | Container port |
+| --- | --- | --- |
+| WEB MPC (Next.js development server) | http://localhost:3410 | 3400 |
+| BSC Anvil (chain 97) | http://localhost:8555 | 8545 |
+| opBNB Anvil (chain 5611) | http://localhost:8556 | 8545 |
+| PostgreSQL 16 | localhost:5440 | 5432 |
+| Neon HTTP proxy | http://localhost:4454 | 4444 |
+
+UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3410` as the Origin and SIWE domain. Host-side browsers use port 3410. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
+
+The previous `mpc-qa-rotation-20261010` containers are stopped and their volumes are preserved. The current project starts with clean contracts, database and build cache; it does not reuse the previous legacy bridge registry or corrupted Turbopack cache. Use `npm run stack:status` to confirm all five services are healthy before running suites.
+
+Load baselines are stored as `pipeline/baselines/<environment>-<profile>-<workloadId>.json`. The workload ID covers the k6 script, effective profile, measured endpoints and session count. Changing the traffic mix creates a separate baseline only after every absolute SLO and functional check passes. App changes continue to compare against the same workload baseline. Older baseline files remain available; the former 10-user traffic mix is not compared with the current 15-user mix.
 
 ## Configuration
 
@@ -31,12 +50,12 @@ The app cannot be installed from a channel ID alone. Workspace installation requ
 ```sh
 npm run qa:scheduler -- --dry-run
 npm run qa:scheduler -- --check-slack
-npm run qa:scheduler:start -- --run-now regression
+npm run qa:scheduler:start
 npm run qa:scheduler:status
 npm run qa:scheduler -- --stop
 ```
 
-For foreground use: `npm run qa:scheduler`. For one tick: `npm run qa:scheduler -- --once`. `--run-now` adds one immediate run; it does not change cron cadence. Stop only the PID shown by the status command using SIGTERM. Restart after changing .env. A stopped worker may leave its current child finishing; a replacement worker waits for it rather than duplicating the suite.
+For foreground use: `npm run qa:scheduler`. For one tick: `npm run qa:scheduler -- --once`. `--run-now` adds an extra immediate run; omit it when starting the rotation. `--status` shows the next suite and earliest start time, or a pending current job. Stop only the PID shown by the status command using SIGTERM. Restart after changing .env. A stopped worker may leave its current child finishing; a replacement worker waits for it rather than duplicating the suite.
 
 ## Storage and delivery
 

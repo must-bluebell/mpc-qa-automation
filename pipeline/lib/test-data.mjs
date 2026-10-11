@@ -1,9 +1,11 @@
-import { createRequire } from 'node:module'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { resolve } from 'node:path'
 import { createPublicClient, createWalletClient, defineChain, getAddress, http, parseEther } from 'viem'
 import { mnemonicToAccount } from 'viem/accounts'
 import { createSiweMessage } from 'viem/siwe'
 import { ROOT, isLoopback } from './env.mjs'
+import { childEnv } from './proc.mjs'
 
 /**
  * Pipeline stage 1b: prepares the configured QA wallet on the isolated stack before any suite runs.
@@ -113,13 +115,26 @@ async function joinWaitlist(s, account, chains) {
 }
 
 /** The exam key is read from the app's own source (read-only) so it can never drift from what the app checks. */
-async function examAnswers(env) {
+export async function examAnswers(env) {
   const root = resolve(ROOT, env.stack.webmpcPath)
-  const { createJiti } = createRequire(resolve(root, 'package.json'))('jiti')
-  const jiti = createJiti(resolve(root, 'package.json'), { alias: { '@modules': `${root}/src/modules`, '@platform': `${root}/src/platform`, '@shared': `${root}/src/shared`, '@config': `${root}/config` } })
-  const { WAY_QUIZ } = await jiti.import(`${root}/src/modules/my-mine/glossary/text.ts`)
-  if (!Array.isArray(WAY_QUIZ) || !WAY_QUIZ.length) throw new Error('could not read the My Mine exam key')
-  return WAY_QUIZ.map(q => q.a)
+  // App modules validate chain wiring at import time. Load them in a separate process
+  // with this target's settings, without changing or caching the parent's environment.
+  const script = `
+    import { createRequire } from 'node:module';
+    const root = process.cwd();
+    const { createJiti } = createRequire(root + '/package.json')('jiti');
+    const jiti = createJiti(root + '/package.json', { alias: { '@modules': root + '/src/modules', '@platform': root + '/src/platform', '@shared': root + '/src/shared', '@config': root + '/config' } });
+    const { WAY_QUIZ } = await jiti.import(root + '/src/modules/my-mine/glossary/text.ts');
+    if (!Array.isArray(WAY_QUIZ) || !WAY_QUIZ.length) throw new Error('could not read the My Mine exam key');
+    console.log(JSON.stringify(WAY_QUIZ.map(q => q.a)));
+  `
+  const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: root, timeout: 30_000,
+    env: childEnv({ NEXT_PUBLIC_CHAIN_ID: String(env.chainId),
+      NEXT_PUBLIC_LOCAL_RPC_URL: `http://127.0.0.1:${env.stack.ports?.anvil ?? 8555}`,
+      NEXT_PUBLIC_LOCAL_OPBNB_RPC_URL: `http://127.0.0.1:${env.stack.ports?.opbnbAnvil ?? 8556}` }),
+  })
+  return JSON.parse(stdout.trim())
 }
 
 class AppSession {

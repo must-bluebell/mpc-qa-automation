@@ -1,0 +1,60 @@
+import { defineConfig } from '@playwright/test'
+
+const baseURL = process.env.SCENARIO_BASE_URL ?? 'http://localhost:3400'
+if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(baseURL).hostname)) {
+  throw new Error('Local scenarios require a loopback app URL')
+}
+
+export default defineConfig({
+  testDir: './test/scenario/local',
+  outputDir: 'test-results/local-scenarios',
+  timeout: 600_000,
+  expect: { timeout: 15_000 },
+  fullyParallel: false,
+  // Bound the workload on the shared scenario dev server.
+  workers: 1,
+  // Stateful failures must remain visible. A retry must not inherit a half-finished run.
+  retries: 0,
+  reporter: process.env.CI
+    ? [['line'], ['html', { open: 'never', outputFolder: 'playwright-report/local-scenarios' }]]
+    : [['list'], ['html', { open: 'never', outputFolder: 'playwright-report/local-scenarios' }]],
+  use: {
+    baseURL,
+    actionTimeout: 30_000,
+    navigationTimeout: 60_000,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+  projects: [
+    {
+      name: 'preflight',
+      testMatch: /api-chain\.spec\.ts/,
+    },
+    {
+      name: 'api-chain',
+      testMatch: /features\.spec\.ts/,
+      dependencies: ['preflight'],
+    },
+    {
+      name: 'checkin-flows',
+      testMatch: /checkin-flows\.spec\.ts/,
+      dependencies: ['preflight'],
+    },
+    {
+      // Explicit mining and certificate snapshot assertions get an exclusive phase.
+      name: 'vote',
+      testMatch: /vote\.spec\.ts/,
+      dependencies: ['api-chain', 'checkin-flows'],
+    },
+    {
+      // Browser checks share quizzes and advance proposal height; run after API scenarios.
+      name: 'ui-critical',
+      testMatch: /(?:browser-flows|ui-critical)\.spec\.ts/,
+      dependencies: ['vote'],
+      workers: 1,
+      // Match PR #227: moving controls must settle before Playwright clicks.
+      use: { browserName: 'chromium', reducedMotion: 'reduce' },
+    },
+  ],
+})

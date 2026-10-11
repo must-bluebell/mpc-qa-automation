@@ -1,6 +1,6 @@
 {
   "local-docker": {
-    "description": "Isolated WEB MPC Docker + Anvil stack (Compose project mpc-qa). The only environment where writes, seeded defects and load are allowed.",
+    "description": "Isolated WEB MPC Docker + Anvil stack (Compose project mpc-qa-rotation-20261011). The only environment where writes, seeded defects and load are allowed.",
     "baseUrl": "http://localhost:3410",
     "appOrigin": "http://localhost:3410",
     "chainId": 97,
@@ -11,10 +11,16 @@
     "allowSeededDefects": true,
     "isolated": true,
     "stack": {
-      "composeProject": "mpc-qa-run-20261009",
+      "composeProject": "mpc-qa-rotation-20261011",
       "webmpcPath": "../WEB MPC",
-      "ports": { "web": 3410, "anvil": 8555, "opbnbAnvil": 8556, "postgres": 5440, "neonProxy": 4454 },
-      "note": "The original mpc-qa project's Anvil volume refuses an unsafe restore; its volumes are preserved untouched and this fresh project is used instead."
+      "ports": {
+        "web": 3410,
+        "anvil": 8555,
+        "opbnbAnvil": 8556,
+        "postgres": 5440,
+        "neonProxy": 4454
+      },
+      "note": "Fresh project for current Crew contracts and clean Next.js cache. Previous projects mpc-qa-rotation-20261010 and mpc-qa-rerun-20261009-1135 retain their volumes; their legacy deployments and caches are not reused."
     }
   },
   "preview": {

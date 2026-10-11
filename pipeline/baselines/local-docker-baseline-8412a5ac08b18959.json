@@ -1,0 +1,44 @@
+{
+  "createdAt": "2026-10-11T12:43:42.821Z",
+  "runId": "20261011-124238-load-f33b",
+  "profile": "baseline",
+  "profileSpec": {
+    "vus": 5,
+    "duration": "60s"
+  },
+  "workloadId": "8412a5ac08b18959",
+  "appVersion": "mpc-waitlist@0.1.0+src-2026-10-06T04:42",
+  "endpoints": {
+    "GET /api/home": {
+      "p95Ms": 82.03984999999997,
+      "errorRate": 0,
+      "requests": 234
+    },
+    "GET /api/quests": {
+      "p95Ms": 687.2146499999999,
+      "errorRate": 0,
+      "requests": 234
+    },
+    "GET /api/vote/proposals": {
+      "p95Ms": 758.3659499999999,
+      "errorRate": 0,
+      "requests": 234
+    },
+    "GET /api/auth/session": {
+      "p95Ms": 139.524,
+      "errorRate": 0,
+      "requests": 301
+    },
+    "POST /api/auth/nonce": {
+      "p95Ms": 130.364,
+      "errorRate": 0,
+      "requests": 301
+    },
+    "GET /api/notifications": {
+      "p95Ms": 737.974,
+      "errorRate": 0,
+      "requests": 301
+    }
+  },
+  "throughputRps": 50.978930220789714
+}

@@ -1,0 +1,108 @@
+name: Wallet QA
+
+# QA-repository PRs run self-checks. Application previews dispatch a deployment URL;
+# application merges dispatch an exact commit to qa-runner.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Target deployment URL (a Vercel Preview deployment)'
+        required: true
+      chain_id:
+        description: 'Chain the target builds against (56 mainnet, 97 testnet)'
+        required: true
+        default: '97'
+  repository_dispatch:
+    # Sent by globalmpc-webapp once its preview deploy reports Ready, carrying
+    # client_payload.base_url and .chain_id.
+    types: [webapp-preview]
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: the jobs only read this repo. Secrets are never exposed to pull_request runs from forks.
+permissions:
+  contents: read
+
+concurrency:
+  group: wallet-qa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # 🔴 Split from the test job on purpose. These need no deployment, so they run on every push and
+  #    PR to this repo — where the test job cannot, because there is nothing to point it at. Merging
+  #    the two would mean either skipping self-checks or inventing a target.
+  static:
+    name: Typecheck and copy drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+
+      # Checked out so `check:copy` can compare the vendored strings against the real registry.
+      # Fails open when absent, so this is a convenience, not a dependency.
+      - name: Check out the app (for the copy drift check)
+        uses: actions/checkout@v7
+        continue-on-error: true
+        with:
+          repository: ${{ vars.WEBAPP_REPOSITORY || 'globalmpc/globalmpc-webapp' }}
+          path: globalmpc-webapp
+          token: ${{ secrets.WEBAPP_READ_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with: { node-version: '22', cache: 'npm' }
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:reporting
+      - name: Audit QA dependencies (high and critical vulnerabilities)
+        run: npm audit --audit-level=high --include=dev
+      - name: Check copy drift
+        run: npm run check:copy
+        env:
+          WEBAPP_PATH: ${{ github.workspace }}/globalmpc-webapp
+
+  test:
+    name: Wallet tests
+    # Browser tests run only when a target deployment is supplied.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+
+      - uses: actions/setup-node@v7
+        with: { node-version: '22', cache: 'npm' }
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Run wallet tests
+        env:
+          BASE_URL: ${{ github.event.client_payload.base_url || inputs.base_url }}
+          QA_CHAIN_ID: ${{ github.event.client_payload.chain_id || inputs.chain_id || '97' }}
+          QA_SEED_PHRASE: ${{ secrets.QA_SEED_PHRASE }}
+          WALLET_ADDRESS: ${{ vars.QA_WALLET_ADDRESS }}
+          WALLET_ADDRESS_INDEX: ${{ vars.QA_WALLET_ADDRESS_INDEX || '0' }}
+          QA_ENVIRONMENT: ${{ vars.QA_ENVIRONMENT }}
+          QA_VERSION: ${{ github.event.client_payload.version || vars.QA_VERSION }}
+          QA_OWNER: ${{ vars.QA_OWNER }}
+          QA_RUN_LABEL: Regression
+        run: npx playwright test
+
+      - name: Publish regression summary
+        if: always()
+        run: |
+          if [ -f playwright-report/regression-summary.md ]; then
+            cat playwright-report/regression-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

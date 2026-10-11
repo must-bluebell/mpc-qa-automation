@@ -17,9 +17,11 @@ import { stackStatus } from './adapters/local-stack.mjs'
 import { startChaosProxy, PROFILES } from './chaos/proxy.mjs'
 import { notifyRun } from './notify/slack.mjs'
 import { analyzeRun } from './ai/analyze.mjs'
+import { shouldReview } from './ai/policy.mjs'
 import { publishSummary, kstTime } from './lib/safe-output.mjs'
 import { generateAllureReport } from './lib/allure.mjs'
 import { prepareTestData } from './lib/test-data.mjs'
+import { runStatus } from './lib/run-status.mjs'
 
 const ADAPTERS = { playwright: runPlaywrightStep, 'webmpc-scenarios': runWebmpcStep, k6: runK6Step }
 const TRIGGERS = /^[\w-]{1,40}$/
@@ -167,18 +169,15 @@ export async function runPipeline({ suite: suiteName, env: envName, trigger = 'm
   const prev = previousRun(run)
   run.comparison = compareRuns(run, prev, readIndex().filter(r => r.runId !== id))
   run.coverage = coverageOf(run.tests, requirements)
-  const productFailures = run.tests.filter(t => t.status === 'failed' && t.classification?.kind === 'product').length
-  const infraFailures = run.tests.filter(t => t.status === 'failed' && t.classification?.kind === 'infrastructure').length
   if (run.status === 'running') {
-    run.status = productFailures ? 'failed' : infraFailures ? 'infra-failed' : run.steps.some(s => s.timedOut) ? 'timeout'
-      : !c.total ? 'blocked' : c.blocked && !c.passed ? 'blocked' : 'passed'
+    run.status = runStatus(run)
   }
   run.finishedAt = new Date().toISOString()
   run.durationMs = Date.now() - started
 
   // AI review is advisory; it never changes the status computed above.
-  const wantAi = ai ?? (process.env.QA_AI_AUTO === '1' && c.failed > 0)
-  run.ai = wantAi ? await analyzeRun(run, dir, requirements) : { status: 'not-requested', reason: process.env.QA_AI_AUTO === '1' ? 'no failures to analyse' : 'QA_AI_AUTO is not 1' }
+  const wantAi = shouldReview(ai, run)
+  run.ai = wantAi ? await analyzeRun(run, dir, requirements) : { status: 'not-requested', reason: ai === false ? 'AI review disabled for this run' : process.env.QA_AI_AUTO === '1' ? 'no failures to analyse' : 'QA_AI_AUTO is not 1' }
 
   // Built before Slack so the summary can link it; a failed build only drops the link.
   run.allure = await generateAllureReport(id, dir, { echo })
@@ -224,11 +223,12 @@ async function main() {
   const { values } = parseArgs({ options: {
     suite: { type: 'string', default: 'smoke' }, env: { type: 'string', default: process.env.QA_DEFAULT_ENV || 'local-docker' },
     trigger: { type: 'string', default: 'manual' }, 'schedule-id': { type: 'string' }, 'seed-defect': { type: 'string' },
-    'run-id': { type: 'string' }, 'no-notify': { type: 'boolean', default: false }, ai: { type: 'boolean' }, quiet: { type: 'boolean', default: false },
+    'run-id': { type: 'string' }, 'no-notify': { type: 'boolean', default: false }, ai: { type: 'boolean' }, 'no-ai': { type: 'boolean' }, quiet: { type: 'boolean', default: false },
   } })
   try {
+    if (values.ai && values['no-ai']) throw new Error('Choose either --ai or --no-ai.')
     const run = await runPipeline({ suite: values.suite, env: values.env, trigger: values.trigger, scheduleId: values['schedule-id'] ?? null,
-      seededDefect: values['seed-defect'] ?? null, runId: values['run-id'], notify: !values['no-notify'], ai: values.ai, echo: !values.quiet })
+      seededDefect: values['seed-defect'] ?? null, runId: values['run-id'], notify: !values['no-notify'], ai: values['no-ai'] ? false : values.ai, echo: !values.quiet })
     console.log(`\n${renderMarkdown(run)}\nRun folder: runs/${run.runId}`)
     process.exit(run.status === 'passed' ? 0 : run.status === 'failed' ? 1 : 2)
   } catch (error) {
