@@ -1,6 +1,6 @@
 # GitHub Actions and Slack setup
 
-The QA repository is `must-bluebell/mpc-qa-automation`. Its `.github/workflows/qa-runner.yml` runs the full API, regression, UAT and load suite against the exact application commit received through `webapp-merged`, API checks every four hours, and load checks daily at 01:00 Asia/Seoul. Manual runs support `regression`, `api`, `uat`, `load` and `full`. The workflow must be on the QA repository's default branch.
+The QA repository is `must-bluebell/mpc-qa-automation`. Its `.github/workflows/qa-runner.yml` runs the full API, regression, UAT and load suite against the exact application commit received through `webapp-merged`, with recurring execution owned by the local scheduler (critical smoke every 30 minutes, nightly API + UAT, weekly load and a daily health report). Manual runs support `regression`, `api`, `uat`, `load` and `full`. The workflow must be on the QA repository's default branch.
 
 An independent code/security job checks out the same application revision, installs its frozen pnpm lockfile, runs TypeScript and lint/boundary checks, and audits dependencies. High or critical dependency vulnerabilities fail the gate, as do unavailable audit services. These checks run independently so a code gate failure does not suppress functional test evidence. The application's existing `packageManager` field selects pnpm through Corepack. QA-repository PRs also run `npm audit --audit-level=high --include=dev` in `qa.yml`.
 

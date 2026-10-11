@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { call, requireWrites, signIn } from '../../fixtures/api'
 import { target } from '../../config/target'
 
-test.describe('Account access acceptance journeys', { tag: ['@uat', '@critical', '@feature-auth'] }, () => {
+test.describe('Account access acceptance journeys', { tag: ['@uat', '@smoke', '@critical', '@feature-auth'] }, () => {
   test.beforeEach(() => requireWrites())
 
   test('U01 - A returning user restores their session and can sign out', async ({ request, playwright }, info) => {

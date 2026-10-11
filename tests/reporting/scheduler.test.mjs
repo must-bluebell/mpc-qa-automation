@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cronMatches, enqueueDue, nextSlots, completeJob, enqueueRotation, rotationSlot } from '../../pipeline/scheduler.mjs'
+import { cronMatches, enqueueDue, nextSlots, completeJob, enqueueRotation, rotationSlot, reconcileSchedules, selectQueuedJob, completeSummaryJob } from '../../pipeline/scheduler.mjs'
 import { classifyFailure } from '../../pipeline/lib/classify.mjs'
 import { redactValue } from '../../pipeline/lib/safe-output.mjs'
 
@@ -86,4 +86,63 @@ test('wallet setup errors are infrastructure failures, not product defects',()=>
 test('nested redaction preserves JSON structure while removing credential values',()=>{
   const data=redactValue({errors:['Authorization: Bearer private'],nested:{value:'xoxb-secret-token'}})
   assert.deepEqual(data,{errors:['[REDACTED]'],nested:{value:'[REDACTED]'}})
+})
+
+test('schedule changes cancel obsolete queued jobs without interrupting active work',()=>{
+  const state={jobs:[{scheduleId:'qa-rotation',status:'queued'}, {scheduleId:'qa-rotation',status:'running'}, {scheduleId:'qa-rotation',status:'notifying'}]}
+  reconcileSchedules(state,{schedules,rotation:{enabled:false}})
+  assert.deepEqual(state.jobs.map(j=>j.status),['cancelled','running','notifying'])
+})
+test('scheduled jobs preserve report kind and priority; stale jobs are missed before selecting work',()=>{
+  const now=new Date('2026-10-12T00:00:00Z'),spec=[
+    {id:'smoke',suite:'critical-smoke',cron:'*/30 * * * *',env:'local-docker',enabled:true,graceMinutes:10,priority:30},
+    {id:'health',kind:'summary',suite:'daily-health',cron:'0 9 * * *',env:'local-docker',enabled:true,priority:0},
+  ]
+  const state={cursor:'2026-10-11T23:29:00Z',jobs:[]}
+  enqueueDue(state,spec,now)
+  const selected=selectQueuedJob(state,now)
+  assert.equal(selected.kind,'summary')
+  assert.equal(selected.scheduleId,'health')
+  assert.equal(state.jobs.find(j=>j.scheduleId==='smoke'&&j.at==='2026-10-11T23:30:00.000Z').status,'missed')
+})
+
+test('a busy worker still allows summaries and records expired test jobs',()=>{
+  const state={jobs:[
+    {id:'active',status:'running',suite:'nightly-regression'},
+    {id:'stale',status:'queued',at:'2026-10-11T22:00:00Z',graceMinutes:10},
+    {id:'test',status:'queued',at:'2026-10-12T00:00:00Z',priority:10},
+    {id:'report',kind:'summary',status:'queued',at:'2026-10-12T00:00:00Z',priority:0},
+  ]}
+  assert.equal(selectQueuedJob(state,new Date('2026-10-12T00:00:00Z'),{summaryOnly:true}).id,'report')
+  assert.equal(state.jobs[1].status,'missed')
+  assert.equal(state.jobs[0].status,'running')
+})
+test('configuration assigns API and UAT smoke, nightly without load, and one scheduling owner',async()=>{
+  const {config}=await import('../../pipeline/lib/env.mjs')
+  const {expandSuite}=await import('../../pipeline/orchestrator.mjs')
+  const {readFileSync}=await import('node:fs')
+  const spec=config.schedules(),suites=config.suites()
+  assert.equal(spec.rotation.enabled,false)
+  assert.equal(spec.schedules.length,4)
+  const smoke=expandSuite('critical-smoke',suites)
+  assert.deepEqual(smoke.map(s=>[s.project,s.grep]),[['api','@smoke'],['uat','@smoke']])
+  const nightly=expandSuite('nightly-regression',suites)
+  assert.ok(nightly.some(s=>s.project==='api'))
+  assert.ok(nightly.some(s=>s.adapter==='webmpc-scenarios'))
+  assert.equal(nightly.some(s=>s.adapter==='k6'),false)
+  assert.doesNotMatch(readFileSync(new URL('../../.github/workflows/qa-runner.yml',import.meta.url),'utf8'),/^  schedule:/m)
+})
+
+test('summary generation retries after a temporary outbox failure without finishing or losing the job',async()=>{
+  const job={id:'report',kind:'summary',status:'queued'},state={jobs:[job]}
+  let attempts=0
+  const options={persistImpl:()=>{},generate:async()=>{if(++attempts===1)throw new Error('outbox busy')}}
+  await completeSummaryJob(state,job,{},options)
+  assert.equal(job.status,'running')
+  assert.equal(job.finishedAt,undefined)
+  assert.equal(job.reportError,'Daily health generation or outbox delivery failed; retry pending.')
+  await completeSummaryJob(state,job,{},options)
+  assert.equal(job.status,'finished')
+  assert.equal(job.reportError,undefined)
+  assert.equal(attempts,2)
 })

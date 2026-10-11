@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { notifyBotRun, flushBotOutbox } from '../../pipeline/notify/slack-bot.mjs'
+import { notifyBotRun, flushBotOutbox, notifyHealthSummary } from '../../pipeline/notify/slack-bot.mjs'
 
 const run = (id, status = 'failed') => ({ runId:id, suite:'regression', env:'local-docker', status,
   finishedAt:'2026-10-09T00:00:00Z', versions:{app:{id:'abc123'}}, counts:{passed:status==='passed'?1:0,failed:status==='failed'?1:0,skipped:status==='skipped'?1:0,blocked:0},
@@ -92,4 +92,20 @@ test('GitHub CI summaries link to the run without exposing raw artifacts',async(
   const bad=setup();bad.options.runUrl='https://github.com.attacker.invalid/secret';bad.options.reportBase=''
   await notifyBotRun(run('invalid-link'),bad.options)
   assert.doesNotMatch(bad.calls[0].body.text,/attacker/)
+})
+
+test('daily health queues durably once and retries without adding runs or incidents',async()=>{
+  const {calls,options}=setup(),good=options.fetchImpl
+  options.fetchImpl=async()=>({ok:false,status:429,headers:new Headers({'retry-after':'1'})})
+  const result=await notifyHealthSummary('daily-health-1','MPC QA daily health — no-data',options)
+  assert.equal(result.queued,true)
+  let state=JSON.parse(readFileSync(join(options.stateDir,'slack-bot-state.json'),'utf8'))
+  assert.equal(state.messages.length,1)
+  assert.equal(state.messages[0].status,'pending')
+  assert.deepEqual(state.runs,{})
+  assert.deepEqual(state.incidents,{})
+  await flushBotOutbox({...options,fetchImpl:good,now:options.now+2000})
+  await notifyHealthSummary('daily-health-1','changed text',{...options,fetchImpl:good,now:options.now+3000})
+  assert.equal(calls.filter(c=>c.method==='chat.postMessage').length,1)
+  assert.match(calls[0].body.text,/no-data/)
 })

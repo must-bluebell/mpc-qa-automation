@@ -91,5 +91,40 @@
     "tags": [
       "@full"
     ]
+  },
+  "api-smoke": {
+    "steps": [
+      {
+        "adapter": "playwright",
+        "project": "api",
+        "grep": "@smoke"
+      }
+    ]
+  },
+  "uat-smoke": {
+    "steps": [
+      {
+        "adapter": "playwright",
+        "project": "uat",
+        "grep": "@smoke"
+      }
+    ],
+    "requiresIsolated": true
+  },
+  "critical-smoke": {
+    "description": "Critical read-only API checks and three account-access UAT journeys.",
+    "include": [
+      "api-smoke",
+      "uat-smoke"
+    ],
+    "timeoutMs": 900000
+  },
+  "nightly-regression": {
+    "description": "Full API and UAT including application scenarios; load runs separately.",
+    "include": [
+      "api",
+      "uat"
+    ],
+    "timeoutMs": 4800000
   }
 }

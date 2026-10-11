@@ -39,3 +39,4 @@ The following summarizes user flows implemented in the code. Verify deployment s
 - My Mine opens only when all required opBNB contract addresses are configured; the voting tab opens only when the voting contract address is configured. The Energy bridge is not a prerequisite for new user flows.
 - Depending on the feature, transactions are sent directly by the user or through a server relay. A success message on screen alone does not confirm a successful chain operation.
 - Do not interpret the environment restriction on the `/my-mine` review page as a restriction on all `/my-mine/*` feature APIs.
+

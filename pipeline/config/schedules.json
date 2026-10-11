@@ -1,11 +1,57 @@
 {
   "timezone": "Asia/Seoul",
-  "schedules": [],
+  "schedules": [
+    {
+      "id": "critical-30m",
+      "suite": "critical-smoke",
+      "cron": "*/30 * * * *",
+      "kind": "test",
+      "graceMinutes": 10,
+      "priority": 30,
+      "env": "local-docker",
+      "enabled": true
+    },
+    {
+      "id": "nightly-api-uat",
+      "suite": "nightly-regression",
+      "cron": "0 1 * * *",
+      "kind": "test",
+      "graceMinutes": 360,
+      "priority": 10,
+      "env": "local-docker",
+      "enabled": true
+    },
+    {
+      "id": "weekly-load",
+      "suite": "load",
+      "cron": "0 3 * * 0",
+      "kind": "test",
+      "graceMinutes": 360,
+      "priority": 20,
+      "env": "local-docker",
+      "enabled": true
+    },
+    {
+      "id": "daily-health",
+      "suite": "daily-health",
+      "cron": "0 9 * * *",
+      "kind": "summary",
+      "graceMinutes": 1440,
+      "priority": 0,
+      "env": "local-docker",
+      "enabled": true
+    }
+  ],
   "rotation": {
     "id": "qa-rotation",
-    "suites": ["regression", "uat", "api", "load"],
+    "suites": [
+      "regression",
+      "uat",
+      "api",
+      "load"
+    ],
     "env": "local-docker",
     "gapMinutes": 30,
-    "enabled": true
+    "enabled": false
   }
 }

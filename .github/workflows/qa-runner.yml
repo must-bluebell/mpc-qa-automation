@@ -3,11 +3,7 @@ name: MPC QA regression and schedules
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: '0 */4 * * *'
-      timezone: Asia/Seoul
-    - cron: '0 1 * * *'
-      timezone: Asia/Seoul
+  # Recurring QA is owned by the local scheduler.
   repository_dispatch:
     types: [webapp-merged]
   workflow_dispatch:

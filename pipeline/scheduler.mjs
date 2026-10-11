@@ -8,6 +8,7 @@ import { ROOT, RUNS_DIR, config } from './lib/env.mjs'
 import { acquireLock, readLock } from './lib/lock.mjs'
 import { createRunDir, readRun, saveRun, writeJsonAtomic } from './lib/run-store.mjs'
 import { kstTime, opaqueId, publishSummary } from './lib/safe-output.mjs'
+import { generateHealthSummary } from './health-summary.mjs'
 import { notifyBotRun, flushBotOutbox, checkBot } from './notify/slack-bot.mjs'
 
 function cronField(text,value,min,max) {
@@ -66,12 +67,31 @@ export function enqueueDue(state,schedules,now=new Date(),timezone='Asia/Seoul')
       const id=`${schedule.id}-${at}`
       if(known.has(id))continue
       state.jobs.push({id,scheduleId:schedule.id,suite:schedule.suite,env:schedule.env,at:new Date(at).toISOString(),
-        runId:`sched-${schedule.id}-${at}`,status:end-at>grace?'missed':'queued',graceMinutes:schedule.graceMinutes??60})
+        kind:schedule.kind??'test',priority:schedule.priority??30,runId:`sched-${schedule.id}-${at}`,status:end-at>grace?'missed':'queued',graceMinutes:schedule.graceMinutes??60})
       known.add(id)
     }
   }
   state.cursor=new Date(end).toISOString()
   return state
+}
+/** Retire only unclaimed work; active jobs and historical evidence survive migration. */
+export function reconcileSchedules(state,spec) {
+  const enabled=new Map(spec.schedules.filter(s=>s.enabled).map(s=>[s.id,s]))
+  for(const job of state.jobs.filter(j=>j.status==='queued'&&j.scheduleId!=='run-now')) {
+    const schedule=enabled.get(job.scheduleId)
+    const rotation=spec.rotation?.enabled&&job.scheduleId===spec.rotation.id
+    if(!rotation&&(!schedule||schedule.suite!==job.suite||schedule.env!==job.env||(schedule.kind??'test')!==(job.kind??'test'))) {
+      job.status='cancelled';job.reason='Schedule removed, disabled or changed.'
+    }
+  }
+  return state
+}
+export function selectQueuedJob(state,now=new Date(),{summaryOnly=false}={}) {
+  for(const job of state.jobs.filter(j=>j.status==='queued'&&j.rotationIndex===undefined)) {
+    if(now.getTime()-Date.parse(job.at)>(job.graceMinutes??60)*60_000)job.status='missed'
+  }
+  return state.jobs.filter(j=>j.status==='queued'&&(!summaryOnly||j.kind==='summary'))
+    .sort((a,b)=>(a.priority??30)-(b.priority??30)||Date.parse(a.at)-Date.parse(b.at))[0]
 }
 export function nextSlots(schedules,now=new Date(),timezone='Asia/Seoul') {
   return schedules.filter(s=>s.enabled).map(s=>{
@@ -104,10 +124,22 @@ export async function completeJob(state,job,code,{readRunImpl=readRun,saveRunImp
   job.status='finished';job.finishedAt=new Date().toISOString();persistImpl(state)
 }
 
+export async function completeSummaryJob(state,job,spec,{generate=generateHealthSummary,persistImpl=persist}={}) {
+  job.status='running';persistImpl(state)
+  try {
+    await generate(job,state,spec)
+    job.status='finished';job.finishedAt=new Date().toISOString();delete job.reportError
+  }catch {
+    job.reportError='Daily health generation or outbox delivery failed; retry pending.'
+  }
+  persistImpl(state)
+}
+
 export async function runScheduler({once=false,runNow=null}={}) {
   mkdirSync(RUNS_DIR,{recursive:true,mode:0o700})
   const lock=acquireLock(`scheduler-${process.pid}`,'scheduler'),state=loadState(),spec=config.schedules()
   if(spec.timezone!=='Asia/Seoul')throw new Error('Scheduler timezone must be Asia/Seoul (KST).')
+  reconcileSchedules(state,spec)
   if(runNow) {
     if(!config.suites()[runNow])throw new Error('Unknown immediate suite')
     const id=`manual-${Date.now()}-${opaqueId(runNow).slice(0,4)}`
@@ -117,6 +149,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
     await completeJob(state,job,code)
     console.log(`${kstTime(Date.now())} ${job.suite}: ${readRun(job.runId)?.status??job.status}; ${job.runId}`)
   }
+  const workers=new Map()
   let stopped=false
   const stop=()=>{stopped=true}
   process.once('SIGINT',stop);process.once('SIGTERM',stop)
@@ -128,25 +161,39 @@ export async function runScheduler({once=false,runNow=null}={}) {
       state.pid=process.pid;state.heartbeatAt=new Date().toISOString();persist(state)
       await flushBotOutbox()
       for(const job of state.jobs.filter(j=>j.status==='notifying'))await finish(job,job.exitCode)
-      for(const job of state.jobs.filter(j=>j.status==='running'))if(!alive(job.pid))await finish(job,null)
+      for(const job of state.jobs.filter(j=>j.status==='running'&&j.kind!=='summary')) {
+        const worker=workers.get(job.id)
+        if(worker?.done||!alive(job.pid)) {
+          await finish(job,worker?.code??null);workers.delete(job.id)
+        }
+      }
+      // Summaries never own the test lock and recover independently of test workers.
+      for(const job of state.jobs.filter(j=>j.status==='running'&&j.kind==='summary')) {
+        await completeSummaryJob(state,job,spec)
+      }
       const pipelineLock=readLock()
-      if(!state.jobs.some(j=>j.status==='running')&&pipelineLock&&!pipelineLock.stale) {
-        // An interactive pipeline run owns the shared account. Keep queued work for the next tick.
-      }else if(!state.jobs.some(j=>j.status==='running')) {
-        const now=Date.now()
-        for(const job of state.jobs.filter(j=>j.status==='queued'&&j.rotationIndex===undefined))if(now-Date.parse(job.at)>job.graceMinutes*60_000){job.status='missed';persist(state)}
-        const job=state.jobs.find(j=>j.status==='queued')
-        if(job) {
+      const busy=state.jobs.some(j=>['running','notifying'].includes(j.status)&&j.kind!=='summary')||(pipelineLock&&!pipelineLock.stale)
+      const job=selectQueuedJob(state,new Date(),{summaryOnly:!!busy})
+      persist(state)
+      if(job) {
+        if(job.kind==='summary') {
+          await completeSummaryJob(state,job,spec)
+        }else {
           const prior=readRun(job.runId)
           if(prior)await finish(job,null)
           else {
             job.status='running';job.pid=null;persist(state)
-            console.log(`${kstTime(now)} starting ${job.suite}; ${job.runId}`)
+            console.log(`${kstTime(Date.now())} starting ${job.suite}; ${job.runId}`)
             const log=openSync(join(RUNS_DIR,`${job.runId}.log`),'a',0o600)
             const child=spawn(process.execPath,[join(ROOT,'pipeline/orchestrator.mjs'),'--suite',job.suite,'--env',job.env,'--trigger','scheduled','--schedule-id',job.scheduleId,'--run-id',job.runId,'--no-notify','--quiet'],{cwd:ROOT,stdio:['ignore',log,log]})
             closeSync(log);job.pid=child.pid;persist(state)
-            const code=await new Promise(resolvePromise=>{child.once('error',()=>resolvePromise(2));child.once('exit',resolvePromise)})
-            await finish(job,code)
+            const worker={done:false,code:null}
+            worker.promise=new Promise(resolvePromise=>{
+              const done=code=>{worker.done=true;worker.code=code;resolvePromise(code)}
+              child.once('error',()=>done(2));child.once('exit',done)
+            })
+            workers.set(job.id,worker)
+            if(once){await finish(job,await worker.promise);workers.delete(job.id)}
           }
         }
       }
@@ -161,7 +208,7 @@ async function main() {
   if(values.stop){const lock=readLock('scheduler');if(!lock||lock.stale){console.log('Scheduler is not running.');return}process.kill(lock.pid,'SIGTERM');console.log(`Stopped scheduler pid ${lock.pid}.`);return}
   if(values['check-slack']){const result=await checkBot();console.log(JSON.stringify(result,null,2));if(!result.ok)process.exitCode=1;return}
   if(values['dry-run']){const spec=config.schedules();console.log(JSON.stringify({cron:nextSlots(spec.schedules,new Date(),spec.timezone),rotation:rotationSlot(loadState(),spec.rotation)},null,2));return}
-  if(values.status){const state=loadState();console.log(JSON.stringify({lock:readLock('scheduler'),heartbeat:state.heartbeatAt,rotation:config.schedules().rotation,next:rotationSlot(state,config.schedules().rotation),jobs:state.jobs.slice(-10)},null,2));return}
+  if(values.status){const state=loadState();console.log(JSON.stringify({lock:readLock('scheduler'),heartbeat:state.heartbeatAt,rotation:config.schedules().rotation,next:nextSlots(config.schedules().schedules,new Date(),config.schedules().timezone),jobs:state.jobs.slice(-10)},null,2));return}
   if(values.start) {
     const lock=readLock('scheduler');if(lock&&!lock.stale)throw new Error(`Scheduler is already running (pid ${lock.pid}).`)
     mkdirSync(RUNS_DIR,{recursive:true,mode:0o700})

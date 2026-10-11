@@ -2,16 +2,20 @@
 
 The scheduler uses Asia/Seoul (KST, UTC+9). User-visible Slack and sanitized report times use KST. Internal state uses UTC for unambiguous comparisons.
 
-| Order | Suite |
-| --- | --- |
-| 1 | Web regression |
-| 2 | Automated UAT |
-| 3 | API |
-| 4 | Controlled load |
+| Job | Asia/Seoul (KST) | Asia/Karachi (Pakistan) |
+| --- | --- | --- |
+| Critical API + account-access UAT smoke | Every hour at :00 and :30 | Every hour at :00 and :30 |
+| Full API + UAT regression | Daily 01:00 | Previous day 21:00 |
+| Controlled load (baseline profile) | Sunday 03:00 | Saturday 23:00 |
+| Consolidated QA health report | Daily 09:00 | Daily 05:00 |
 
-The active rotation starts web regression immediately, waits 30 minutes after it finishes, then runs UAT, API and load in order with the same completion-to-start gap. After load it waits 30 minutes and repeats from web. Failures still produce Slack reports and advance the rotation. Durable state preserves the current run and gap across scheduler restarts. The separate cron schedules are disabled while this rotation is active.
+The local scheduler owns recurring execution; GitHub recurring triggers are removed. GitHub push, merge dispatch and manual triggers remain available. Deploy the workflow change to the default branch to disable remote recurring triggers. The former suite rotation is disabled. Migration cancels obsolete queued jobs while preserving running jobs, notification work and history.
 
-All suites currently use the isolated local Docker stack. The global pipeline lock serializes suites using the shared account. Runs queued past their grace period are visibly marked missed in scheduler-state.json instead of being replayed indefinitely. A first start does not backfill earlier runs. Restarting never reruns a claimed slot; interrupted jobs remain visible. Keep the host awake and Docker running. This local process does not install an OS startup service.
+Critical smoke covers read-only API checks and three account-access journeys: session restoration, identity isolation and sign-in after logout. Full nightly UAT also runs the application's wider scenario suite. Nightly does not include load.
+
+All suites use the isolated local Docker stack. One test worker runs at a time because the suites share accounts and application state. The scheduler keeps recording slots during long runs; smoke queued more than ten minutes late is marked missed. Nightly and weekly load have six-hour grace periods and take precedence over smoke. The daily summary has a 24-hour grace period and can run while a test worker is busy. A first start does not backfill earlier slots; restart catches up at most 24 hours, with older absences visible in daily reports. Keep the host awake and Docker running. This local process does not install an OS startup service.
+
+The daily health job records the half-open 24-hour window ending at its scheduled cutoff. It aggregates API, UAT, web and load checks, pass rate among executed assertions, execution coverage including skipped/blocked checks, failure comparison events, infrastructure failures, completed/missed/pending/absent scheduled slots, latest nightly and latest load with timestamp and age. Seeded defects, previews, other environments and completions at or after cutoff are excluded from window totals. No executed assertions means an n/a pass rate. Historical load may be shown without contributing to today's counts. The report is a snapshot, never a new passing test execution. Delivery uses the same durable Slack outbox, without altering incidents.
 
 The current environment is `local-docker`, Compose project `mpc-qa-rotation-20261011`:
 
@@ -55,7 +59,7 @@ npm run qa:scheduler:status
 npm run qa:scheduler -- --stop
 ```
 
-For foreground use: `npm run qa:scheduler`. For one tick: `npm run qa:scheduler -- --once`. `--run-now` adds an extra immediate run; omit it when starting the rotation. `--status` shows the next suite and earliest start time, or a pending current job. Stop only the PID shown by the status command using SIGTERM. Restart after changing .env. A stopped worker may leave its current child finishing; a replacement worker waits for it rather than duplicating the suite.
+For foreground use: `npm run qa:scheduler`. For one tick: `npm run qa:scheduler -- --once`. `--run-now` adds an extra immediate run; omit it for normal scheduled operation. `--status` shows upcoming cron slots and recent jobs. Stop only the PID shown by the status command using SIGTERM. Restart after changing .env. A stopped worker may leave its current child finishing; a replacement worker waits for it rather than duplicating the suite.
 
 ## Storage and delivery
 
@@ -64,6 +68,7 @@ For foreground use: `npm run qa:scheduler`. For one tick: `npm run qa:scheduler 
 - `runs/scheduler-state.json`: durable slots and queued/running/finished/missed/interrupted status.
 - `runs/scheduler.log` and `runs/<runId>.log`: private worker logs.
 - `runs/slack-bot-state.json`: sanitized queued messages, Slack timestamps and persistent incident state; no token.
+- `runs/health/<jobId>.json`: daily report snapshot, separate from test run history.
 - `runs/published/<runId>.md`: allowlisted summaries suitable for sharing from an access-controlled HTTPS host.
 - `runs/<runId>/`: private raw diagnostic evidence; never upload this whole tree to shared hosting.
 - `runs/allure/<runId>/`: Allure HTML report for the run's Playwright steps; `runs/allure/history.jsonl` carries trends between runs.

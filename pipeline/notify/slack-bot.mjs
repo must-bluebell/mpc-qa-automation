@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync 
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { RUNS_DIR, config } from '../lib/env.mjs'
-import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS } from '../lib/safe-output.mjs'
+import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS, redactValue } from '../lib/safe-output.mjs'
 import { formatRate } from '../lib/quality-rates.mjs'
 
 function settings(options) {
@@ -248,6 +248,20 @@ async function flush(state,o) {
 export async function notifyBotRun(run,options={}) {
   const o=settings(options)
   return locked(o,async state=>{queueRun(state,run,o);return {...await flush(state,o),queued:true}})
+}
+/** Daily reports share durable delivery, without creating tests or changing incidents. */
+export async function notifyHealthSummary(reportId,text,options={}) {
+  if(!/^[\w-]{1,100}$/.test(reportId))throw new Error('Invalid health report ID')
+  const o=settings(options)
+  return locked(o,async state=>{
+    const id=`${o.channel}:health:${reportId}`
+    if(!state.messages.some(m=>m.id===id)) {
+      state.messages.push({id,kind:'health',runId:reportId,channel:o.channel,text:redactValue(text),parent:null,
+        clientId:clientId(id),createdAt:o.now,status:'pending',attempts:0,nextAttemptAt:0})
+      save(o,state)
+    }
+    return {...await flush(state,o),queued:true}
+  })
 }
 export async function flushBotOutbox(options={}) {
   const o=settings(options)
