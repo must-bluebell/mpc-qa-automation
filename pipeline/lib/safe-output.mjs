@@ -90,7 +90,7 @@ export function publicSummary(run) {
       const requirementId=confirmation?.description?.match(/^([A-Z]+-\d+):/)?.[1]
       const confirmed=t.status==='failed'&&approved.has(requirementId)
       const load=t.adapter==='k6'?loadCheck(t,run,thresholds):null
-      return {id:opaqueId(t.key),name:load?.name??testNames[(t.title??'').split(' > ').at(-1)?.match(/^([WAPMCU]\d{2}) - /)?.[1]]??`Check ${opaqueId(t.key)}`,status:field(t.status),
+      return {id:opaqueId(t.key),name:load?.name??testNames[(t.title??'').split(' > ').at(-1)?.match(/^([WAPMCU]\d{2}) - /)?.[1]]??testNames[(t.title??'').split(' > ').at(-1)]??`Check ${opaqueId(t.key)}`,status:field(t.status),
         category:categoryOf(t,run),detail:load?.detail??null,
         reason:['failed','blocked','skipped'].includes(t.status)?(load?.detail&&t.status==='failed'?`${load.breaches?.length?`Breached: ${load.breaches.join('; ')}. Measured`:'SLO breached'}: ${load.detail}`:diagnosticReason(t)):null,
         requirementIds:(t.requirementIds??[]).filter(id=>approved.has(id)),

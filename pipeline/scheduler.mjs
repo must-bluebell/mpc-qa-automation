@@ -8,6 +8,7 @@ import { ROOT, RUNS_DIR, config } from './lib/env.mjs'
 import { acquireLock, readLock } from './lib/lock.mjs'
 import { createRunDir, readRun, saveRun, writeJsonAtomic } from './lib/run-store.mjs'
 import { kstTime, opaqueId, publishSummary } from './lib/safe-output.mjs'
+import { aiArgs } from './ai/policy.mjs'
 import { generateHealthSummary } from './health-summary.mjs'
 import { notifyBotRun, flushBotOutbox, checkBot } from './notify/slack-bot.mjs'
 
@@ -67,7 +68,7 @@ export function enqueueDue(state,schedules,now=new Date(),timezone='Asia/Seoul')
       const id=`${schedule.id}-${at}`
       if(known.has(id))continue
       state.jobs.push({id,scheduleId:schedule.id,suite:schedule.suite,env:schedule.env,at:new Date(at).toISOString(),
-        kind:schedule.kind??'test',priority:schedule.priority??30,runId:`sched-${schedule.id}-${at}`,status:end-at>grace?'missed':'queued',graceMinutes:schedule.graceMinutes??60})
+        ai:typeof schedule.ai==='boolean'?schedule.ai:undefined,kind:schedule.kind??'test',priority:schedule.priority??30,runId:`sched-${schedule.id}-${at}`,status:end-at>grace?'missed':'queued',graceMinutes:schedule.graceMinutes??60})
       known.add(id)
     }
   }
@@ -185,7 +186,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
             job.status='running';job.pid=null;persist(state)
             console.log(`${kstTime(Date.now())} starting ${job.suite}; ${job.runId}`)
             const log=openSync(join(RUNS_DIR,`${job.runId}.log`),'a',0o600)
-            const child=spawn(process.execPath,[join(ROOT,'pipeline/orchestrator.mjs'),'--suite',job.suite,'--env',job.env,'--trigger','scheduled','--schedule-id',job.scheduleId,'--run-id',job.runId,'--no-notify','--quiet'],{cwd:ROOT,stdio:['ignore',log,log]})
+            const child=spawn(process.execPath,[join(ROOT,'pipeline/orchestrator.mjs'),'--suite',job.suite,'--env',job.env,'--trigger','scheduled','--schedule-id',job.scheduleId,'--run-id',job.runId,'--no-notify','--quiet',...aiArgs(job.ai)],{cwd:ROOT,stdio:['ignore',log,log]})
             closeSync(log);job.pid=child.pid;persist(state)
             const worker={done:false,code:null}
             worker.promise=new Promise(resolvePromise=>{

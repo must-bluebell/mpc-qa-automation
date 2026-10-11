@@ -48,5 +48,17 @@
   "W17": "W17 - Explain failed message signing: locked wallet",
   "W18": "W18 - Explain failed message signing: unavailable wallet",
   "W19": "W19 - Explain failed message signing: unexpected wallet error",
-  "W20": "W20 - Complete the recorded journey after successful wallet sign-in"
+  "W20": "W20 - Complete the recorded journey after successful wallet sign-in",
+  "BSC SBT and opBNB Crew contracts are ready with instant finality": "BSC SBT and opBNB Crew contracts are ready with instant finality",
+  "new member completes SIWE, community, email and SBT issuance": "New member completes SIWE, community, email and SBT issuance",
+  "prerequisites and link gates precede both Crew quest rewards": "Prerequisites and link gates precede both Crew quest rewards",
+  "host and guest claim venture rewards once and activate mining bounds": "Host and guest claim venture rewards once and activate mining bounds",
+  "earned Crew funds the complete My Mine lifecycle": "Earned Crew funds the complete My Mine lifecycle",
+  "admin roles, accounts, password rotation and permission boundaries work": "Admin roles, accounts, password rotation and permission boundaries work",
+  "correct, incorrect and unanswered quizzes produce exact check-in rewards": "Correct, incorrect and unanswered quizzes produce exact check-in rewards",
+  "signed relay check-in earns Crew once and funds real mining draws": "Signed relay check-in earns Crew once and funds real mining draws",
+  "admin publishes a proposal and signed votes preserve snapshot power": "Admin publishes a proposal and signed votes preserve snapshot power",
+  "browser completes new registration and on-chain SBT issuance": "Browser completes new registration and on-chain SBT issuance",
+  "browser checks in for Crew and saves real mining draws": "Browser checks in for Crew and saves real mining draws",
+  "a fresh member opens activities and submits a vote in the browser": "A fresh member opens activities and submits a vote in the browser"
 }

@@ -40,7 +40,7 @@ export function buildBrief(run, requirements) {
 
 export async function analyzeRun(run, dir = runDir(run.runId), requirements = config.requirements(), { client, fetchImpl } = {}) {
   const cfg = aiConfig()
-  if (!cfg.configured) return { status: 'not-configured', provider: cfg.provider, reason: 'Set QA_AI_PROVIDER=ollama for local review, or configure a cloud provider key.' }
+  if (!cfg.configured) return { status: 'not-configured', provider: cfg.provider, reason: 'Configure OpenClaw gateway access, Ollama, or a cloud provider key.' }
   const { brief, regression } = buildBrief(run, requirements)
   writeFileSync(join(dir, 'ai-input.json'), JSON.stringify(brief, null, 2))
   const started = Date.now()

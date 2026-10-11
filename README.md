@@ -69,6 +69,27 @@ After reviewing and reproducing a defect, annotate the relevant test with `{ typ
 
 ### Optional model review
 
+To use an existing OpenClaw GPT login, enable its Responses HTTP endpoint and create a dedicated `qa-review` agent with `tools.deny: ["*"]`, no skills, and its own workspace. Configure the private QA `.env`:
+
+```dotenv
+QA_AI_PROVIDER=openclaw
+QA_AI_MODEL=openai/gpt-6-astra
+QA_OPENCLAW_BASE_URL=http://127.0.0.1:18789
+QA_OPENCLAW_AGENT=qa-review
+QA_OPENCLAW_TOKEN=your-private-gateway-token
+QA_AI_AUTO=1
+```
+
+`QA_AI_MODEL` labels the configured backend; the dedicated agent's OpenClaw configuration selects the actual GPT model and manages OAuth. The QA project uses only the gateway token. This adapter accepts only loopback HTTP endpoints and refuses redirects. Requests use independent sessions and disable tools. OpenClaw's Responses compatibility layer does not guarantee schema-constrained generation, so the schema is included in the instructions and the project validates all returned evidence and requirement references before accepting the review. Gateway transcripts may retain the sanitized evidence; `store: false` is not a retention guarantee for OpenClaw. Keep the gateway token private and the gateway accessible only to trusted callers. [OpenClaw endpoint documentation](https://docs.openclaw.ai/gateway/openresponses-http-api).
+
+Review an existing completed pipeline run without rerunning tests:
+
+```sh
+node pipeline/ai/analyze.mjs <runId>
+```
+
+Success requires `status: "ok"`; results are saved under `runs/<runId>/ai-analysis.json` and shown in the dashboard. Gateway outages, quota failures, malformed output and missing evidence references produce a rejected review while preserving test outcomes. There is no durable AI retry queue; use the saved-run command to retry. Restart the dashboard and scheduler after changing provider settings. Smoke schedules inherit automatic failure-only review; nightly regression explicitly requests review on every result. Per-schedule `ai: true` or `ai: false` overrides automatic mode and is preserved in durable queued jobs.
+
 For local analysis without an API key, start Ollama, install a model (`ollama pull gpt-oss:20b`), and set `QA_AI_PROVIDER=ollama` and `QA_AI_MODEL=gpt-oss:20b` in `.env`. The default endpoint is `http://127.0.0.1:11434`; only local loopback endpoints are accepted. A Mac with 16 GB of memory has limited room for this model alongside Docker, so avoid running model inference during load measurements. The download is large and is a separate installation step. [Official local GPT-OSS guide](https://developers.openai.com/cookbook/articles/gpt-oss/run-locally-ollama).
 
 Alternatively configure `OPENAI_API_KEY` and `OPENAI_MODEL`, or the existing Anthropic provider. Then run:

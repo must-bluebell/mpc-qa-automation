@@ -19,7 +19,8 @@
       "graceMinutes": 360,
       "priority": 10,
       "env": "local-docker",
-      "enabled": true
+      "enabled": true,
+      "ai": true
     },
     {
       "id": "weekly-load",

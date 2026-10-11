@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { RUNS_DIR, config } from '../lib/env.mjs'
 import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS, redactValue } from '../lib/safe-output.mjs'
+import { renderAiReview, splitThreadText } from './ai-review.mjs'
 import { formatRate } from '../lib/quality-rates.mjs'
 
 function settings(options) {
@@ -78,27 +79,15 @@ function comparisonText(c) {
   return `${c.newFailures.length} new failure${c.newFailures.length===1?'':'s'} · ${c.persisting.length+c.newVariants.length} still failing · ${c.recovered.length} recovered${c.previousRunId?` (vs ${c.previousRunId})`:''}`
 }
 /** One line per pipeline stage, so every scheduled report shows how the result was produced. */
-function renderPipeline(s,{actionable,recovered,owner}) {
-  const p=s.pipeline,e=p.environment,ok=v=>v?'✅':'❌',c=s.counts
-  const env=[`${e.name} (${e.isolated?'isolated stack':'shared target'})`,
-    e.health?`health probe ${e.health.ok?'OK':'failed'}${e.health.httpStatus?` (HTTP ${e.health.httpStatus})`:''}`:'health probe not recorded',
-    ...(e.stack?[`${e.stack.services-e.stack.unhealthy}/${e.stack.services} Docker services healthy`]:[]),
-    ...(e.load?['load allowed']:[])].join(' · ')
-  const td=e.testData,mark={ready:'✓',created:'✓ new',skipped:'–',failed:'✗'}
-  const data=!td?'test data: not prepared (environment not ready)'
-    :`test data: ${td.status}${td.steps.length?` — ${td.steps.map(x=>`${x.name} ${mark[x.status]??x.status}`).join(' · ')}`:''}`
-  const envOk=e.health?.ok!==false&&e.stack?.healthy!==false&&td?.status!=='failed'
-  const steps=p.steps.length?p.steps.map(x=>`      ${x.timedOut||x.errors?'⚠️':'•'} ${x.adapter}${x.target?`/${x.target}`:''} (${x.suite}) — ${x.tests} tests in ${duration(x.durationMs)}${x.timedOut?' · timed out':''}${x.errors?` · ${x.errors} step error(s)`:''}`).join('\n'):'      • no suite step ran (environment not ready)'
-  const ev=p.evidence,stored=[`private run folder runs/${s.runId}/`,`${ev.logs} step log(s)`,...(ev.htmlReports?[`${ev.htmlReports} Playwright HTML report(s)`]:[]),...(ev.allure?['Allure report']:[]),...(ev.loadSummary?['k6 load summary']:[]),'sanitized summary']
-  const cmp=p.comparison
-  const lines=[`*Pipeline stages*${s.reportOnly?' _(recorded in the source run)_':''}`,
-    `1️⃣ *Environment & test data* ${ok(envOk)}\n      ${env}\n      ${data}`,
-    `2️⃣ *Suites run through adapters* ${ok(p.steps.length&&p.steps.every(x=>!x.timedOut&&!x.errors))}\n${steps}`,
-    `3️⃣ *Explicit assertions* ${c.passed+c.failed+c.skipped+c.blocked?ok(!c.failed):'❌'}\n      ${c.passed+c.failed+c.skipped+c.blocked} checks asserted: ${c.passed} passed · ${c.failed} failed · ${c.skipped} skipped · ${c.blocked} blocked${p.coverage?`\n      critical requirements passing: ${p.coverage.criticalPassed}/${p.coverage.criticalTotal}`:''}`,
-    `4️⃣ *Reports & evidence stored* ✅\n      ${stored.join(' · ')}`,
-    `5️⃣ *Compared with previous runs* ${cmp?.newFailures.length?'⚠️':'✅'}\n      ${cmp?comparisonText(cmp):'comparison not recorded'}${cmp?.newFailures.length?`\n      New: ${cmp.newFailures.slice(0,10).join(', ')}`:''}${cmp?.persisting.length?`\n      Still failing: ${cmp.persisting.slice(0,10).join(', ')}`:''}${cmp?.recovered.length?`\n      Recovered: ${cmp.recovered.slice(0,10).join(', ')}`:''}`,
-    `6️⃣ *Slack notifications* ✅\n      summary + test cases + diagnostics posted · failure alert: ${actionable?(/^U[A-Z0-9]+$/.test(owner??'')?'owner mentioned':'raised (no owner configured)'):'none (no new failures)'} · recovery update: ${recovered.length?`${recovered.length} recovered`:'none'}`]
-  return lines.join('\n')
+function renderPipeline(s) {
+  const p=s.pipeline,e=p.environment,stack=e.stack
+  const services=stack?`${stack.services-stack.unhealthy}/${stack.services} Docker services healthy`:'Docker health not recorded'
+  return ['*System health*',`Environment: ${e.name} · ${e.isolated?'isolated local stack':'shared target'}`,
+    `App: ${e.health?`${e.health.ok?'healthy':'unhealthy'}${e.health.httpStatus?` (HTTP ${e.health.httpStatus})`:''}`:'probe not recorded'}`,
+    `Stack: ${services}`,`Test data: ${e.testData?.status??'not prepared'}`,
+    `Execution: ${p.steps.length} adapter step(s) · ${p.steps.filter(x=>x.timedOut).length} timed out · ${p.steps.reduce((n,x)=>n+x.errors,0)} step error(s)`,
+    ...(p.coverage?[`Critical requirements passing: ${p.coverage.criticalPassed}/${p.coverage.criticalTotal}`]:[]),
+    'Health reflects the source run; test failures are reported separately.'].join('\n')
 }
 /** Why a run produced no trustworthy result, from allowlisted health data only. */
 function infraProblem(s) {
@@ -111,7 +100,7 @@ function infraProblem(s) {
   return parts.length?`${parts.join(' · ')}. Not a product defect.`:`run ${s.status}. Not a confirmed product defect.`
 }
 const badge=status=>status==='passed'?'🟢':status==='failed'?'🔴':'🟡'
-const SUITE_LABELS={'combined-report':'Combined report',regression:'Web regression',api:'API',load:'Load',uat:'UAT',smoke:'Smoke',full:'Full suite'}
+const SUITE_LABELS={'critical-smoke':'Critical API & UAT smoke','nightly-regression':'Full API & UAT regression','combined-report':'Combined report',regression:'Web regression',api:'API',load:'Load',uat:'UAT',smoke:'Smoke',full:'Full suite'}
 function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
   const c=s.counts,total=c.passed+c.failed+c.skipped+c.blocked
   const rows=s.sections.length?s.sections.map(r=>({label:r.label,status:r.status,counts:r.counts}))
@@ -121,7 +110,7 @@ function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
     return `${badge(r.status)} *${r.label}* — ${r.counts.passed}/${n} passed${r.counts.failed?` · ${r.counts.failed} failed`:''}${r.counts.skipped?` · ${r.counts.skipped} skipped`:''}${r.counts.blocked?` · ${r.counts.blocked} blocked`:''}`}
   return [`${badge(s.status)} *MPC QA — ${SUITE_LABELS[s.suite]??s.suite} · ${s.status.toUpperCase()}*`,
     ...(s.reportOnly?['_Recorded results preview — previous execution, not a fresh run._']:[]),
-    `Version: ${s.applicationVersion} · ${s.finishedAt}`,
+    `Version: ${s.applicationVersion} · ${s.finishedAt}`,`Source run: ${s.runId}`,
     `Trigger: ${triggerText(s)} · Env: ${s.pipeline.environment.name}`,'',
     `*Overall:* ${c.passed} passed · ${c.failed} failed · ${c.skipped} skipped · ${c.blocked} blocked${total?` (${total} checks, ${formatRate(s.quality.passRate)} test pass rate; ${formatRate(s.quality.executionRate)} executed)`:''}`,'',
     ...(rows.length?[...rows.map(row),'']:[]),
@@ -135,22 +124,17 @@ function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
 }
 /** Every check, grouped by category; a reason shared by all of a category's failures is printed once. Split to stay readable in Slack. */
 function renderCases(groups) {
-  const blocks=groups.map(([category,checks])=>{
-    const failing=checks.filter(t=>t.status!=='passed'),reasons=new Set(failing.map(t=>t.reason))
-    const shared=failing.length>1&&reasons.size===1&&!/^(SLO breached|Breached)/.test(failing[0].reason??'')?failing[0].reason:null
-    const lines=checks.map(t=>{
-      const note=t.status==='passed'?t.detail:shared?null:t.reason
-      return `${CHECK_ICONS[t.status]??'•'} ${t.name}${t.critical?' *(critical)*':''}${note?`\n      ↳ ${note}`:''}`
-    })
-    return [`*${category}* — ${tally(checks)}`,...lines,...(shared?[`↳ _Reason (all ${failing.length} ${failing.every(t=>t.status==='failed')?'failed':'not passed'})_: ${shared}`]:[])].join('\n')
-  })
-  const messages=[]
-  for(const block of blocks){
-    const last=messages.at(-1)
-    if(last&&last.length+block.length<3500)messages[messages.length-1]=`${last}\n\n${block}`
-    else messages.push(block)
+  const result=[]
+  for(const [status,label] of [['failed','Failed cases'],['blocked','Blocked cases'],['skipped','Skipped cases'],['passed','Passed cases']]) {
+    const sections=[]
+    for(const [category,checks] of groups) {
+      const selected=checks.filter(t=>t.status===status)
+      if(!selected.length)continue
+      sections.push(`*${category}* — ${selected.length} ${status}`,...selected.map(t=>`${CHECK_ICONS[t.status]} ${t.name}${t.critical?' *(critical)*':''}${(t.reason??t.detail)?`\n      ↳ ${t.reason??t.detail}`:''}`),'')
+    }
+    if(sections.length)result.push(...splitThreadText(`*${label}*`,sections.join('\n')))
   }
-  return messages.map((m,i)=>i?m:`*Test cases*\n\n${m}`)
+  return result
 }
 function queueRun(state,run,o) {
   const runKey=`${o.channel}:${run.runId}`
@@ -184,7 +168,7 @@ function queueRun(state,run,o) {
   const metrics=load?`\n\n*Load metrics*\n${load.totalRequests??'unavailable'} requests · ${load.throughputRps??'unavailable'} requests/s · functional check rate ${load.checkPassRate===null?'unavailable':`${(load.checkPassRate*100).toFixed(1)}%`}\n${load.endpoints.map(r=>`• ${r.name}: p95 ${r.p95Ms??'unavailable'}ms · error rate ${r.errorRate===null?'unavailable':`${(r.errorRate*100).toFixed(2)}%`}`).join('\n')}`:''
   const sources=s.sections.map(r=>`• ${r.label}: source ${r.sourceRunId} · ${r.finishedAt}`).join('\n')
   const details=`*Incidents & diagnostics*\n${notes.slice(0,35).join('\n')||'No new actionable failures or recoveries.'}${notes.length>35?'\nAdditional checks are in the sanitized report.':''}${metrics}${sources?`\n\n*Source runs*\n${sources}`:''}`
-  const thread=[['pipeline',renderPipeline(s,{actionable,recovered,owner:o.owner})],...renderCases(groups).map((text,i)=>[`cases-${i+1}`,text]),['details',details]]
+  const thread=[...renderCases(groups).map((text,i)=>[`cases-${i+1}`,text]),['details',details],...renderAiReview(run,o.stateDir).map((text,i)=>[`ai-${i+1}`,text]),['pipeline',renderPipeline(s)]]
   const parentId=`${runKey}:summary`
   state.runs[runKey]={queuedAt:o.now}
   for(const [kind,text,parent] of [['summary',summary,null],...thread.map(([kind,text])=>[kind,text,parentId])]) {
@@ -256,8 +240,13 @@ export async function notifyHealthSummary(reportId,text,options={}) {
   return locked(o,async state=>{
     const id=`${o.channel}:health:${reportId}`
     if(!state.messages.some(m=>m.id===id)) {
-      state.messages.push({id,kind:'health',runId:reportId,channel:o.channel,text:redactValue(text),parent:null,
-        clientId:clientId(id),createdAt:o.now,status:'pending',attempts:0,nextAttemptAt:0})
+      const lines=redactValue(text).split('\n')
+      const parts=lines.length>3?[lines.slice(0,3).join('\n'),...splitThreadText('*System health details*',lines.slice(3).join('\n'))]:[lines.join('\n')]
+      for(const [i,body] of parts.entries()) {
+        const messageId=i?`${id}:details-${i}`:id
+        state.messages.push({id:messageId,kind:i?'health-details':'health',runId:reportId,channel:o.channel,text:body,parent:i?id:null,
+          clientId:clientId(messageId),createdAt:o.now,status:'pending',attempts:0,nextAttemptAt:0})
+      }
       save(o,state)
     }
     return {...await flush(state,o),queued:true}

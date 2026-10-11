@@ -8,7 +8,7 @@ dotenv.config()
 try {
   const cfg=aiConfig()
   if (!cfg.configured) {
-    throw new Error('AI model review has not run. Set QA_AI_PROVIDER=ollama for local analysis, or configure a cloud provider. The automatic evidence brief is in playwright-report/ai-analysis.md.')
+    throw new Error('AI model review has not run. Configure OpenClaw gateway access, Ollama, or a cloud provider. The automatic evidence brief is in playwright-report/ai-analysis.md.')
   }
   const folder = resolve('playwright-report')
   const input = JSON.parse(await readFile(resolve(folder, 'ai-analysis-input.json'), 'utf8'))

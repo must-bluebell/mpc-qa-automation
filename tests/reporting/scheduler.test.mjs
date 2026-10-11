@@ -146,3 +146,10 @@ test('summary generation retries after a temporary outbox failure without finish
   assert.equal(job.reportError,undefined)
   assert.equal(attempts,2)
 })
+
+test('queued schedules retain explicit nightly AI policy across restart',()=>{
+  const spec=[{id:'nightly',suite:'nightly-regression',cron:'0 1 * * *',env:'local-docker',enabled:true,ai:true}]
+  const state={jobs:[]}
+  enqueueDue(state,spec,new Date('2026-10-11T16:00:00Z'))
+  assert.equal(JSON.parse(JSON.stringify(state)).jobs[0].ai,true)
+})

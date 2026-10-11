@@ -1,6 +1,6 @@
 {
   "local-docker": {
-    "description": "Isolated WEB MPC Docker + Anvil stack (Compose project mpc-qa-rotation-20261011). The only environment where writes, seeded defects and load are allowed.",
+    "description": "Isolated WEB MPC Docker + Anvil stack (Compose project mpc-qa-recovery-20261011-1752). The only environment where writes, seeded defects and load are allowed.",
     "baseUrl": "http://localhost:3410",
     "appOrigin": "http://localhost:3410",
     "chainId": 97,
@@ -11,7 +11,7 @@
     "allowSeededDefects": true,
     "isolated": true,
     "stack": {
-      "composeProject": "mpc-qa-rotation-20261011",
+      "composeProject": "mpc-qa-recovery-20261011-1752",
       "webmpcPath": "../WEB MPC",
       "ports": {
         "web": 3410,
@@ -20,7 +20,7 @@
         "postgres": 5440,
         "neonProxy": 4454
       },
-      "note": "Fresh project for current Crew contracts and clean Next.js cache. Previous projects mpc-qa-rotation-20261010 and mpc-qa-rerun-20261009-1135 retain their volumes; their legacy deployments and caches are not reused."
+      "note": "Fresh recovery project after unclean opBNB memory kill. All previous project volumes are preserved. ANVIL_BLOCK_TIME=5 is set in the private QA .env to reduce chain memory growth; do not change it for existing chain state."
     }
   },
   "preview": {

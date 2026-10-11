@@ -29,13 +29,13 @@ test('Slack preview shows all three results in one summary and load metrics in i
   const messages=[]
   await notifyBotRun(combineReport(source),{token:'xoxb-test',channel:'C123',owner:'',stateDir:mkdtempSync(join(tmpdir(),'qa-combined-')),
     fetchImpl:async(url,o)=>{messages.push(JSON.parse(o.body));return {ok:true,status:200,json:async()=>({ok:true,ts:`${messages.length}.1`})}}})
-  assert.equal(messages.length,4)
+  assert.equal(messages.length,6)
   for(const label of ['Web automation regression testing','API testing','Load testing'])assert.ok(messages[0].text.includes(label))
   assert.match(messages[0].text,/Recorded results preview/)
-  assert.match(messages[1].text,/Pipeline stages/)
-  assert.match(messages[2].text,/Test cases/)
-  assert.match(messages[2].text,/❌ GET \/api\/home — p95 & error-rate SLO\n.*p95 3659 ms \(limit 1500 ms\)/)
-  assert.doesNotMatch(messages[2].text.split("*Load testing*")[1],/Check [0-9a-f]{16}/)
+  assert.match(messages.at(-1).text,/System health/)
+  assert.match(messages[1].text,/Failed cases/)
+  assert.match(messages[1].text,/❌ GET \/api\/home — p95 & error-rate SLO\n.*p95 3659 ms \(limit 1500 ms\)/)
+  assert.doesNotMatch(messages[1].text.split("*Load testing*")[1],/Check [0-9a-f]{16}/)
   assert.match(messages[3].text,/492 requests/)
 })
 test('load failures name the breached rule, including baseline regressions under the absolute limit',()=>{
