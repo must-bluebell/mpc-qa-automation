@@ -1,0 +1,473 @@
+[
+  {
+    "title": "Public home JSON",
+    "method": "GET",
+    "path": "/api/home",
+    "status": 200,
+    "error": null,
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-01",
+    "statuses": [
+      200
+    ],
+    "category": "successful-read"
+  },
+  {
+    "title": "Public quests JSON",
+    "method": "GET",
+    "path": "/api/quests",
+    "status": 200,
+    "error": null,
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-02",
+    "statuses": [
+      200
+    ],
+    "category": "successful-read"
+  },
+  {
+    "title": "Public vote proposals JSON",
+    "method": "GET",
+    "path": "/api/vote/proposals",
+    "status": 200,
+    "error": null,
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-03",
+    "statuses": [
+      200
+    ],
+    "category": "successful-read"
+  },
+  {
+    "title": "Anonymous session has no address",
+    "method": "GET",
+    "path": "/api/auth/session",
+    "status": 200,
+    "error": null,
+    "foreign": false,
+    "no_store": true,
+    "anonymous": true,
+    "id": "LOAD-04",
+    "statuses": [
+      200
+    ],
+    "category": "successful-read"
+  },
+  {
+    "title": "Notifications rejects anonymous access",
+    "method": "GET",
+    "path": "/api/notifications",
+    "status": 401,
+    "error": "not_signed_in",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-05",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Activities rejects anonymous access",
+    "method": "GET",
+    "path": "/api/activities",
+    "status": 401,
+    "error": "not_signed_in",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-06",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Energy balance rejects anonymous access",
+    "method": "GET",
+    "path": "/api/energy",
+    "status": 401,
+    "error": "not_signed_in",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-07",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Energy history rejects anonymous access",
+    "method": "GET",
+    "path": "/api/energy/history",
+    "status": 401,
+    "error": "not_signed_in",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-08",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Energy deposits rejects anonymous access",
+    "method": "GET",
+    "path": "/api/energy/deposits",
+    "status": 401,
+    "error": "not_signed_in",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-09",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Energy portfolio rejects anonymous access",
+    "method": "GET",
+    "path": "/api/energy/portfolio",
+    "status": 401,
+    "error": "not_signed_in",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-10",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Energy compensation rejects anonymous access",
+    "method": "GET",
+    "path": "/api/energy/compensation",
+    "status": 401,
+    "error": "not_signed_in",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-11",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Admin admins requires admin session",
+    "method": "GET",
+    "path": "/api/admin/admins",
+    "status": 401,
+    "error": "not_admin",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-12",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Admin quests requires admin session",
+    "method": "GET",
+    "path": "/api/admin/quests",
+    "status": 401,
+    "error": "not_admin",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-13",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Admin roles requires admin session",
+    "method": "GET",
+    "path": "/api/admin/roles",
+    "status": 401,
+    "error": "not_admin",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-14",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Cron relay-sweep rejects missing bearer",
+    "method": "GET",
+    "path": "/api/cron/relay-sweep",
+    "status": [
+      401,
+      403
+    ],
+    "error": null,
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-15",
+    "statuses": [
+      401,
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Cron funnel-failures rejects missing bearer",
+    "method": "GET",
+    "path": "/api/cron/funnel-failures",
+    "status": [
+      401,
+      403
+    ],
+    "error": null,
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-16",
+    "statuses": [
+      401,
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Foreign-origin nonce is refused",
+    "method": "POST",
+    "path": "/api/auth/nonce",
+    "status": 403,
+    "error": null,
+    "foreign": true,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-17",
+    "statuses": [
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Foreign-origin logout is refused",
+    "method": "POST",
+    "path": "/api/auth/logout",
+    "status": 403,
+    "error": null,
+    "foreign": true,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-18",
+    "statuses": [
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Vote metadata rejects ID 0",
+    "method": "GET",
+    "path": "/api/vote/metadata/0",
+    "status": 400,
+    "error": "bad_proposal_id",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-19",
+    "statuses": [
+      400
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Vote metadata rejects ID invalid",
+    "method": "GET",
+    "path": "/api/vote/metadata/invalid",
+    "status": 400,
+    "error": "bad_proposal_id",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-20",
+    "statuses": [
+      400
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Admin ledger/export requires admin session",
+    "method": "GET",
+    "path": "/api/admin/ledger/export",
+    "status": 401,
+    "error": "not_admin",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-21",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Admin website-analytics requires admin session",
+    "method": "GET",
+    "path": "/api/admin/website-analytics",
+    "status": 401,
+    "error": "not_admin",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-22",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Admin join-policy requires admin session",
+    "method": "GET",
+    "path": "/api/admin/join-policy",
+    "status": 401,
+    "error": "not_admin",
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-23",
+    "statuses": [
+      401
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Cron energy-reconcile rejects missing bearer",
+    "method": "GET",
+    "path": "/api/cron/energy-reconcile",
+    "status": [
+      401,
+      403
+    ],
+    "error": null,
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-24",
+    "statuses": [
+      401,
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Cron quest-reconcile rejects missing bearer",
+    "method": "GET",
+    "path": "/api/cron/quest-reconcile",
+    "status": [
+      401,
+      403
+    ],
+    "error": null,
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-25",
+    "statuses": [
+      401,
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Cron checkin-reconcile rejects missing bearer",
+    "method": "GET",
+    "path": "/api/cron/checkin-reconcile",
+    "status": [
+      401,
+      403
+    ],
+    "error": null,
+    "foreign": false,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-26",
+    "statuses": [
+      401,
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Foreign-origin PATCH /api/notifications is refused",
+    "method": "PATCH",
+    "path": "/api/notifications",
+    "status": 403,
+    "error": null,
+    "foreign": true,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-27",
+    "statuses": [
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Foreign-origin POST /api/energy is refused",
+    "method": "POST",
+    "path": "/api/energy",
+    "status": 403,
+    "error": null,
+    "foreign": true,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-28",
+    "statuses": [
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Foreign-origin POST /api/energy/compensation is refused",
+    "method": "POST",
+    "path": "/api/energy/compensation",
+    "status": 403,
+    "error": null,
+    "foreign": true,
+    "no_store": false,
+    "anonymous": false,
+    "id": "LOAD-29",
+    "statuses": [
+      403
+    ],
+    "category": "expected-rejection"
+  },
+  {
+    "title": "Session with invalid authorization remains anonymous",
+    "method": "GET",
+    "path": "/api/auth/session",
+    "status": 200,
+    "error": null,
+    "foreign": false,
+    "no_store": true,
+    "anonymous": true,
+    "invalid_bearer": true,
+    "id": "LOAD-30",
+    "statuses": [
+      200
+    ],
+    "category": "successful-read"
+  }
+]

@@ -11,6 +11,7 @@
     "allowSeededDefects": true,
     "isolated": true,
     "stack": {
+      "databasePool": true,
       "composeProject": "mpc-qa-recovery-20261011-1752",
       "webmpcPath": "../WEB MPC",
       "ports": {

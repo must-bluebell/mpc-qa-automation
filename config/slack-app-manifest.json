@@ -1,5 +1,9 @@
 {
-  "display_information": { "name": "MPC QA", "description": "Scheduled QA summaries, threaded evidence and recovery alerts." },
+  "display_information": {
+    "name": "MPC QA",
+    "description": "Automated API, UAT and load testing with AI analysis, detailed Slack reports and daily QA health summaries.",
+    "long_description": "Hi, I am MPC QA Agent. I help the team monitor application quality through automated testing and clear, actionable reports.\n\nI run critical API and account-access UAT smoke tests every 30 minutes, full API and UAT regression every night, and controlled load tests weekly. I also send a consolidated QA health report every day.\n\nFor each workflow, I share a separate Slack summary with threaded passed and failed cases, diagnostics, available AI analysis, and system health last. AI reviews help explain recorded findings and propose additional test scenarios; test assertions determine pass or fail.\n\nI track recurring failures and recoveries, highlight skipped or blocked checks, and report infrastructure problems and missed scheduled runs so the team can see what needs attention."
+  },
   "features": { "bot_user": { "display_name": "MPC QA", "always_online": false } },
   "oauth_config": { "scopes": { "bot": ["chat:write", "channels:history", "channels:manage"] } },
   "settings": { "socket_mode_enabled": false }

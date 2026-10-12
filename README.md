@@ -122,6 +122,8 @@ Merged application PRs can trigger code/type checks, dependency security auditin
 
 UAT and load run only against the isolated `local-docker` stack (`pipeline/config/environments.json`, Compose project and host ports under `stack`). The pipeline refuses them on preview, staging and production.
 
+The standalone [JMeter and Postman plans](testplans/README.md) add 30 load cases (2,000 users, 60-second ramp-up, two-second request pacing) and 20 API cases. They include a JTL/Newman latency reporter and are separate from the scheduled k6 workload.
+
 To check Slack delivery without a workspace, run `node scripts/slack-sink.mjs` and start the dashboard with `SLACK_ALERT_WEBHOOK_URL=http://127.0.0.1:4599/services/TQA/BQA/local QA_SLACK_ALLOW_LOOPBACK=1`. Payloads land in `runs/slack-sink.jsonl`. Real deliveries require a `https://hooks.slack.com/services/...` URL.
 
 ### Security

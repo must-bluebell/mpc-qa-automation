@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import dotenv from 'dotenv'
 import { promisify } from 'node:util'
 import { resolve } from 'node:path'
 import { ROOT } from '../lib/env.mjs'
@@ -19,9 +20,32 @@ export function stackPortEnv(env) {
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))
 }
 
-function composeArgs(env, extra) {
+export function composeArgs(env, extra) {
   const cwd = resolve(ROOT, env.stack.webmpcPath)
-  return { cwd, env: stackPortEnv(env), args: ['compose', '-f', 'docker/docker-compose.yml', '-f', 'docker/docker-compose.scenario.yml', '-p', env.stack.composeProject, ...extra] }
+  const ports = stackPortEnv(env)
+  const overlays = []
+  if (env.stack.databasePool) {
+    if (!env.isolated) throw new Error('QA pooling requires an isolated environment')
+    // Down only parses Compose; it never connects to SQL or needs real credentials.
+    const databaseUrl = extra[0] === 'down' ? 'postgres://unused:unused@postgres:5432/unused'
+      : dotenv.parse(readFileSync(resolve(cwd, 'docker/.env'))).DATABASE_URL
+    ports.QA_POOLED_DATABASE_URL = pooledDatabaseUrl(databaseUrl)
+    // Compose gives process variables priority over its .env file. Bind the
+    // exact validated URL so an ambient DATABASE_URL cannot redirect the pool.
+    ports.DATABASE_URL = databaseUrl
+    ports.QA_POOL_CONFIG_DIR = resolve(ROOT, 'pipeline/config')
+    overlays.push('-f', resolve(ROOT, 'pipeline/config/docker-compose.pool.yml'))
+  }
+  return { cwd, env: ports, args: ['compose', '-f', 'docker/docker-compose.yml', '-f', 'docker/docker-compose.scenario.yml', ...overlays, '-p', env.stack.composeProject, ...extra] }
+}
+
+export function pooledDatabaseUrl(value) {
+  let url
+  try { url = new URL(value) } catch { throw new Error('QA pooling requires the local postgres service') }
+  if (!['postgres:', 'postgresql:'].includes(url.protocol) || url.hostname !== 'postgres' || (url.port && url.port !== '5432')) throw new Error('QA pooling requires the local postgres service')
+  url.hostname = 'pgbouncer'
+  url.port = '5432'
+  return url.href
 }
 
 export async function stackStatus(env) {
@@ -31,14 +55,14 @@ export async function stackStatus(env) {
     const { stdout } = await exec('docker', args, { cwd, env: childEnv(ports), timeout: 20_000 })
     const services = stdout.trim().split('\n').filter(Boolean).flatMap(line => { const v = JSON.parse(line); return Array.isArray(v) ? v : [v] })
       .map(s => ({ service: s.Service, state: s.State, health: s.Health || null, status: s.Status }))
-    return { project: env.stack.composeProject, ...evaluateStackHealth(services), services }
+    return { project: env.stack.composeProject, ...evaluateStackHealth(services, env.stack), services }
   } catch (error) {
     return { project: env.stack.composeProject, healthy: false, services: [], error: /Cannot connect|daemon/i.test(String(error.stderr ?? error.message)) ? 'Docker is not running' : String(error.message).slice(0, 300) }
   }
 }
 
-export function evaluateStackHealth(services) {
-  const required=['web','postgres','neon-proxy','anvil','anvil-opbnb']
+export function evaluateStackHealth(services, { databasePool = false } = {}) {
+  const required=['web','postgres','neon-proxy','anvil','anvil-opbnb', ...(databasePool ? ['pgbouncer'] : [])]
   const missingServices=required.filter(name=>!services.some(s=>s.service===name))
   const unhealthyServices=services.filter(s=>required.includes(s.service)&&(s.state!=='running'||(s.health&&s.health!=='healthy'))).map(s=>s.service)
   return {healthy:!missingServices.length&&!unhealthyServices.length,missingServices,unhealthyServices}
@@ -50,11 +74,12 @@ export async function stackUp(env, {build=true}={}) {
 }
 
 export async function stackDown(env, { volumes = false } = {}) {
-  const { cwd, env: ports, args } = composeArgs(env, ['down', '--remove-orphans', ...(volumes ? ['--volumes'] : [])])
+  const cwd = resolve(ROOT, env.stack.webmpcPath)
   // No application checkout means no stack was ever started from it, so there is nothing to stop.
   if (!existsSync(resolve(cwd, 'docker/docker-compose.yml'))) {
     console.log(`No docker/docker-compose.yml in ${cwd}; nothing to stop.`)
     return { code: 0 }
   }
+  const { env: ports, args } = composeArgs(env, ['down', '--remove-orphans', ...(volumes ? ['--volumes'] : [])])
   return runProcess('docker', args, { cwd, env: ports, timeoutMs: 300_000 })
 }

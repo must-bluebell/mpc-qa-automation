@@ -32,7 +32,7 @@
     ]
   },
   "regression": {
-    "description": "Wallet UI regression and connection recovery checks.",
+    "description": "MPC browser regression: wallet recovery, board navigation, onboarding, sessions, activities, voting and access protection.",
     "steps": [
       {
         "adapter": "playwright",
