@@ -7,6 +7,8 @@
   "scripts": {
     "test": "playwright test --project=chromium",
     "test:wallet": "playwright test tests/wallet",
+    "test:web:isolated": "node scripts/test-web-isolated.mjs",
+    "test:unity-signin": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= CI= playwright test --project=chromium --grep 'W02 - Sign in with Trust Wallet and open Digging'",
     "test:headed": "playwright test --headed",
     "report": "playwright show-report",
     "check:copy": "node scripts/check-copy.mjs",
@@ -31,7 +33,10 @@
     "report:combined": "node scripts/share-combined-report.mjs",
     "stack:up": "node pipeline/stack.mjs up",
     "stack:down": "node pipeline/stack.mjs down",
-    "stack:status": "node pipeline/stack.mjs status"
+    "stack:status": "node pipeline/stack.mjs status",
+    "test:silicon-cart": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= CI= playwright test --project=chromium --grep 'W30 -'",
+    "test:daily-checkin": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= CI= playwright test --project=chromium --grep 'W31 - Claim Daily check-in'",
+    "test:unity-additional": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= CI= playwright test --project=chromium --grep 'Additional Unity coverage'"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.132.1",

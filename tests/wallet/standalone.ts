@@ -500,7 +500,10 @@ export class JoinSheet {
 
   /** Matched by role, not text — a same-text placeholder `<span role="status">` also exists. */
   cta(): Locator {
-    return this.page.getByRole('main', { name: 'Home', exact: true }).getByRole('button', { name: copy.landing.join, exact: true })
+    const home = this.page.getByRole('main', { name: 'Home', exact: true })
+    // Unity deployments renamed the CTA; older targets still use the vendored waitlist copy.
+    return home.getByRole('button', { name: copy.landing.join, exact: true })
+      .or(home.getByRole('button', { name: 'Join the waitlist', exact: true }))
   }
 
   sheet(): Locator {

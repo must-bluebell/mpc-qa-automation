@@ -24,6 +24,10 @@ export function composeArgs(env, extra) {
   const cwd = resolve(ROOT, env.stack.webmpcPath)
   const ports = stackPortEnv(env)
   const overlays = []
+  if (env.name === 'web-isolated' || env.stack.verificationRuntime) {
+    if (!env.isolated) throw new Error('Verification diagnostics require an isolated environment')
+    overlays.push('-f', resolve(ROOT, 'pipeline/config/docker-compose.verification.yml'))
+  }
   if (env.stack.databasePool) {
     if (!env.isolated) throw new Error('QA pooling requires an isolated environment')
     // Down only parses Compose; it never connects to SQL or needs real credentials.

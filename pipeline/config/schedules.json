@@ -9,7 +9,8 @@
       "graceMinutes": 10,
       "priority": 30,
       "env": "local-docker",
-      "enabled": true
+      "enabled": true,
+      "ai": true
     },
     {
       "id": "nightly-api-uat",
@@ -30,7 +31,8 @@
       "graceMinutes": 360,
       "priority": 20,
       "env": "local-docker",
-      "enabled": true
+      "enabled": true,
+      "ai": true
     },
     {
       "id": "daily-health",

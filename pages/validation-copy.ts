@@ -1,0 +1,21 @@
+/** Fixed copy observed on app.globalmpc.tech in the wallet and check-in journey reports. */
+export const validationCopy = {
+  miningIntro: 'Pick a seam, spend Crew, and send the ore home in the cart.',
+  questsIntro: 'Complete quests. Earn Crew.',
+  checkedIn: 'You have checked in today.',
+  completed: 'Completed',
+  communityIntro: 'Join the Telegram group and follow on X. Both are needed to continue.',
+  telegramUnavailable: 'Telegram did not respond to the membership check. Open the group and try again.',
+  insufficientCrew: 'Not enough Crew left for 1 dig',
+  diggingUnavailable: 'Digging unavailable now',
+  emptyCart: 'The cart is empty',
+  emptyCartHint: 'Nothing in the cart yet',
+  cartRunsUsed: '2 of 2 runs are done · the cart goes again tomorrow',
+  justDug: 'Just dug',
+  miningChance: 'Mining chance',
+  registerReward: 'Register reward',
+  creditDuration: 'Total Credit over 15 days',
+  cartRecordHint: 'Sending the cart records its ore and Crew use on-chain. This use is already excluded from your available Crew; recording does not charge you again.',
+  earningToday: (amount: number) => `Earning today ${amount} Crew`,
+  baseReward: (amount: number) => `Base ${amount} Crew`,
+} as const

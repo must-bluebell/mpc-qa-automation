@@ -17,19 +17,19 @@ All suites use the isolated local Docker stack. One test worker runs at a time b
 
 The daily health job records the half-open 24-hour window ending at its scheduled cutoff. It aggregates API, UAT, web and load checks, pass rate among executed assertions, execution coverage including skipped/blocked checks, failure comparison events, infrastructure failures, completed/missed/pending/absent scheduled slots, latest nightly and latest load with timestamp and age. Seeded defects, previews, other environments and completions at or after cutoff are excluded from window totals. No executed assertions means an n/a pass rate. Historical load may be shown without contributing to today's counts. The report is a snapshot, never a new passing test execution. Delivery uses the same durable Slack outbox, without altering incidents.
 
-The current environment is `local-docker`, Compose project `mpc-qa-rotation-20261011`:
+The current environment is `local-docker`, Compose project `mpc-qa-web-20261015`, promoted after a complete 90/90 verification run. `web-isolated` is an alias for the same database and chains; run suites sequentially:
 
 | Service | Host endpoint | Container port |
 | --- | --- | --- |
-| WEB MPC (Next.js development server) | http://localhost:3410 | 3400 |
-| BSC Anvil (chain 97) | http://localhost:8555 | 8545 |
-| opBNB Anvil (chain 5611) | http://localhost:8556 | 8545 |
-| PostgreSQL 16 | localhost:5440 | 5432 |
-| Neon HTTP proxy | http://localhost:4454 | 4444 |
+| WEB MPC (Next.js development server) | http://localhost:3420 | 3400 |
+| BSC Anvil (chain 97) | http://localhost:8565 | 8545 |
+| opBNB Anvil (chain 5611) | http://localhost:8566 | 8545 |
+| PostgreSQL 16 | localhost:5450 | 5432 |
+| Neon HTTP proxy | http://localhost:4464 | 4444 |
 
-UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3410` as the Origin and SIWE domain. Host-side browsers use port 3410. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
+UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3420` as the Origin and SIWE domain. Host-side browsers use port 3420. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
 
-The previous `mpc-qa-rotation-20261010` containers are stopped and their volumes are preserved. The current project starts with clean contracts, database and build cache; it does not reuse the previous legacy bridge registry or corrupted Turbopack cache. Use `npm run stack:status` to confirm all five services are healthy before running suites.
+The previous `mpc-qa-recovery-20261011-1752` stack has an unsafe opBNB snapshot after an unclean shutdown; its volumes and all earlier stacks remain preserved. The active project retains its validated contracts and database, and enables compiler-cache eviction to avoid the observed Docker memory exhaustion. Use `npm run stack:status` to confirm all required services are healthy before running suites.
 
 Load baselines are stored as `pipeline/baselines/<environment>-<profile>-<workloadId>.json`. The workload ID covers the k6 script, effective profile, measured endpoints and session count. Changing the traffic mix creates a separate baseline only after every absolute SLO and functional check passes. App changes continue to compare against the same workload baseline. Older baseline files remain available; the former 10-user traffic mix is not compared with the current 15-user mix.
 
@@ -85,7 +85,7 @@ Every Playwright step writes Allure results to `runs/<runId>/allure-results/`. B
 
 When `QA_ALLURE_BASE_URL` is set, the Slack summary adds `Allure: <base>/<runId>/index.html`. The same HTTPS rules as `QA_REPORT_BASE_URL` apply. Hosting is a deployment step, for example `aws s3 sync runs/allure s3://your-bucket/allure --exclude history.jsonl` after each run. Unlike `runs/published/`, Allure reports are **not** sanitized: they contain screenshots, traces, video and raw error text, so serve them only behind team-only access (SSO or VPN), never publicly. View one locally with `npx allure open runs/allure/<runId>`.
 
-Nightly API + UAT explicitly requests AI review even when passing; other test schedules inherit `QA_AI_AUTO=1` for failures and blocked runs. The local OpenClaw provider requires its authenticated gateway and dedicated tools-disabled review agent to be available. AI failures are recorded separately from assertion outcomes and can be retried with `node pipeline/ai/analyze.mjs <runId>`; AI has no durable retry outbox.
+Every configured test schedule explicitly requests AI review, including passing runs. Manual runs inherit `QA_AI_AUTO=1` for failures and blocked runs unless `--ai` or `--no-ai` is supplied. The local OpenClaw provider requires its authenticated gateway and dedicated tools-disabled review agent to be available. AI failures are recorded separately from assertion outcomes and can be retried with `node pipeline/ai/analyze.mjs <runId>`; AI has no durable retry outbox.
 
 AI uses the existing approved-requirement validation and cannot change assertion outcomes. It remains optional; an exhausted API credit balance does not prevent tests or Slack delivery.
 

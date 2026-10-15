@@ -1,3 +1,5 @@
+import { expectValidationMessage } from './validation-messages'
+import { validationCopy } from '../pages/validation-copy'
 import { expect, type Page } from '@playwright/test'
 import { target } from '../config/target'
 
@@ -8,13 +10,14 @@ export async function openMining(page: Page): Promise<void> {
   if (!usesActivities()) {
     await page.goto('/?view=dig')
     await expect(page.getByRole('heading', { name: 'Digging', exact: true })).toBeVisible()
+    await expectValidationMessage(page.getByText(validationCopy.miningIntro, { exact: true }), validationCopy.miningIntro, 'digging-instructions')
     return
   }
   const registration = await page.request.get('/api/register/status')
   expect(registration.ok(), 'Registration status must load').toBe(true)
   if (!(await registration.json()).registered) {
     const hostname = new URL(target().baseUrl).hostname
-    if (process.env.QA_ENVIRONMENT !== 'local-docker' || process.env.QA_ALLOW_WRITES !== '1' || !['localhost', '127.0.0.1'].includes(hostname)) {
+    if (!['local-docker', 'web-isolated'].includes(process.env.QA_ENVIRONMENT ?? '') || process.env.QA_ALLOW_WRITES !== '1' || !['localhost', '127.0.0.1'].includes(hostname)) {
       throw new Error('Current mining journey requires a registered test member; local onboarding is not authorized for this target.')
     }
     const join = page.getByRole('dialog', { name: 'Join', exact: true })

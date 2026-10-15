@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import type { HDAccount } from 'viem'
+import type { HDAccount, TypedDataDefinition } from 'viem'
 
 /**
  * A mock browser wallet, injected before page load.
@@ -44,6 +44,8 @@ export type InjectWalletOptions = {
   chainId: number
   /** The name shown on the wallet row — this is `connector.name`, so it is the button's label. */
   walletName?: string
+  /** Validate the actual EIP-712 request before the Node signer approves it. */
+  beforeSignTypedData?: (payload: TypedDataDefinition) => void | Promise<void>
   failOn?: Partial<Record<FailableMethod, WalletFailure>>
 }
 
@@ -84,7 +86,9 @@ export async function injectTestWallet(
       if (request.method === 'eth_signTypedData_v4' || request.method === 'eth_signTypedData_v3') {
         // EIP-712 params are [address, jsonPayload].
         const [, payload] = request.params as [string, string]
-        return account.signTypedData(JSON.parse(payload))
+        const typedData = JSON.parse(payload) as TypedDataDefinition
+        await options.beforeSignTypedData?.(typedData)
+        return account.signTypedData(typedData)
       }
       throw new Error(`sign bridge: unhandled method ${request.method}`)
     },

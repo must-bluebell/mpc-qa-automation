@@ -18,7 +18,9 @@ export async function connectConfiguredWallet(page: Page): Promise<MockWallet> {
   await sheet.open()
   await sheet.connectWith(wallet.walletName)
   await expect.poll(async () => {
-    const response = await page.request.get('/api/auth/session')
+    // A reset on this read can occur while the development server serves sign-in.
+    // Retry only transport resets; HTTP failures and the session assertion still fail.
+    const response = await page.request.get('/api/auth/session', { maxRetries: 2 })
     return response.ok() ? (await response.json()).address : null
   }, { timeout: 60_000 }).toBe(wallet.address.toLowerCase())
 

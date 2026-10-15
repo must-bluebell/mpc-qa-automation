@@ -1,3 +1,4 @@
+import { expectValidationMessage } from '../../fixtures/validation-messages'
 import { expect, test } from '@playwright/test'
 import { chainName, target } from '../../config/target'
 import { stubAnalytics } from '../../fixtures/network'
@@ -84,12 +85,13 @@ test.describe('Wallet connection errors', { tag: ['@ui', '@feature-wallet', '@cr
     const sheet = new JoinSheet(page)
     await sheet.open()
     await sheet.connectWith(wallet.walletName)
-    await expect(sheet.error()).toHaveText(copy.join.failRejected)
+    await expectValidationMessage(sheet.error(), copy.join.failRejected, 'connection-cancelled')
     await sheet.expectStep(copy.join.stepWallet)
     await setWalletFailure(page, 'eth_requestAccounts', null)
     await sheet.connectWith(wallet.walletName)
     await sheet.expectStep(copy.join.stepSign)
     await expect(sheet.addressChip(wallet.address)).toBeVisible()
+    await expectValidationMessage(sheet.error(), copy.join.signRejected, 'signature-cancelled-after-reconnection')
   })
 
   test('W26 - Repeated connection failures never create a signed-in session', async ({ page }) => {
@@ -102,7 +104,7 @@ test.describe('Wallet connection errors', { tag: ['@ui', '@feature-wallet', '@cr
     await sheet.open()
     for (let attempt = 0; attempt < 2; attempt++) {
       await sheet.connectWith(wallet.walletName)
-      await expect(sheet.error()).toHaveText(copy.join.failRejected)
+      await expectValidationMessage(sheet.error(), copy.join.failRejected, 'connection-cancelled')
       await sheet.expectStep(copy.join.stepWallet)
     }
     const session = await page.request.get('/api/auth/session')
@@ -124,7 +126,7 @@ test.describe('Wallet connection errors', { tag: ['@ui', '@feature-wallet', '@cr
       await sheet.open()
       await sheet.connectWith(wallet.walletName)
 
-      await expect(sheet.error()).toHaveText(expected)
+      await expectValidationMessage(sheet.error(), expected, `${failure}-wallet-error`)
       // The flow must not advance on a failed connect.
       await sheet.expectStep(copy.join.stepWallet)
     })
@@ -163,7 +165,7 @@ test.describe('Wallet network errors', { tag: ['@ui', '@feature-wallet', '@criti
       await setWalletFailure(page, 'wallet_switchEthereumChain', failure)
       await sheet.switchChainButton().click()
 
-      await expect(sheet.error()).toHaveText(expected)
+      await expectValidationMessage(sheet.error(), expected, `${failure}-wallet-error`)
     })
   }
 })
@@ -196,7 +198,7 @@ test.describe('Wallet connection network cancellation', { tag: ['@ui', '@feature
     await sheet.open()
     await sheet.connectWith(wallet.walletName)
 
-    await expect(sheet.error()).toHaveText(copy.join.failRejected)
+    await expectValidationMessage(sheet.error(), copy.join.failRejected, 'connection-cancelled')
   })
 })
 
@@ -223,7 +225,7 @@ test.describe('Wallet signature errors', { tag: ['@ui', '@feature-wallet', '@cri
       await sheet.open()
       await sheet.connectWith(wallet.walletName)
 
-      await expect(sheet.error()).toHaveText(expected)
+      await expectValidationMessage(sheet.error(), expected, `${failure}-wallet-error`)
       // A failed signature holds the flow on the sign step, with a retry button.
       await sheet.expectStep(copy.join.stepSign)
     })

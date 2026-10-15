@@ -122,6 +122,14 @@ Merged application PRs can trigger code/type checks, dependency security auditin
 
 UAT and load run only against the isolated `local-docker` stack (`pipeline/config/environments.json`, Compose project and host ports under `stack`). The pipeline refuses them on preview, staging and production.
 
+For the complete web suite, including the write-gated cases, start Docker and run `npm run test:web:isolated`.
+This command uses the verified `mpc-qa-web-20261015` Compose project at `http://localhost:3420`, prepares a fresh local member through real registration and certificate transactions, and runs only the Chromium project with local writes enabled. This stack is now shared by the `local-docker` and `web-isolated` profiles; run tests sequentially. The previous recovery stack and its volumes are preserved. The first startup installs app dependencies and deploys local contracts; subsequent runs reuse the stack. The local app Docker image must already be built.
+
+The Activity refresh and dismissal cases create owned pending/failed notification records in this disposable database and remove those records afterward. Their HTTP responses, authentication, and UI actions remain real; these notification fixtures do not establish blockchain transaction correctness. Running `npx playwright test --project=chromium` directly still uses `.env` and skips write-gated cases unless its target and prerequisites are configured.
+
+After this stack is healthy, run every scheduled application suite sequentially with `npm run qa -- --suite full --env web-isolated --no-notify --no-ai`. This executes API, web regression, UAT (including the app's local scenarios), and the configured k6 load profile, and saves a combined run report under `runs/`. The command does not start the recurring scheduler or post Slack messages.
+The verification overlay enables the app's existing runner compiler-cache eviction in the Next server child, caps V8 old-space at 3 GiB per process, and logs worker exits. The launcher still binds to the Docker interface; both aliases retain these protections on the verified QA stack.
+
 The standalone [JMeter and Postman plans](testplans/README.md) add 30 load cases (2,000 users, 60-second ramp-up, two-second request pacing) and 20 API cases. They include a JTL/Newman latency reporter and are separate from the scheduled k6 workload.
 
 To check Slack delivery without a workspace, run `node scripts/slack-sink.mjs` and start the dashboard with `SLACK_ALERT_WEBHOOK_URL=http://127.0.0.1:4599/services/TQA/BQA/local QA_SLACK_ALLOW_LOOPBACK=1`. Payloads land in `runs/slack-sink.jsonl`. Real deliveries require a `https://hooks.slack.com/services/...` URL.

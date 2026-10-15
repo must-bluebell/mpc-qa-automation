@@ -1,14 +1,12 @@
+import { JoinSheet } from '../../pages/JoinSheet'
+import { expectValidationMessage } from '../../fixtures/validation-messages'
 import { test, expect, type Page, type TestInfo } from '@playwright/test'
 import { openMining, usesActivities } from '../../fixtures/mining-navigation'
 import { target } from '../../config/target'
 import { getConfiguredWallet } from '../../utils/wallet-generator'
 
 async function closeJoinIfOpen(page: Page): Promise<void> {
-  const join = page.getByRole('dialog', { name: 'Join', exact: true })
-  if (await join.isVisible()) {
-    await join.getByRole('button', { name: usesActivities() ? 'Later' : 'Close Join', exact: true }).click({ timeout: 3_000 })
-    await expect(join).not.toBeVisible()
-  }
+  await new JoinSheet(page).dismissIfOpen()
 }
 
 /** Follow the recorded actions in one browser session, without another wallet connection. */
@@ -42,16 +40,16 @@ export async function runRecordedActions(page: Page, testInfo: TestInfo): Promis
   })
 
   await test.step('W21 - Claim Crew when available, or verify the empty reward state', async () => {
-    const claim = page.getByRole('button', { name: 'Claim crew', exact: true })
+    const claim = page.getByRole('button', { name: /^Claim [Cc]rew$/ })
     await expect(claim).toBeVisible()
     const emptyState = page.getByRole('main').getByText(usesActivities() ? 'Nothing stands to claim yet' : 'Nothing to claim yet', { exact: true }).filter({ visible: true })
     if (await claim.isDisabled()) {
-      await expect(emptyState).toBeVisible()
+      await expectValidationMessage(emptyState, usesActivities() ? 'Nothing stands to claim yet' : 'Nothing to claim yet', 'no-referral-rewards')
       testInfo.annotations.push({ type: 'reward-state', description: 'No referral rewards available; Claim crew is disabled.' })
     } else {
       await claim.click()
       await expect(claim).toBeDisabled({ timeout: 60_000 })
-      await expect(emptyState).toBeVisible()
+      await expectValidationMessage(emptyState, usesActivities() ? 'Nothing stands to claim yet' : 'Nothing to claim yet', 'no-referral-rewards')
     }
   })
 
@@ -93,7 +91,7 @@ export async function runRecordedActions(page: Page, testInfo: TestInfo): Promis
 
   await test.step('Return to Digging and confirm the wallet session', async () => {
     await openMining(page)
-    const session = await page.request.get('/api/auth/session')
+    const session = await page.request.get('/api/auth/session', { maxRetries: 2 })
     expect(session.ok()).toBe(true)
     expect((await session.json()).address).toBe(getConfiguredWallet().address.toLowerCase())
     await page.screenshot({ path: testInfo.outputPath('recorded-journey-digging.png'), fullPage: true })

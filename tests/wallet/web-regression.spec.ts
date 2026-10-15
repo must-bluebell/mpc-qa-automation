@@ -6,6 +6,7 @@ import { stubAnalytics } from '../../fixtures/network'
 import { connectConfiguredWallet } from '../../fixtures/connected-wallet'
 import { injectTestWallet, type MockWallet } from '../../fixtures/wallet'
 import { JoinSheet } from '../../pages/JoinSheet'
+import { storedActivity } from '../../fixtures/stored-activity'
 
 // Derived from MPC-load-testing.jmx and mpc-waitlist.postman_collection.json.
 // Wallet signatures and MPC responses are real; only third-party destinations are stubbed.
@@ -16,7 +17,7 @@ function blockIf(condition: boolean, reason: string) {
   }
 }
 
-const test = base.extend<{ member: MockWallet; newcomer: MockWallet }>({
+const test = base.extend<{ member: MockWallet; newcomer: MockWallet; activityRecord: string }>({
   member: async ({ page }, use) => {
     requireWrites()
     blockIf(!process.env.QA_SEED_PHRASE, 'Configured member wallet is missing')
@@ -29,9 +30,31 @@ const test = base.extend<{ member: MockWallet; newcomer: MockWallet }>({
     const sheet = new JoinSheet(page)
     await sheet.open()
     await sheet.connectWith(wallet.walletName)
-    await expect.poll(async () => (await (await page.request.get('/api/auth/session')).json()).address).toBe(wallet.address.toLowerCase())
+    await expect.poll(async () => (await (await page.request.get('/api/auth/session', { maxRetries: 2 })).json()).address).toBe(wallet.address.toLowerCase())
     await sheet.expectStep('Community')
     await use(wallet)
+  },
+  activityRecord: async ({ page }, use, info) => {
+    requireWrites()
+    const refresh = info.title.startsWith('WEB-15')
+    if (!process.env.QA_WEB_FIXTURE_CONTAINER) {
+      const id = process.env[refresh ? 'QA_WEB_ACTIVITY_REFRESH_ID' : 'QA_WEB_ACTIVITY_DISMISS_ID']
+      blockIf(!id, 'Run npm run test:web:isolated to prepare an owned Activity fixture')
+      await connectConfiguredWallet(page)
+      await use(id!)
+      return
+    }
+    const wallet = await injectTestWallet(page, { account: mnemonicToAccount(generateMnemonic(english)), chainId: target().chainId })
+    await page.goto('/')
+    const sheet = new JoinSheet(page)
+    await sheet.open()
+    await sheet.connectWith(wallet.walletName)
+    await expect.poll(async () => (await (await page.request.get('/api/auth/session', { maxRetries: 2 })).json()).address).toBe(wallet.address.toLowerCase())
+    const record = await storedActivity(wallet.address, refresh ? 'pending' : 'failed')
+    try {
+      await page.reload()
+      await use(record.id)
+    } finally { await record.cleanup() }
   },
 })
 
@@ -66,7 +89,7 @@ async function disconnect(page: Page) {
   await closeJoin(page)
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click()
   await page.getByRole('dialog', { name: 'Disconnect wallet?', exact: true }).getByRole('button', { name: 'Disconnect', exact: true }).click()
-  await expect.poll(async () => (await (await page.request.get('/api/auth/session')).json()).address).toBeNull()
+  await expect.poll(async () => (await (await page.request.get('/api/auth/session', { maxRetries: 2 })).json()).address).toBeNull()
   await expect(new JoinSheet(page).cta()).toBeVisible()
 }
 
@@ -82,7 +105,7 @@ test.describe('MPC web regression from supplied plans', { tag: ['@ui', '@regress
     await expect(new JoinSheet(page).cta()).toBeVisible()
     await page.reload()
     await expect(new JoinSheet(page).cta()).toBeVisible()
-    expect((await (await page.request.get('/api/auth/session')).json()).address).toBeNull()
+    expect((await (await page.request.get('/api/auth/session', { maxRetries: 2 })).json()).address).toBeNull()
   })
   for (const [id, label, key, path] of [
     ['02', 'Quests', 'quest', '/quests'], ['03', 'My Mine', 'mine', '/mine'], ['04', 'Vote', 'vote', '/vote'],
@@ -108,7 +131,7 @@ test.describe('MPC web regression from supplied plans', { tag: ['@ui', '@regress
   test('WEB-06 - Closing and reopening Join preserves the community step', async ({ page, newcomer }) => {
     expect(newcomer.address).toBeTruthy()
     await closeJoin(page)
-    await new JoinSheet(page).open()
+    await new JoinSheet(page).open('Community')
     await new JoinSheet(page).expectStep('Community')
   })
   test('WEB-07 - Malformed email shows validation and does not register the wallet', async ({ page, newcomer }) => {
@@ -141,7 +164,9 @@ test.describe('MPC web regression from supplied plans', { tag: ['@ui', '@regress
     await page.goto('/?tab=quest')
     await page.reload()
     await assertTab(page, 'Quests', 'quest')
-    expect((await (await page.request.get('/api/auth/session')).json()).address).toBe(member.address.toLowerCase())
+    // A reload can leave a stale keep-alive socket on the local dev server.
+    // Retry connection resets only; HTTP errors and the session assertion still fail normally.
+    expect((await (await page.request.get('/api/auth/session', { maxRetries: 2 })).json()).address).toBe(member.address.toLowerCase())
   })
   test('WEB-11 - A second browser tab shares the same server session', async ({ page, member }) => {
     const second = await page.context().newPage()
@@ -157,7 +182,7 @@ test.describe('MPC web regression from supplied plans', { tag: ['@ui', '@regress
     await disconnect(page)
     await page.reload()
     await expect(new JoinSheet(page).cta()).toBeVisible()
-    expect((await (await page.request.get('/api/auth/session')).json()).address).toBeNull()
+    expect((await (await page.request.get('/api/auth/session', { maxRetries: 2 })).json()).address).toBeNull()
   })
   test('WEB-13 - A protected deep link cannot restore identity after logout', async ({ page, member }) => {
     expect(member.address).toBeTruthy()
@@ -175,25 +200,33 @@ test.describe('MPC web regression from supplied plans', { tag: ['@ui', '@regress
     expect((await response.json()).activities).toEqual([])
     await expect(page.getByRole('button', { name: /^Activity / })).toHaveCount(0)
   })
-  for (const [id, action, setting] of [
-    ['15', 'Check status', 'QA_WEB_ACTIVITY_REFRESH_ID'], ['16', 'Close', 'QA_WEB_ACTIVITY_DISMISS_ID'],
+  for (const [id, action] of [
+    ['15', 'Check status'], ['16', 'Close'],
   ] as const) {
-    test(`WEB-${id} - Activity ${action} updates the real wallet feed`, async ({ page, member }) => {
-      expect(member.address).toBeTruthy()
-      const activityId = process.env[setting]
-      blockIf(!activityId, `${setting} must identify an owned ${id === '15' ? 'pending' : 'finalized failed'} QA activity`)
+    test(`WEB-${id} - Activity ${action} updates the real wallet feed`, async ({ page, activityRecord }) => {
+      const activityId = activityRecord
       const data = await (await page.request.get('/api/activities')).json()
       const item = data.activities.find((a: { activityId: string | number }) => String(a.activityId) === activityId)
-      blockIf(!item, 'Configured QA activity is absent from this wallet feed')
-      blockIf(id === '15' ? !['submitting', 'confirming'].includes(item.status) : item.status !== 'failed' || item.finalized === false,
-        'Configured QA activity is not in the required state')
+      if (process.env.QA_WEB_FIXTURE_CONTAINER) {
+        expect(item, 'The owned notification fixture must appear in the real feed').toBeDefined()
+        expect(data.activities, 'The fresh wallet must have exactly its fixture notification').toHaveLength(1)
+        if (id === '15') expect(['submitting', 'confirming']).toContain(item.status)
+        else { expect(item.status).toBe('failed'); expect(item.finalized).toBe(true) }
+      } else {
+        blockIf(!item, 'Configured QA activity is absent from this wallet feed')
+        blockIf(id === '15' ? !['submitting', 'confirming'].includes(item.status) : item.status !== 'failed' || item.finalized === false,
+          'Configured QA activity is not in the required state')
+        blockIf(data.activities.length !== 1, 'Activity fixture must be the only current item for deterministic browser selection')
+      }
       await closeJoin(page)
       await page.getByRole('button', { name: /^Activity / }).click()
       const card = page.locator('article').filter({ has: page.getByRole('button', { name: action, exact: true }) })
       // Avoid acting on an arbitrary existing item when multiple cards share the same action.
-      blockIf(data.activities.length !== 1, 'Activity fixture must be the only current item for deterministic browser selection')
       // Freeze provider polling so a background timer cannot satisfy the refresh check.
-      if (id === '15') await page.clock.pauseAt(new Date())
+      if (id === '15') {
+        // Use the browser clock: the Node wall clock can lag the installed clock.
+        await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000))
+      }
       const requested = page.waitForRequest(r => new URL(r.url()).pathname === (id === '15'
         ? '/api/activities' : `/api/activities/${activityId}/dismiss`), { timeout: 5000 })
       await card.getByRole('button', { name: action, exact: true }).click()

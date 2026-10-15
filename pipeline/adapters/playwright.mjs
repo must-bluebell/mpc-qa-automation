@@ -30,6 +30,7 @@ export async function runPlaywrightStep(step, ctx) {
     BASE_URL: ctx.targetUrl, QA_APP_ORIGIN: ctx.env.appOrigin, QA_CHAIN_ID: String(ctx.env.chainId), QA_CHAIN_NAME: ctx.env.chainName??'',
     QA_ALLOW_WRITES: ctx.env.allowWrites ? '1' : '0', QA_REPORT_DIR: ctx.stepDir, QA_ALLURE_RESULTS_DIR: join(ctx.runDir, 'allure-results'),
     QA_NAVIGATION: ctx.env.navigation??'', QA_ENVIRONMENT: ctx.env.name, QA_VERSION: ctx.versions.app.id, QA_RUN_LABEL: `${ctx.suite} (${ctx.runId})`,
+    QA_WEB_FIXTURE_CONTAINER: ctx.env.isolated && (ctx.env.name === 'web-isolated' || ctx.env.stack?.verificationRuntime) ? `${ctx.env.stack.composeProject}-web-1` : '',
     CI: process.env.CI ?? '', FORCE_COLOR: '0',
   }
   const result = await runProcess('npx', args, { cwd: ROOT, env, timeoutMs: ctx.remainingMs(), logFile: join(ctx.stepDir, 'output.log'), echo: ctx.echo,

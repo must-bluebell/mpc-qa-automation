@@ -1,8 +1,8 @@
 {
   "local-docker": {
-    "description": "Isolated WEB MPC Docker + Anvil stack (Compose project mpc-qa-recovery-20261011-1752). The only environment where writes, seeded defects and load are allowed.",
-    "baseUrl": "http://localhost:3410",
-    "appOrigin": "http://localhost:3410",
+    "description": "Default isolated WEB MPC stack, promoted after the complete 90-check verification. The previous recovery stack and its volumes are preserved.",
+    "baseUrl": "http://localhost:3420",
+    "appOrigin": "http://localhost:3420",
     "chainId": 97,
     "chainName": "Local Anvil",
     "navigation": "activities",
@@ -12,16 +12,36 @@
     "isolated": true,
     "stack": {
       "databasePool": true,
-      "composeProject": "mpc-qa-recovery-20261011-1752",
+      "verificationRuntime": true,
+      "composeProject": "mpc-qa-web-20261015",
       "webmpcPath": "../WEB MPC",
       "ports": {
-        "web": 3410,
-        "anvil": 8555,
-        "opbnbAnvil": 8556,
-        "postgres": 5440,
-        "neonProxy": 4454
+        "web": 3420,
+        "anvil": 8565,
+        "opbnbAnvil": 8566,
+        "postgres": 5450,
+        "neonProxy": 4464
       },
-      "note": "Fresh recovery project after unclean opBNB memory kill. All previous project volumes are preserved. ANVIL_BLOCK_TIME=5 is set in the private QA .env to reduce chain memory growth; do not change it for existing chain state."
+      "note": "Promoted from web-isolated after run 20261015-075056-full-a48b passed 90/90. The corrupted mpc-qa-recovery-20261011-1752 stack and all previous volumes remain preserved. Keep existing chain mining settings unchanged."
+    }
+  },
+  "web-isolated": {
+    "description": "Verification alias for the active local QA stack. Shares database and chains with local-docker; run suites sequentially.",
+    "baseUrl": "http://localhost:3420",
+    "appOrigin": "http://localhost:3420",
+    "chainId": 97,
+    "chainName": "Local Anvil",
+    "navigation": "activities",
+    "allowWrites": true,
+    "allowLoad": true,
+    "allowSeededDefects": true,
+    "isolated": true,
+    "stack": {
+      "databasePool": true,
+      "verificationRuntime": true,
+      "composeProject": "mpc-qa-web-20261015",
+      "webmpcPath": "../WEB MPC",
+      "ports": { "web": 3420, "anvil": 8565, "opbnbAnvil": 8566, "postgres": 5450, "neonProxy": 4464 }
     }
   },
   "preview": {
