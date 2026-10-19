@@ -253,6 +253,7 @@ test.describe('MPC web regression from supplied plans', { tag: ['@ui', '@regress
   test('WEB-18 - Back to proposals clears the invalid selection and restores the list', async ({ page, member }) => {
     expect(member.address).toBeTruthy()
     await page.goto('/?tab=vote&proposal=999999999')
+    await closeJoin(page)
     await page.getByRole('button', { name: 'Back to proposals', exact: true }).click()
     await expect.poll(() => new URL(page.url()).searchParams.get('proposal')).toBeNull()
     await assertTab(page, 'Vote', 'vote')

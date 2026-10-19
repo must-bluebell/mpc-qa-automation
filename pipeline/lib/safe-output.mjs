@@ -6,6 +6,10 @@ import { qualityRates, formatRate } from './quality-rates.mjs'
 
 const testNames=JSON.parse(readFileSync(new URL('../config/test-case-names.json',import.meta.url),'utf8'))
 export const opaqueId = value => createHash('sha256').update(String(value)).digest('hex').slice(0, 16)
+export function dashboardRunUrl(id) {
+  const configured=Number(process.env.QA_DASHBOARD_PORT),port=Number.isInteger(configured)&&configured>0&&configured<=65535?configured:4500
+  return `http://127.0.0.1:${port}/#/runs/${encodeURIComponent(id)}`
+}
 export const REPORT_CATEGORIES=[{suite:'regression',label:'Web automation regression testing'},{suite:'api',label:'API testing'},{suite:'load',label:'Load testing'}]
 export function safeText(value) {
   let text = String(value ?? '')
@@ -82,7 +86,13 @@ export function publicSummary(run) {
       label:REPORT_CATEGORIES.find(c=>c.suite===s.suite).label,status:field(s.status),sourceRunId:field(s.sourceRunId),finishedAt:kstTime(s.finishedAt),
       counts:Object.fromEntries(['passed','failed','skipped','blocked'].map(k=>[k,count(s.counts?.[k])]))})),
     loadMetrics:run.load?{totalRequests:metric(run.load.totalRequests),throughputRps:metric(run.load.throughputRps),checkPassRate:fraction(run.load.checkPassRate),
-      endpoints:Object.entries(run.load.endpoints??{}).filter(([name])=>Object.hasOwn(config.thresholds().endpoints,name)).map(([name,row])=>({name,p95Ms:metric(row.p95Ms),errorRate:fraction(row.errorRate)}))}:null,
+      baselineRunId:run.load.baseline?.runId?field(run.load.baseline.runId):null,
+      baselineAction:['compared','created','updated','none'].includes(run.load.baselineAction)?run.load.baselineAction:'none',
+      endpoints:Object.entries(run.load.endpoints??{}).filter(([name])=>Object.hasOwn(config.thresholds().endpoints,name)).map(([name,row])=>{
+        const baseline=run.load.baseline?.endpoints?.[name],base=metric(baseline?.p95Ms)
+        return {name,p95Ms:metric(row.p95Ms),errorRate:fraction(row.errorRate),baselineP95Ms:base,baselineErrorRate:fraction(baseline?.errorRate),
+          p95ChangePct:base>0&&Number.isFinite(row.p95Ms)?Number(((row.p95Ms/base-1)*100).toFixed(1)):null}
+      })}:null,
     finishedAt:kstTime(run.finishedAt), applicationVersion:field(run.versions?.app?.id || 'unspecified'),
     counts:Object.fromEntries(['passed','failed','skipped','blocked'].map(k=>[k,count(run.counts?.[k])])),
     checks:(run.tests??[]).map(t=>{

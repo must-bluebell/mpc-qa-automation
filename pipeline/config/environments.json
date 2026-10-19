@@ -1,6 +1,6 @@
 {
   "local-docker": {
-    "description": "Default isolated WEB MPC stack, promoted after the complete 90-check verification. The previous recovery stack and its volumes are preserved.",
+    "description": "Fresh isolated QA recovery stack; previous projects and volumes are preserved. Shares state with the other local alias; run suites sequentially.",
     "baseUrl": "http://localhost:3420",
     "appOrigin": "http://localhost:3420",
     "chainId": 97,
@@ -13,7 +13,7 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-web-20261015",
+      "composeProject": "mpc-qa-web-20261019",
       "webmpcPath": "../WEB MPC",
       "ports": {
         "web": 3420,
@@ -22,11 +22,11 @@
         "postgres": 5450,
         "neonProxy": 4464
       },
-      "note": "Promoted from web-isolated after run 20261015-075056-full-a48b passed 90/90. The corrupted mpc-qa-recovery-20261011-1752 stack and all previous volumes remain preserved. Keep existing chain mining settings unchanged."
+      "note": "Fresh isolated recovery stack after both chains in the 20261015 project refused unsafe snapshot restoration. All previous volumes are preserved."
     }
   },
   "web-isolated": {
-    "description": "Verification alias for the active local QA stack. Shares database and chains with local-docker; run suites sequentially.",
+    "description": "Fresh isolated QA recovery stack; previous projects and volumes are preserved. Shares state with the other local alias; run suites sequentially.",
     "baseUrl": "http://localhost:3420",
     "appOrigin": "http://localhost:3420",
     "chainId": 97,
@@ -39,9 +39,16 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-web-20261015",
+      "composeProject": "mpc-qa-web-20261019",
       "webmpcPath": "../WEB MPC",
-      "ports": { "web": 3420, "anvil": 8565, "opbnbAnvil": 8566, "postgres": 5450, "neonProxy": 4464 }
+      "ports": {
+        "web": 3420,
+        "anvil": 8565,
+        "opbnbAnvil": 8566,
+        "postgres": 5450,
+        "neonProxy": 4464
+      },
+      "note": "Fresh isolated recovery stack after both chains in the 20261015 project refused unsafe snapshot restoration. All previous volumes are preserved."
     }
   },
   "preview": {

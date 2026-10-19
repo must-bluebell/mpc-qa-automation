@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { cronMatches } from './scheduler.mjs'
 import { RUNS_DIR } from './lib/env.mjs'
 import { readIndex, readRun, isRunId, writeJsonAtomic } from './lib/run-store.mjs'
-import { kstTime } from './lib/safe-output.mjs'
+import { kstTime, publicSummary, dashboardRunUrl } from './lib/safe-output.mjs'
 import { notifyHealthSummary } from './notify/slack-bot.mjs'
+import { executionRecovered } from './lib/run-status.mjs'
 
 const statuses=['passed','failed','skipped','blocked']
 const counts=()=>Object.fromEntries(statuses.map(s=>[s,0]))
@@ -59,14 +60,55 @@ export function buildHealthSummary({end,env,schedules=[],runs=[],jobs=[],timezon
     return run?{runId:safeId(run.runId),status:safeStatus(run.status),finishedAt:new Date(run.finishedAt).toISOString(),ageHours:(cutoff-Date.parse(run.finishedAt))/3_600_000}:null
   }
   const executed=total.passed+total.failed,checks=executed+total.skipped+total.blocked
-  const attention=executionFailures||total.failed||total.skipped||total.blocked||scheduled.some(s=>s.missed||s.pending||s.missing)
+  const unresolved=new Map(),adapterFailures=new Map(),infrastructureFailures=new Map()
+  const stepKey=s=>JSON.stringify([s.adapter,s.project??null,s.name?.replace(/^\d+-/,''),s.grep??null])
+  for(const run of [...eligible].sort((a,b)=>Date.parse(a.finishedAt)-Date.parse(b.finishedAt))) {
+    for(const step of run.steps??[]) {
+      const tests=(run.tests??[]).filter(t=>t.step===step.name)
+      if(step.exitCode!==0||!tests.some(t=>t.status==='passed')||!executionRecovered({status:'passed',steps:[step],tests}))continue
+      for(const [key,identity] of adapterFailures)if(identity===stepKey(step)){unresolved.delete(key);adapterFailures.delete(key)}
+    }
+    const published=publicSummary(run),failedKeys=[]
+    for(const [i,t] of (run.tests??[]).entries()) {
+      if(!t.key)continue
+      const step=(run.steps??[]).find(s=>s.name===t.step)
+      const synthetic=step&&t.key.endsWith(':step')&&t.tags?.includes('@pipeline')
+      const identity=synthetic?stepKey(step):null,key=synthetic?`${t.key}:${identity}`:t.key
+      if(t.status==='failed') {
+        failedKeys.push(key)
+        unresolved.set(key,{name:published.checks[i].name,sourceRunId:safeId(run.runId),lastFailedAt:new Date(run.finishedAt).toISOString()})
+        if(synthetic)adapterFailures.set(key,identity)
+      }
+      else if(t.status==='passed')unresolved.delete(key)
+    }
+    const key=`infrastructure:${run.suite}`
+    if(['infra-failed','crashed','timeout','blocked'].includes(run.status)) {
+      unresolved.set(key,{name:`Suite execution: ${safeId(run.suite)}`,sourceRunId:safeId(run.runId),lastFailedAt:new Date(run.finishedAt).toISOString()})
+      infrastructureFailures.set(key,{suite:run.suite,failedKeys,steps:(run.steps??[]).map(stepKey),
+        partial:['timeout','crashed','blocked'].includes(run.status)||!!run.errors?.length||(run.steps??[]).some(s=>s.timedOut||s.errors?.length)})
+    }
+    for(const [key,incident] of infrastructureFailures) {
+      const allSteps=run.steps??[],suiteSteps=allSteps.filter(s=>s.fromSuite===incident.suite)
+      const wholeSuite=run.suite===incident.suite||suiteSteps.length>0
+      const covered=incident.steps.length?incident.steps.every(identity=>allSteps.some(step=>{
+        const tests=(run.tests??[]).filter(t=>t.step===step.name)
+        return stepKey(step)===identity&&step.exitCode!=null&&tests.some(t=>['passed','failed'].includes(t.status))&&executionRecovered({status:'failed',steps:[step],tests})
+      })):wholeSuite&&allSteps.length>0&&allSteps.every(s=>!s.grep)
+      const complete=executionRecovered(run)&&covered&&(!incident.partial||wholeSuite)
+      const recoveredChecks=complete&&incident.failedKeys.length&&incident.failedKeys.every(k=>!unresolved.has(k))
+      const recoveredSuite=complete&&!incident.failedKeys.length
+      if(recoveredChecks||recoveredSuite){unresolved.delete(key);infrastructureFailures.delete(key)}
+    }
+  }
+  const unresolvedFailures=[...unresolved.values()]
+  const attention=unresolvedFailures.length||executionFailures||total.failed||total.skipped||total.blocked||scheduled.some(s=>s.missed||s.pending||s.missing)
   return {start:new Date(start).toISOString(),end:new Date(cutoff).toISOString(),env:safeId(env),
-    runs:{total:window.length,ids:window.map(r=>safeId(r.runId))},categories,counts:total,executionFailures,failureEvents,schedules:scheduled,
+    runs:{total:window.length,ids:window.map(r=>safeId(r.runId))},categories,counts:total,executionFailures,failureEvents,schedules:scheduled,unresolvedFailures,
     passRate:executed?total.passed/executed:null,executionRate:checks?executed/checks:null,
-    latestNightly:latest('nightly-regression'),latestLoad:latest('load'),health:window.length?(attention?'attention':'healthy'):'no-data'}
+    latestNightly:latest('nightly-regression'),latestLoad:latest('load'),health:unresolvedFailures.length?'attention':window.length?(attention?'attention':'healthy'):'no-data'}
 }
 function link(id,base) {
-  if(!base)return ''
+  if(!base)return ` — ${dashboardRunUrl(id)} (local scheduler host)`
   try {
     const url=new URL(base)
     if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)return ''
@@ -81,10 +123,12 @@ export function renderHealthSummary(report,{reportBase}={}) {
     `${report.runs.total} actual runs · pass rate ${rate(report.passRate)} · execution coverage ${rate(report.executionRate)}`,
     ...Object.entries(report.categories).map(([name,c])=>`${name==='api'?'API':name==='uat'?'UAT':name}: ${c.passed} passed · ${c.failed} failed · ${c.skipped} skipped · ${c.blocked} blocked`),
     `Execution/infrastructure failures: ${report.executionFailures}`,
+    `Unresolved failures: ${(report.unresolvedFailures??[]).length}`,
+    ...(report.unresolvedFailures??[]).map(f=>`• ${f.name} · last failed ${kstTime(f.lastFailedAt)} · ${f.sourceRunId}${link(f.sourceRunId,reportBase)}`),
     ...report.schedules.map(s=>`${s.id}: ${s.expected} expected · ${s.completed} completed · ${s.missed} missed · ${s.pending} pending · ${s.missing} absent`),
     `Failure events: ${report.failureEvents.new} new · ${report.failureEvents.recurring} recurring · ${report.failureEvents.newVariants} new variants · ${report.failureEvents.recovered} recovered`,
     latest('Latest nightly',report.latestNightly),latest('Latest load',report.latestLoad),
-    ...(reportBase?report.runs.ids.map(id=>`Run ${id}${link(id,reportBase)}`):['Reports retained locally; shared hosting is not configured.'])].join('\n')
+    ...report.runs.ids.map(id=>`Run ${id}${link(id,reportBase)}`)].join('\n')
 }
 export async function generateHealthSummary(job,state,spec) {
   const dir=join(RUNS_DIR,'health');mkdirSync(dir,{recursive:true,mode:0o700})

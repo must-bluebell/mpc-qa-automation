@@ -8,15 +8,18 @@ test('main updates run regression and KST schedules select API and load',()=>{
   assert.equal(planGitHubRun('schedule',{schedule:'0 1 * * *'},config).suite,'load')
   assert.throws(()=>planGitHubRun('schedule',{schedule:'* * * * *'},config))
 })
-test('app merge dispatch tests the exact commit only from the configured app',()=>{
-  const client_payload={repository:'team/web-app',sha:'a'.repeat(40)}
-  const plan=planGitHubRun('repository_dispatch',{action:'webapp-merged',client_payload},config)
+test('app PR dispatch tests the exact head commit only from the configured app',()=>{
+  const client_payload={repository:'team/web-app',sha:'a'.repeat(40),pr_number:17}
+  const plan=planGitHubRun('repository_dispatch',{action:'webapp-pr',client_payload},config)
   assert.equal(plan.appRef,client_payload.sha)
   assert.equal(plan.suite,'full')
-  assert.throws(()=>planGitHubRun('repository_dispatch',{action:'webapp-merged',client_payload:{...client_payload,repository:'other/app'}},config))
-  assert.throws(()=>planGitHubRun('repository_dispatch',{action:'webapp-merged',client_payload:{...client_payload,sha:'main; echo unsafe'}},config))
+  assert.equal(plan.prNumber,17)
+  assert.throws(()=>planGitHubRun('repository_dispatch',{action:'webapp-pr',client_payload:{...client_payload,pr_number:0}},config))
+  assert.throws(()=>planGitHubRun('repository_dispatch',{action:'webapp-merged',client_payload},config))
+  assert.throws(()=>planGitHubRun('repository_dispatch',{action:'webapp-pr',client_payload:{...client_payload,repository:'other/app'}},config))
+  assert.throws(()=>planGitHubRun('repository_dispatch',{action:'webapp-pr',client_payload:{...client_payload,sha:'main; echo unsafe'}},config))
 })
-test('PR code never enters a credential-bearing Docker job',()=>{
+test('direct PR events are rejected; only validated application dispatches select PR code',()=>{
   assert.throws(()=>planGitHubRun('pull_request',{},config))
   assert.equal(planGitHubRun('workflow_dispatch',{inputs:{suite:'full'}},config).suite,'full')
   assert.equal(planGitHubRun('workflow_dispatch',{inputs:{suite:'uat'}},config).suite,'uat')

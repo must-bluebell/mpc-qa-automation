@@ -3,6 +3,7 @@
   "schedules": [
     {
       "id": "critical-30m",
+      "slack": "changes",
       "suite": "critical-smoke",
       "cron": "*/30 * * * *",
       "kind": "test",

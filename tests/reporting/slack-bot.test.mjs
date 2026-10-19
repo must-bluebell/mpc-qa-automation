@@ -169,3 +169,55 @@ test('known application scenarios use readable allowlisted names without publish
  assert.match(text,/New member completes SIWE, community, email and SBT issuance/)
  assert.doesNotMatch(text,/private unknown scenario text/)
 })
+
+test('scheduled critical smoke suppresses clean runs, groups repeats in the failure thread and alerts on recovery',async()=>{
+ const {calls,options}=setup()
+ const smoke=(id,status)=>({...run(id,status),suite:'critical-smoke',trigger:'scheduled',scheduleId:'critical-30m'})
+ await notifyBotRun(smoke('clean','passed'),options)
+ assert.equal(calls.length,0)
+ await notifyBotRun(smoke('first','failed'),options)
+ const parents=()=>calls.filter(c=>c.method==='chat.postMessage'&&!c.body.thread_ts)
+ assert.equal(parents().length,1)
+ const parentTs=JSON.parse(readFileSync(join(options.stateDir,'slack-bot-state.json'),'utf8')).messages.find(m=>m.runId==='first'&&m.kind==='summary').ts
+ const before=calls.length
+ await notifyBotRun(smoke('repeat','failed'),options)
+ assert.equal(parents().length,1)
+ assert.equal(calls.length,before+1)
+ assert.equal(calls.at(-1).body.thread_ts,parentTs)
+ assert.match(calls.at(-1).body.text,/Recurring failure group/)
+ await notifyBotRun(smoke('recovered','passed'),options)
+ assert.equal(parents().length,2)
+ assert.match(parents().at(-1).body.text,/Recovered/)
+ await notifyBotRun(smoke('healthy-again','passed'),options)
+ assert.equal(parents().length,2)
+})
+
+test('smoke infrastructure recovery alerts and nightly clean runs always publish',async()=>{
+ const {calls,options}=setup()
+ const smoke=(id,status)=>({...run(id,status),tests:[],suite:'critical-smoke',trigger:'scheduled',scheduleId:'critical-30m'})
+ await notifyBotRun(smoke('infra','infra-failed'),options)
+ await notifyBotRun(smoke('infra-recovery','passed'),options)
+ const parents=calls.filter(c=>!c.body.thread_ts)
+ assert.equal(parents.length,2)
+ assert.match(parents[1].body.text,/Recovered/)
+ await notifyBotRun({...run('nightly-clean','passed'),suite:'nightly-regression',trigger:'scheduled',scheduleId:'nightly-api-uat'},options)
+ assert.equal(calls.filter(c=>!c.body.thread_ts).length,3)
+})
+
+test('load report includes numerical comparison with the same workload baseline',async()=>{
+ const {calls,options}=setup()
+ const r={...run('baseline-comparison','passed'),suite:'load',load:{totalRequests:500,throughputRps:10,checkPassRate:1,baselineAction:'compared',baseline:{runId:'baseline-source',endpoints:{'GET /api/home':{p95Ms:100,errorRate:0}}},endpoints:{'GET /api/home':{p95Ms:120,errorRate:0.01}}}}
+ await notifyBotRun(r,options)
+ const text=calls.map(c=>c.body.text).join('\n')
+ assert.match(text,/baseline-source/)
+ assert.match(text,/100ms/)
+ assert.match(text,/20(?:\.0)?%/)
+})
+
+test('infrastructure recovery is announced when execution resumes but a product assertion fails',async()=>{
+ const {calls,options}=setup()
+ await notifyBotRun({...run('down'),status:'infra-failed',tests:[]},options)
+ await notifyBotRun({...run('product-fails'),steps:[],tests:[{...run('x').tests[0],classification:{kind:'product'}}]},options)
+ const parents=calls.filter(c=>!c.body.thread_ts)
+ assert.match(parents.at(-1).body.text,/Recovered.*Suite execution/)
+})

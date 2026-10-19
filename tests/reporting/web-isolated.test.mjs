@@ -32,6 +32,8 @@ test('only the isolated verification profile receives the bounded-memory diagnos
 test('default QA and verification aliases target the same verified stack with runtime protection', () => {
   const active = resolveEnvironment('local-docker')
   const verified = resolveEnvironment('web-isolated')
+  const standalone = webTestEnvironment()
+  assert.equal(standalone.stack.composeProject, active.stack.composeProject)
   assert.equal(active.baseUrl, verified.baseUrl)
   assert.equal(active.appOrigin, active.baseUrl)
   assert.equal(active.stack.composeProject, verified.stack.composeProject)

@@ -1,7 +1,7 @@
 name: Wallet QA
 
 # QA-repository PRs run self-checks. Application previews dispatch a deployment URL;
-# application merges dispatch an exact commit to qa-runner.yml.
+# application PRs dispatch their exact head commit to qa-runner.yml.
 on:
   workflow_dispatch:
     inputs:

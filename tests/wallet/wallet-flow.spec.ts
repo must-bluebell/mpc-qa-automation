@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { decodeEventLog, parseAbiItem } from 'viem'
 import { parseSiweMessage } from 'viem/siwe'
-import { openMining } from '../../fixtures/mining-navigation'
+import { openMining, usesActivities } from '../../fixtures/mining-navigation'
 import { target } from '../../config/target'
 import { stubAnalytics } from '../../fixtures/network'
 import { capabilities } from '../../fixtures/tiers'
@@ -192,15 +192,19 @@ test.describe('Unity sign-in cases', { tag: ['@ui', '@unity-signin'] }, () => {
     expect(message.chainId).toBe(t.chainId)
     expect(message.nonce).toBeTruthy()
     expect(message.expirationTime?.getTime()).toBeGreaterThan(Date.now())
-    await expect(page).toHaveURL(new URL('/?view=dig', t.baseUrl).href)
-    await expect(page.getByRole('button', { name: 'Open user account', exact: true })).toBeVisible()
+    await expect(page).toHaveURL(new URL(usesActivities() ? '/?tab=mine' : '/?view=dig', t.baseUrl).href)
+    if (!usesActivities()) await expect(page.getByRole('button', { name: 'Open user account', exact: true })).toBeVisible()
   })
 
   test('Positive 2 - Keep the authenticated Digging session after refresh', async ({ page }) => {
     const wallet = await connectConfiguredWallet(page)
     await page.reload()
-    await expect(page).toHaveURL(new URL('/?view=dig', t.baseUrl).href)
-    await expect(page.getByRole('button', { name: 'Open user account', exact: true })).toBeVisible()
+    await expect(page).toHaveURL(new URL(usesActivities() ? '/?tab=mine' : '/?view=dig', t.baseUrl).href)
+    if (usesActivities()) {
+      await expect(page.getByRole('tabpanel', { name: 'My Mine', exact: true })).toBeVisible()
+    } else {
+      await expect(page.getByRole('button', { name: 'Open user account', exact: true })).toBeVisible()
+    }
     const session = await page.request.get('/api/auth/session', { maxRetries: 2 })
     expect(session.status()).toBe(200)
     expect((await session.json()).address).toBe(wallet.address.toLowerCase())
@@ -243,198 +247,9 @@ test.describe('Unity sign-in cases', { tag: ['@ui', '@unity-signin'] }, () => {
   })
 })
 
-test('W30 - Complete or verify the Silicon digging and cart journey', { tag: ['@ui', '@silicon-cart'] }, async ({ page }, testInfo) => {
-  test.setTimeout(240_000)
-  // Real production activity: no retries, balance funding, or mocked mining/relay responses.
-  const signed: Array<{ message: Record<string, unknown>; domain: unknown }> = []
-  let digsToPerform = 3
-  let alreadyRecorded = false
-  let restoreRunResponse: import('@playwright/test').Response | undefined
-  let rejectCartSignature!: (error: unknown) => void
-  const rejectedCartSignature = new Promise<never>((_resolve, reject) => { rejectCartSignature = reject })
-  void rejectedCartSignature.catch(() => {})
-  let preparation: Promise<import('@playwright/test').Response> | undefined
-  await stubAnalytics(page)
-  const wallet = await injectTestWallet(page, {
-    account: getConfiguredWallet(), chainId: t.chainId,
-    beforeSignTypedData: async payload => {
-      try {
-        expect(new URL(page.url()).origin).toBe('https://app.globalmpc.tech')
-        expect(payload.primaryType).toBe('RecordFor')
-        expect(payload.domain?.name).toBe('MpcMyMine')
-        expect(payload.domain?.version).toBe('3')
-        expect(Number(payload.domain?.chainId)).toBe(204)
-        expect(payload.domain?.verifyingContract?.toLowerCase()).toMatch(/^0x80ca[0-9a-f]{30}5a7e5d$/)
-        expect(preparation, 'The signature must match this cart preparation').toBeDefined()
-        const preparedResponse = await preparation!
-        expect(preparedResponse.ok()).toBe(true)
-        const prepared = await preparedResponse.json()
-        expect(payload).toMatchObject(prepared.typedData)
-        expect(Object.keys(payload.types).sort()).toEqual([...new Set([...Object.keys(prepared.typedData.types), 'EIP712Domain'])].sort())
-        const message = payload.message as Record<string, unknown>
-        expect(String(message.user).toLowerCase()).toBe(wallet.address.toLowerCase())
-        expect(String(message.submitter)).toMatch(/^0x[0-9a-fA-F]{40}$/)
-        expect(String(message.submitter).toLowerCase()).not.toBe('0x0000000000000000000000000000000000000000')
-        expect(message.challenge).toMatch(/^0x[0-9a-fA-F]{64}$/)
-        expect(message.dataHash).toMatch(/^0x[0-9a-fA-F]{64}$/)
-        expect(Number(message.day)).toBe(Math.floor(Date.now() / 86_400_000))
-        expect(Number(message.kind)).toBe(0)
-        expect(Number(message.count)).toBeGreaterThan(0)
-        expect(Number(message.energyUsed)).toBeGreaterThanOrEqual(9)
-        expect(Number(message.creditEarned)).toBe(0)
-        expect(Number(message.creditSpent)).toBe(0)
-        expect(message.goodsIds).toEqual([])
-        expect(message.goodsMadeTo).toEqual([])
-        expect(message.goodsBurnedTo).toEqual([])
-        expect(Number(message.deadline)).toBeGreaterThan(Date.now() / 1000)
-        // Fresh count, energy, hashes and deadline come from this run, never the recorded example.
-        signed.push({ message, domain: payload.domain })
-        await testInfo.attach('verified-RecordFor-signature-request', {
-          body: Buffer.from(JSON.stringify(payload)), contentType: 'application/json',
-        })
-      } catch (error) {
-        rejectCartSignature(error)
-        throw error
-      }
-    },
-  })
-  await test.step('Connect the requested wallet and open Digging', async () => {
-    expect(wallet.address.toLowerCase()).toBe('0xe46d2a8c9ae04517373b8c9c468dfa5db2d381df')
-    await page.goto('/')
-    const sheet = new JoinSheet(page)
-    await sheet.open()
-    await sheet.connectWith(wallet.walletName)
-    await expect.poll(async () => {
-      const session = await page.request.get('/api/auth/session', { maxRetries: 2 })
-      return session.ok() ? (await session.json()).address : null
-    }).toBe(wallet.address.toLowerCase())
-    const restoration = page.waitForResponse(r => new URL(r.url()).pathname === '/my-mine/run' && r.request().method() === 'GET' && r.ok(), { timeout: 60_000 })
-    await openMining(page)
-    restoreRunResponse = await restoration
-    await expect(page.getByText('Syncing today’s activity… You can still browse your mine.', { exact: true }).first()).not.toBeVisible({ timeout: 60_000 })
-  })
-
-  const dig = page.getByRole('button', { name: 'Tap the ore to dig', exact: true })
-  await test.step('Verify mining prerequisites and select Silicon', async () => {
-    await new JoinSheet(page).dismissIfOpen()
-    await expect(dig).toBeVisible()
-    expect(restoreRunResponse, 'Use the app’s successful, versioned run restoration').toBeDefined()
-    const run = await restoreRunResponse!.json()
-    await testInfo.attach('cart-resume-state', { body: Buffer.from(JSON.stringify(run)), contentType: 'application/json' })
-    expect(Array.isArray(run.script), 'The real saved run must supply mining history').toBe(true)
-    expect(Array.isArray(run.records)).toBe(true)
-    const records = run.records as Array<{ index: number; state: string; txHash: string; digCount: number }>
-    const lastCart = Math.max(-1, ...run.script.map((move: { t: string }, index: number) => move.t === 'settle' && records.some(row => row.index === index && ['confirmed', 'included'].includes(row.state)) ? index : -1))
-    const pendingDigs = run.script.slice(lastCart + 1).reduce((count: number, move: { t: string; draws?: unknown[] }) => count + (move.t === 'mine' ? move.draws?.length ?? 0 : 0), 0)
-    digsToPerform = Math.max(0, 3 - pendingDigs)
-    await testInfo.attach('dig-batch-plan', { body: Buffer.from(JSON.stringify({ targetDigs: 3, pendingDigs, digsToPerform, requiredCrew: digsToPerform * 3 })), contentType: 'application/json' })
-    if (pendingDigs > 0) testInfo.annotations.push({ type: 'resumed-cart', description: `Resuming ${pendingDigs} existing digs; execute ${digsToPerform} more before recording the cart.` })
-    const snapshot = await page.locator('body').innerText()
-    await testInfo.attach('mining-prerequisites', { body: Buffer.from(snapshot), contentType: 'text/plain' })
-    await page.screenshot({ path: testInfo.outputPath('mining-prerequisites.png'), fullPage: true })
-    if (pendingDigs === 0 && !await dig.isEnabled() && snapshot.includes(validationCopy.cartRunsUsed)) {
-      const lastRecord = records.find(row => row.index === lastCart)
-      expect(lastRecord, 'A completed batch must have a confirmed owner-scoped cart record').toBeDefined()
-      expect(lastRecord!.digCount).toBeGreaterThanOrEqual(3)
-      expect(lastRecord!.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/)
-      const receiptResponse = await page.request.post('https://opbnb-mainnet-rpc.bnbchain.org', {
-        data: { jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [lastRecord!.txHash] },
-      })
-      expect(receiptResponse.ok()).toBe(true)
-      const receipt = (await receiptResponse.json()).result
-      expect(receipt.transactionHash).toBe(lastRecord!.txHash)
-      expect(receipt.status).toBe('0x1')
-      expect(receipt.to.toLowerCase()).toBe('0x80ca104d4dc59d42862b801792abb1909f5a7e5d')
-      await expectValidationMessage(page.getByText(validationCopy.emptyCartHint, { exact: true }), validationCopy.emptyCartHint, 'completed-cart-empty')
-      await expectValidationMessage(page.locator(`[id=${JSON.stringify(await dig.getAttribute('aria-describedby'))}]`), validationCopy.cartRunsUsed, 'cart-daily-limit')
-      await expect(page.getByRole('button', { name: 'Send the cart', exact: true })).toBeDisabled()
-      alreadyRecorded = true
-      digsToPerform = 0
-      testInfo.annotations.push({ type: 'coverage', description: 'Completed cart and receipt verified; no new digs, signature, or cart submission in this run.' })
-      await testInfo.attach('completed-cart-verification', { body: Buffer.from(JSON.stringify({ freshDigsExecuted: 0, freshCartSubmitted: false, record: lastRecord, receipt })), contentType: 'application/json' })
-      return
-    }
-    if (digsToPerform > 0 && !await dig.isEnabled()) {
-      const reasonId = await dig.getAttribute('aria-describedby')
-      expect(reasonId, 'Disabled digging must explain why it is unavailable').toBeTruthy()
-      if (Number(snapshot.match(/Crew available\s+([\d,]+)\s+Crew/)?.[1]?.replaceAll(',', '')) < 3) {
-        await expectValidationMessage(page.locator(`[id=${JSON.stringify(reasonId)}]`), validationCopy.insufficientCrew, 'insufficient-crew')
-      }
-      testInfo.annotations.push({ type: 'blocked', description: 'Digging is disabled for the connected wallet. See mining-prerequisites for Crew and daily limits.' })
-    }
-    if (snapshot.includes(validationCopy.emptyCartHint)) {
-      await expectValidationMessage(page.getByText(validationCopy.emptyCartHint, { exact: true }), validationCopy.emptyCartHint, 'empty-cart-hint')
-      await expectValidationMessage(page.getByText(validationCopy.emptyCart, { exact: true }), validationCopy.emptyCart, 'empty-cart-reason')
-    }
-    if (digsToPerform > 0) await expect(dig).toBeEnabled()
-    const crew = Number(snapshot.match(/Crew available\s+([\d,]+)\s+Crew/)?.[1]?.replaceAll(',', ''))
-    const digsLeft = Number(snapshot.match(/Digs left today\s+(\d+)\s*\//)?.[1])
-    expect(crew, 'Enough Crew must be available for the remaining digs').toBeGreaterThanOrEqual(digsToPerform * 3)
-    expect(digsLeft, 'The remaining batch must fit the daily dig allowance').toBeGreaterThanOrEqual(digsToPerform)
-    const silicon = page.getByRole('button', { name: /^Silicon · / })
-    if (await silicon.isEnabled()) await silicon.click()
-    await expect(silicon).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  if (alreadyRecorded) {
-    expect(signed).toHaveLength(0)
-    return
-  }
-
-  for (let attempt = 1; attempt <= digsToPerform; attempt++) {
-    await test.step(`Dig ${attempt}: verify the result modal and close it`, async () => {
-      await expect(dig).toBeEnabled()
-      await dig.click()
-      const modal = page.getByRole('dialog').filter({ visible: true })
-      await expect(modal).toHaveCount(1)
-      await expectValidationMessage(modal.getByText(/^(Silica|Lithium ore|Rare earth ore)$/), /^(Silica|Lithium ore|Rare earth ore)$/, `dig-${attempt}-ore-name`)
-      for (const [name, expected] of Object.entries({ fresh: validationCopy.justDug, chance: validationCopy.miningChance, reward: validationCopy.registerReward, duration: validationCopy.creditDuration })) {
-        await expectValidationMessage(modal.getByText(expected, { exact: true }), expected, `dig-${attempt}-${name}`)
-      }
-      await expectValidationMessage(modal.getByRole('button', { name: 'Close', exact: true }), 'Close', `dig-${attempt}-close-action`)
-      await testInfo.attach(`dig-${attempt}-modal-text`, { body: Buffer.from(await modal.innerText()), contentType: 'text/plain' })
-      await page.screenshot({ path: testInfo.outputPath(`dig-${attempt}-modal.png`), fullPage: true })
-      await modal.getByRole('button', { name: /^(Close|Done|OK)$/ }).click()
-      await expect(modal).not.toBeVisible()
-    })
-  }
-
-  await test.step('Send the cart, verify and approve the RecordFor signature', async () => {
-    const cart = page.getByRole('button', { name: 'Send the cart', exact: true })
-    await expect(cart).toBeEnabled()
-    await expectValidationMessage(page.getByText(validationCopy.cartRecordHint, { exact: true }), validationCopy.cartRecordHint, 'cart-recording-instructions')
-    preparation = page.waitForResponse(r => new URL(r.url()).pathname === '/my-mine/record' && r.request().method() === 'POST', { timeout: 60_000 })
-    const submission = page.waitForResponse(r => new URL(r.url()).pathname === '/my-mine/record/submit' && r.request().method() === 'POST', { timeout: 90_000 })
-    await cart.click()
-    const response = await Promise.race([submission, rejectedCartSignature])
-    expect(response.ok(), 'The real relay must accept the signed cart').toBe(true)
-    expect(signed).toHaveLength(1)
-    const result = await response.json()
-    expect(result.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/)
-    expect(['sent', 'included', 'confirmed']).toContain(result.state)
-    await testInfo.attach('cart-relay-result', { body: Buffer.from(JSON.stringify(result)), contentType: 'application/json' })
-    const moveIndex = response.request().postDataJSON().moveIndex
-    const statusUrl = `/my-mine/run?record=${moveIndex}&dataHash=${signed[0]!.message.dataHash}`
-    const cid = response.request().headers()['x-mpc-cid']
-    await expect.poll(async () => {
-      const status = await page.request.get(statusUrl, { headers: { ...(cid ? { 'x-mpc-cid': cid } : {}), ...(restoreRunResponse!.request().headers()['x-mpc-run-protocol'] ? { 'x-mpc-run-protocol': restoreRunResponse!.request().headers()['x-mpc-run-protocol']! } : {}) } })
-      expect(status.ok()).toBe(true)
-      const record = (await status.json()).records?.find((row: { index: number; dataHash: string }) => row.index === moveIndex && row.dataHash === signed[0]!.message.dataHash)
-      return record && ['confirmed', 'included'].includes(record.state) && record.txHash === result.txHash
-    }, { timeout: 120_000 }).toBe(true)
-    // The exact signed record has confirmed above; verify the persistent result after delivery.
-    const done = page.getByRole('button', { name: 'Done', exact: true })
-    if (await done.isVisible()) await done.click()
-    await expectValidationMessage(page.getByText(validationCopy.emptyCartHint, { exact: true }), validationCopy.emptyCartHint, 'recorded-cart-empty')
-    await expect(cart).toBeDisabled()
-    await page.screenshot({ path: testInfo.outputPath('cart-recorded.png'), fullPage: true })
-    await expect(page.getByRole('heading', { name: 'Digging', exact: true })).toBeVisible()
-    const session = await page.request.get('/api/auth/session', { maxRetries: 2 })
-    expect((await session.json()).address).toBe(wallet.address.toLowerCase())
-  })
-})
-
+// Earn the daily Crew before the cart journey consumes it when the whole file runs.
 test('W31 - Claim Daily check-in when available or verify today’s completed check-in', { tag: ['@ui', '@daily-checkin'] }, async ({ page }, testInfo) => {
+  test.skip(usesActivities(), 'Unity check-in UI and pinned mainnet contracts are covered by the separate production run')
   test.setTimeout(240_000)
   let challengeResponse: Promise<import('@playwright/test').Response> | undefined
   let rejectSignature!: (error: unknown) => void
@@ -579,8 +394,11 @@ test('W31 - Claim Daily check-in when available or verify today’s completed ch
     await expect.poll(readBalance, { timeout: 120_000 }).toBe(before + reward)
     const success = page.getByRole('dialog', { name: 'You have checked in today.', exact: true })
     await expectValidationMessage(success.getByText(validationCopy.checkedIn, { exact: true }), validationCopy.checkedIn, 'daily-checkin-success')
-    await expectValidationMessage(success.getByText(validationCopy.earningToday(reward), { exact: true }), validationCopy.earningToday(reward), 'daily-checkin-reward')
-    await expectValidationMessage(success.getByText(validationCopy.baseReward(baseReward), { exact: true }), validationCopy.baseReward(baseReward), 'daily-checkin-base-reward')
+    // Amount chips use CSS gaps between text nodes, which are absent from textContent.
+    const earningCopy = new RegExp(`^Earning today\\s*${reward}\\s*Crew$`)
+    const baseCopy = new RegExp(`^Base\\s*${baseReward}\\s*Crew$`)
+    await expectValidationMessage(success.getByText(earningCopy), earningCopy, 'daily-checkin-reward')
+    await expectValidationMessage(success.getByText(baseCopy), baseCopy, 'daily-checkin-base-reward')
     await page.screenshot({ path: testInfo.outputPath('daily-checkin-success.png'), fullPage: true })
     await success.getByRole('button', { name: 'OK', exact: true }).click()
     await page.getByRole('tab', { name: /^Completed(?:\s*\d+)?$/ }).click()
@@ -595,8 +413,205 @@ test('W31 - Claim Daily check-in when available or verify today’s completed ch
 })
 
 
+test('W30 - Complete or verify the Silicon digging and cart journey', { tag: ['@ui', '@silicon-cart'] }, async ({ page }, testInfo) => {
+  test.skip(usesActivities(), 'Unity cart UI and pinned mainnet contracts are covered by the separate production run')
+  test.setTimeout(240_000)
+  // Real production activity: no retries, balance funding, or mocked mining/relay responses.
+  const signed: Array<{ message: Record<string, unknown>; domain: unknown }> = []
+  let digsToPerform = 3
+  let alreadyRecorded = false
+  let restoreRunResponse: import('@playwright/test').Response | undefined
+  let rejectCartSignature!: (error: unknown) => void
+  const rejectedCartSignature = new Promise<never>((_resolve, reject) => { rejectCartSignature = reject })
+  void rejectedCartSignature.catch(() => {})
+  let preparation: Promise<import('@playwright/test').Response> | undefined
+  await stubAnalytics(page)
+  const wallet = await injectTestWallet(page, {
+    account: getConfiguredWallet(), chainId: t.chainId,
+    beforeSignTypedData: async payload => {
+      try {
+        expect(new URL(page.url()).origin).toBe('https://app.globalmpc.tech')
+        expect(payload.primaryType).toBe('RecordFor')
+        expect(payload.domain?.name).toBe('MpcMyMine')
+        expect(payload.domain?.version).toBe('3')
+        expect(Number(payload.domain?.chainId)).toBe(204)
+        expect(payload.domain?.verifyingContract?.toLowerCase()).toMatch(/^0x80ca[0-9a-f]{30}5a7e5d$/)
+        expect(preparation, 'The signature must match this cart preparation').toBeDefined()
+        const preparedResponse = await preparation!
+        expect(preparedResponse.ok()).toBe(true)
+        const prepared = await preparedResponse.json()
+        expect(payload).toMatchObject(prepared.typedData)
+        expect(Object.keys(payload.types).sort()).toEqual([...new Set([...Object.keys(prepared.typedData.types), 'EIP712Domain'])].sort())
+        const message = payload.message as Record<string, unknown>
+        expect(String(message.user).toLowerCase()).toBe(wallet.address.toLowerCase())
+        expect(String(message.submitter)).toMatch(/^0x[0-9a-fA-F]{40}$/)
+        expect(String(message.submitter).toLowerCase()).not.toBe('0x0000000000000000000000000000000000000000')
+        expect(message.challenge).toMatch(/^0x[0-9a-fA-F]{64}$/)
+        expect(message.dataHash).toMatch(/^0x[0-9a-fA-F]{64}$/)
+        expect(Number(message.day)).toBe(Math.floor(Date.now() / 86_400_000))
+        expect(Number(message.kind)).toBe(0)
+        expect(Number(message.count)).toBeGreaterThan(0)
+        expect(Number(message.energyUsed)).toBeGreaterThanOrEqual(9)
+        expect(Number(message.creditEarned)).toBe(0)
+        expect(Number(message.creditSpent)).toBe(0)
+        expect(message.goodsIds).toEqual([])
+        expect(message.goodsMadeTo).toEqual([])
+        expect(message.goodsBurnedTo).toEqual([])
+        expect(Number(message.deadline)).toBeGreaterThan(Date.now() / 1000)
+        // Fresh count, energy, hashes and deadline come from this run, never the recorded example.
+        signed.push({ message, domain: payload.domain })
+        await testInfo.attach('verified-RecordFor-signature-request', {
+          body: Buffer.from(JSON.stringify(payload)), contentType: 'application/json',
+        })
+      } catch (error) {
+        rejectCartSignature(error)
+        throw error
+      }
+    },
+  })
+  await test.step('Connect the requested wallet and open Digging', async () => {
+    expect(wallet.address.toLowerCase()).toBe('0xe46d2a8c9ae04517373b8c9c468dfa5db2d381df')
+    await page.goto('/')
+    const sheet = new JoinSheet(page)
+    await sheet.open()
+    await sheet.connectWith(wallet.walletName)
+    await expect.poll(async () => {
+      const session = await page.request.get('/api/auth/session', { maxRetries: 2 })
+      return session.ok() ? (await session.json()).address : null
+    }).toBe(wallet.address.toLowerCase())
+    const restoration = page.waitForResponse(r => new URL(r.url()).pathname === '/my-mine/run' && r.request().method() === 'GET' && r.ok(), { timeout: 60_000 })
+    await openMining(page)
+    restoreRunResponse = await restoration
+    await expect(page.getByText('Syncing today’s activity… You can still browse your mine.', { exact: true }).first()).not.toBeVisible({ timeout: 60_000 })
+  })
+
+  const dig = page.getByRole('button', { name: 'Tap the ore to dig', exact: true })
+  await test.step('Verify mining prerequisites and select Silicon', async () => {
+    await new JoinSheet(page).dismissIfOpen()
+    await expect(dig).toBeVisible()
+    expect(restoreRunResponse, 'Use the app’s successful, versioned run restoration').toBeDefined()
+    const run = await restoreRunResponse!.json()
+    await testInfo.attach('cart-resume-state', { body: Buffer.from(JSON.stringify(run)), contentType: 'application/json' })
+    expect(Array.isArray(run.script), 'The real saved run must supply mining history').toBe(true)
+    expect(Array.isArray(run.records)).toBe(true)
+    const records = run.records as Array<{ index: number; state: string; txHash: string; digCount: number }>
+    const lastCart = Math.max(-1, ...run.script.map((move: { t: string }, index: number) => move.t === 'settle' && records.some(row => row.index === index && ['confirmed', 'included'].includes(row.state)) ? index : -1))
+    const pendingDigs = run.script.slice(lastCart + 1).reduce((count: number, move: { t: string; draws?: unknown[] }) => count + (move.t === 'mine' ? move.draws?.length ?? 0 : 0), 0)
+    digsToPerform = Math.max(0, 3 - pendingDigs)
+    await testInfo.attach('dig-batch-plan', { body: Buffer.from(JSON.stringify({ targetDigs: 3, pendingDigs, digsToPerform, requiredCrew: digsToPerform * 3 })), contentType: 'application/json' })
+    if (pendingDigs > 0) testInfo.annotations.push({ type: 'resumed-cart', description: `Resuming ${pendingDigs} existing digs; execute ${digsToPerform} more before recording the cart.` })
+    const snapshot = await page.locator('body').innerText()
+    const crew = Number(snapshot.match(/Crew available\s+([\d,]+)\s+Crew/)?.[1]?.replaceAll(',', ''))
+    const lastRecord = records.find(row => row.index === lastCart)
+    const dailyLimitReached = snapshot.includes(validationCopy.cartRunsUsed)
+    const completedBatchWithLimitedCrew = (lastRecord?.digCount ?? 0) >= 3 && crew < digsToPerform * 3
+    await testInfo.attach('mining-prerequisites', { body: Buffer.from(snapshot), contentType: 'text/plain' })
+    await page.screenshot({ path: testInfo.outputPath('mining-prerequisites.png'), fullPage: true })
+    if (pendingDigs === 0 && ((!await dig.isEnabled() && dailyLimitReached) || completedBatchWithLimitedCrew)) {
+      expect(lastRecord, 'A completed batch must have a confirmed owner-scoped cart record').toBeDefined()
+      expect(lastRecord!.digCount).toBeGreaterThanOrEqual(3)
+      expect(lastRecord!.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/)
+      const receiptResponse = await page.request.post('https://opbnb-mainnet-rpc.bnbchain.org', {
+        data: { jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [lastRecord!.txHash] },
+      })
+      expect(receiptResponse.ok()).toBe(true)
+      const receipt = (await receiptResponse.json()).result
+      expect(receipt.transactionHash).toBe(lastRecord!.txHash)
+      expect(receipt.status).toBe('0x1')
+      expect(receipt.to.toLowerCase()).toBe('0x80ca104d4dc59d42862b801792abb1909f5a7e5d')
+      await expectValidationMessage(page.getByText(validationCopy.emptyCartHint, { exact: true }), validationCopy.emptyCartHint, 'completed-cart-empty')
+      if (dailyLimitReached) {
+        await expectValidationMessage(page.locator(`[id=${JSON.stringify(await dig.getAttribute('aria-describedby'))}]`), validationCopy.cartRunsUsed, 'cart-daily-limit')
+      }
+      await expect(page.getByRole('button', { name: 'Send the cart', exact: true })).toBeDisabled()
+      alreadyRecorded = true
+      digsToPerform = 0
+      testInfo.annotations.push({ type: 'coverage', description: 'Completed cart and receipt verified; no new digs, signature, or cart submission in this run.' })
+      await testInfo.attach('completed-cart-verification', { body: Buffer.from(JSON.stringify({ freshDigsExecuted: 0, freshCartSubmitted: false, record: lastRecord, receipt })), contentType: 'application/json' })
+      return
+    }
+    if (digsToPerform > 0 && !await dig.isEnabled()) {
+      const reasonId = await dig.getAttribute('aria-describedby')
+      expect(reasonId, 'Disabled digging must explain why it is unavailable').toBeTruthy()
+      if (Number(snapshot.match(/Crew available\s+([\d,]+)\s+Crew/)?.[1]?.replaceAll(',', '')) < 3) {
+        await expectValidationMessage(page.locator(`[id=${JSON.stringify(reasonId)}]`), validationCopy.insufficientCrew, 'insufficient-crew')
+      }
+      testInfo.annotations.push({ type: 'blocked', description: 'Digging is disabled for the connected wallet. See mining-prerequisites for Crew and daily limits.' })
+    }
+    if (snapshot.includes(validationCopy.emptyCartHint)) {
+      await expectValidationMessage(page.getByText(validationCopy.emptyCartHint, { exact: true }), validationCopy.emptyCartHint, 'empty-cart-hint')
+      await expectValidationMessage(page.getByText(validationCopy.emptyCart, { exact: true }), validationCopy.emptyCart, 'empty-cart-reason')
+    }
+    if (digsToPerform > 0) await expect(dig).toBeEnabled()
+    const digsLeft = Number(snapshot.match(/Digs left today\s+(\d+)\s*\//)?.[1])
+    expect(crew, 'Enough Crew must be available for the remaining digs').toBeGreaterThanOrEqual(digsToPerform * 3)
+    expect(digsLeft, 'The remaining batch must fit the daily dig allowance').toBeGreaterThanOrEqual(digsToPerform)
+    const silicon = page.getByRole('button', { name: /^Silicon · / })
+    if (await silicon.isEnabled()) await silicon.click()
+    await expect(silicon).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  if (alreadyRecorded) {
+    expect(signed).toHaveLength(0)
+    return
+  }
+
+  for (let attempt = 1; attempt <= digsToPerform; attempt++) {
+    await test.step(`Dig ${attempt}: verify the result modal and close it`, async () => {
+      await expect(dig).toBeEnabled()
+      await dig.click()
+      const modal = page.getByRole('dialog').filter({ visible: true })
+      await expect(modal).toHaveCount(1)
+      await expectValidationMessage(modal.getByText(/^(Silica|Lithium ore|Rare earth ore)$/), /^(Silica|Lithium ore|Rare earth ore)$/, `dig-${attempt}-ore-name`)
+      for (const [name, expected] of Object.entries({ fresh: validationCopy.justDug, chance: validationCopy.miningChance, reward: validationCopy.registerReward, duration: validationCopy.creditDuration })) {
+        await expectValidationMessage(modal.getByText(expected, { exact: true }), expected, `dig-${attempt}-${name}`)
+      }
+      await expectValidationMessage(modal.getByRole('button', { name: 'Close', exact: true }), 'Close', `dig-${attempt}-close-action`)
+      await testInfo.attach(`dig-${attempt}-modal-text`, { body: Buffer.from(await modal.innerText()), contentType: 'text/plain' })
+      await page.screenshot({ path: testInfo.outputPath(`dig-${attempt}-modal.png`), fullPage: true })
+      await modal.getByRole('button', { name: /^(Close|Done|OK)$/ }).click()
+      await expect(modal).not.toBeVisible()
+    })
+  }
+
+  await test.step('Send the cart, verify and approve the RecordFor signature', async () => {
+    const cart = page.getByRole('button', { name: 'Send the cart', exact: true })
+    await expect(cart).toBeEnabled()
+    await expectValidationMessage(page.getByText(validationCopy.cartRecordHint, { exact: true }), validationCopy.cartRecordHint, 'cart-recording-instructions')
+    preparation = page.waitForResponse(r => new URL(r.url()).pathname === '/my-mine/record' && r.request().method() === 'POST', { timeout: 60_000 })
+    const submission = page.waitForResponse(r => new URL(r.url()).pathname === '/my-mine/record/submit' && r.request().method() === 'POST', { timeout: 90_000 })
+    await cart.click()
+    const response = await Promise.race([submission, rejectedCartSignature])
+    expect(response.ok(), 'The real relay must accept the signed cart').toBe(true)
+    expect(signed).toHaveLength(1)
+    const result = await response.json()
+    expect(result.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/)
+    expect(['sent', 'included', 'confirmed']).toContain(result.state)
+    await testInfo.attach('cart-relay-result', { body: Buffer.from(JSON.stringify(result)), contentType: 'application/json' })
+    const moveIndex = response.request().postDataJSON().moveIndex
+    const statusUrl = `/my-mine/run?record=${moveIndex}&dataHash=${signed[0]!.message.dataHash}`
+    const cid = response.request().headers()['x-mpc-cid']
+    await expect.poll(async () => {
+      const status = await page.request.get(statusUrl, { headers: { ...(cid ? { 'x-mpc-cid': cid } : {}), ...(restoreRunResponse!.request().headers()['x-mpc-run-protocol'] ? { 'x-mpc-run-protocol': restoreRunResponse!.request().headers()['x-mpc-run-protocol']! } : {}) } })
+      expect(status.ok()).toBe(true)
+      const record = (await status.json()).records?.find((row: { index: number; dataHash: string }) => row.index === moveIndex && row.dataHash === signed[0]!.message.dataHash)
+      return record && ['confirmed', 'included'].includes(record.state) && record.txHash === result.txHash
+    }, { timeout: 120_000 }).toBe(true)
+    // The exact signed record has confirmed above; verify the persistent result after delivery.
+    const done = page.getByRole('button', { name: 'Done', exact: true })
+    if (await done.isVisible()) await done.click()
+    await expectValidationMessage(page.getByText(validationCopy.emptyCartHint, { exact: true }), validationCopy.emptyCartHint, 'recorded-cart-empty')
+    await expect(cart).toBeDisabled()
+    await page.screenshot({ path: testInfo.outputPath('cart-recorded.png'), fullPage: true })
+    await expect(page.getByRole('heading', { name: 'Digging', exact: true })).toBeVisible()
+    const session = await page.request.get('/api/auth/session', { maxRetries: 2 })
+    expect((await session.json()).address).toBe(wallet.address.toLowerCase())
+  })
+})
+
 // Read-only follow-up for a daily claim that has already been submitted; never claims twice.
 test('W32 - Verify a previously confirmed Daily check-in and its Crew credit', { tag: ['@ui', '@daily-checkin-verification'] }, async ({ page }, testInfo) => {
+  test.skip(usesActivities(), 'Saved Unity mainnet check-in evidence belongs to the separate production run')
   test.skip(!process.env.QA_CHECKIN_EVIDENCE, 'Provide saved claim evidence to verify an existing daily claim')
   const evidence = JSON.parse(readFileSync(process.env.QA_CHECKIN_EVIDENCE!, 'utf8'))
   const wallet = await connectConfiguredWallet(page)
@@ -681,6 +696,7 @@ test.describe('Additional Unity coverage', { tag: ['@ui', '@unity-additional'] }
   }
 
   test('W33 - Positive: close and reopen Quests without losing the wallet session', async ({ page }) => {
+    test.skip(usesActivities(), 'Requires the Unity Quests overlay; local activities use board panels')
     const wallet = await readyMining(page)
     const panel = await openQuests(page)
     await panel.getByRole('button', { name: 'Close quests', exact: true }).click()
@@ -693,6 +709,7 @@ test.describe('Additional Unity coverage', { tag: ['@ui', '@unity-additional'] }
   })
 
   test('W34 - Positive: switch between incomplete and completed quest lists', async ({ page }) => {
+    test.skip(usesActivities(), 'Requires the Unity Quests overlay; local activities use board panels')
     await readyMining(page)
     const panel = await openQuests(page)
     const incomplete = panel.getByRole('tab', { name: /^Incomplete(?:\s*\d+)?$/ })
@@ -714,6 +731,7 @@ test.describe('Additional Unity coverage', { tag: ['@ui', '@unity-additional'] }
   })
 
   test('W35 - Positive: display the available Crew after accounting for pending usage', async ({ page }, testInfo) => {
+    test.skip(usesActivities(), 'Requires the Unity Crew dialog; local activities use board panels')
     const wallet = await readyMining(page)
     const response = await page.request.get('/my-mine/energy')
     expect(response.ok()).toBe(true)

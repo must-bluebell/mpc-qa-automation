@@ -1,20 +1,23 @@
 import { readFileSync, writeFileSync, copyFileSync, appendFileSync, constants } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { verifyPullRequest } from './github-pr.mjs'
 
 export function planGitHubRun(name,event,{appRepository,appRef='main'}={}) {
   if(!/^[\w.-]+\/[\w.-]+$/.test(appRepository??''))throw new Error('Set WEBAPP_REPOSITORY to the application owner/repository in GitHub Actions variables.')
-  let suite
+  let suite,prNumber
   if(name==='push')suite='regression'
   else if(name==='schedule')suite=({'0 */4 * * *':'api','0 1 * * *':'load'})[event.schedule]
   else if(name==='workflow_dispatch') {suite=event.inputs?.suite??'regression';appRef=event.inputs?.app_ref||appRef}
-  else if(name==='repository_dispatch'&&event.action==='webapp-merged') {
-    if(event.client_payload?.repository!==appRepository||!/^([a-f0-9]{40}|[a-f0-9]{64})$/i.test(event.client_payload?.sha??''))throw new Error('App merge dispatch must identify the configured repository and its exact commit SHA.')
+  else if(name==='repository_dispatch'&&event.action==='webapp-pr') {
+    if(event.client_payload?.repository!==appRepository||!/^([a-f0-9]{40}|[a-f0-9]{64})$/i.test(event.client_payload?.sha??''))throw new Error('App PR dispatch must identify the configured repository and its exact head commit SHA.')
+    prNumber=event.client_payload.pr_number
+    if(!Number.isSafeInteger(prNumber)||prNumber<1)throw new Error('App PR dispatch must identify its pull request number.')
     suite='full';appRef=event.client_payload.sha
   }
   if(!['regression','api','load','uat','full'].includes(suite))throw new Error('Unsupported GitHub trigger or suite.')
   if(!/^(?!-)[\w./-]{1,200}$/.test(appRef))throw new Error('Invalid application ref.')
-  return {suite,appRepository,appRef}
+  return {suite,appRepository,appRef,...(prNumber?{prNumber}:{})}
 }
 export function ciProfile(profile,runId,attempt) {
   if(!/^\d+$/.test(runId??'')||!/^\d+$/.test(attempt??''))throw new Error('Expected numeric GitHub run ID and attempt.')
@@ -35,6 +38,7 @@ async function main() {
   if(process.argv[2]==='plan') {
     const event=JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'))
     const plan=planGitHubRun(process.env.GITHUB_EVENT_NAME,event,{appRepository:process.env.WEBAPP_REPOSITORY,appRef:process.env.WEBAPP_REF||'main'})
+    if(plan.prNumber)await verifyPullRequest(plan,{token:process.env.WEBAPP_READ_TOKEN})
     appendFileSync(process.env.GITHUB_OUTPUT,Object.entries(plan).map(([k,v])=>`${k}=${v}\n`).join(''))
   } else if(process.argv[2]==='verify-access') {
     const result=await verifyAppAccess({appRepository:process.env.APP_REPOSITORY,appRef:process.env.APP_REF,token:process.env.GH_TOKEN})

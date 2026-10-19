@@ -1,24 +1,26 @@
 # Copy into the APPLICATION repository as .github/workflows/mpc-qa-trigger.yml.
-name: Request MPC quality checks after app merge
+name: Request MPC quality checks before app merge
 on:
-  pull_request:
-    types: [closed]
+  # Base-branch workflow only; never check out or execute PR code here.
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 permissions:
   contents: read
 jobs:
   request-quality:
-    if: github.event.pull_request.merged == true
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger QA against this exact application commit
+      - name: Trigger QA against this exact PR head commit
         env:
           GH_TOKEN: ${{ secrets.QA_DISPATCH_TOKEN }}
           APP_REPOSITORY: ${{ github.repository }}
-          APP_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          APP_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
           set -euo pipefail
-          jq -n --arg repo "$APP_REPOSITORY" --arg sha "$APP_SHA" \
-            '{event_type:"webapp-merged",client_payload:{repository:$repo,sha:$sha}}' \
+          jq -n --arg repo "$APP_REPOSITORY" --arg sha "$APP_SHA" --argjson pr "$PR_NUMBER" \
+            '{event_type:"webapp-pr",client_payload:{repository:$repo,sha:$sha,pr_number:$pr}}' \
             | gh api --method POST repos/must-bluebell/mpc-qa-automation/dispatches --input -

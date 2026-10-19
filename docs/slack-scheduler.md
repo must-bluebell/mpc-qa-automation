@@ -9,7 +9,16 @@ The scheduler uses Asia/Seoul (KST, UTC+9). User-visible Slack and sanitized rep
 | Controlled load (baseline profile) | Sunday 03:00 | Saturday 23:00 |
 | Consolidated QA health report | Daily 09:00 | Daily 05:00 |
 
-The local scheduler owns recurring execution; GitHub recurring triggers are removed. GitHub push, merge dispatch and manual triggers remain available. Deploy the workflow change to the default branch to disable remote recurring triggers. The former suite rotation is disabled. Migration cancels obsolete queued jobs while preserving running jobs, notification work and history.
+| Schedule | Slack behavior |
+| --- | --- |
+| Critical smoke, every 30 minutes | Alert on new failures or recovery. Group repeated failures into one reply on the original incident thread. Clean runs remain in the dashboard without a Slack post. |
+| Nightly API + UAT | Always send the full summary, including passing runs and their AI review. |
+| Weekly load | Send performance metrics and numerical p95/error-rate comparison with the matching workload baseline. |
+| Daily health | Send counts, unresolved failures, scheduled execution coverage and report links. |
+
+All three scheduled test workflows explicitly enable AI reviews, including passing smoke runs whose Slack messages are suppressed. The daily report summarizes recorded executions rather than running new assertions. Manual and dashboard run summaries remain available regardless of the smoke notification policy.
+
+The local scheduler owns recurring execution; GitHub recurring triggers are removed. GitHub push, pre-merge PR dispatch and manual triggers remain available (see [PR setup](github/README.md)). Deploy the workflow change to the default branch to disable remote recurring triggers. The former suite rotation is disabled. Migration cancels obsolete queued jobs while preserving running jobs, notification work and history.
 
 Critical smoke covers read-only API checks and three account-access journeys: session restoration, identity isolation and sign-in after logout. Full nightly UAT also runs the application's wider scenario suite. Nightly does not include load.
 
@@ -17,7 +26,11 @@ All suites use the isolated local Docker stack. One test worker runs at a time b
 
 The daily health job records the half-open 24-hour window ending at its scheduled cutoff. It aggregates API, UAT, web and load checks, pass rate among executed assertions, execution coverage including skipped/blocked checks, failure comparison events, infrastructure failures, completed/missed/pending/absent scheduled slots, latest nightly and latest load with timestamp and age. Seeded defects, previews, other environments and completions at or after cutoff are excluded from window totals. No executed assertions means an n/a pass rate. Historical load may be shown without contributing to today's counts. The report is a snapshot, never a new passing test execution. Delivery uses the same durable Slack outbox, without altering incidents.
 
-The current environment is `local-docker`, Compose project `mpc-qa-web-20261015`, promoted after a complete 90/90 verification run. `web-isolated` is an alias for the same database and chains; run suites sequentially:
+Unresolved failures are reconstructed chronologically from real results for the same environment, including failures older than the 24-hour window. A later explicit pass of that check resolves it; skipped, blocked and absent checks do not. A runner outage resolves when execution resumes without infrastructure errors, even if product assertions fail. Only allowlisted check names and source run links are published.
+
+A synthetic "adapter did not produce results" failure resolves after the same adapter, project/workload and test filter completes successfully with actual passing assertions. A partial smoke run cannot clear a failed full-regression adapter. Historical failure records remain available for audit.
+
+The current environment is `local-docker`, Compose project `mpc-qa-web-20261019`, created after the previous stack refused unsafe chain snapshot restoration on October 19. `web-isolated` is an alias for the same database and chains; run suites sequentially:
 
 | Service | Host endpoint | Container port |
 | --- | --- | --- |
@@ -29,7 +42,7 @@ The current environment is `local-docker`, Compose project `mpc-qa-web-20261015`
 
 UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3420` as the Origin and SIWE domain. Host-side browsers use port 3420. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
 
-The previous `mpc-qa-recovery-20261011-1752` stack has an unsafe opBNB snapshot after an unclean shutdown; its volumes and all earlier stacks remain preserved. The active project retains its validated contracts and database, and enables compiler-cache eviction to avoid the observed Docker memory exhaustion. Use `npm run stack:status` to confirm all required services are healthy before running suites.
+Both chains in `mpc-qa-web-20261015` refused restoration after an unclean shutdown. That project’s volumes, the earlier `mpc-qa-recovery-20261011-1752` volumes and all older volumes remain preserved. The active project uses fresh chains and a fresh database, and enables compiler-cache eviction to avoid Docker memory exhaustion. Use `npm run stack:status` to confirm all required services are healthy before running suites.
 
 Load baselines are stored as `pipeline/baselines/<environment>-<profile>-<workloadId>.json`. The workload ID covers the k6 script, effective profile, measured endpoints and session count. Changing the traffic mix creates a separate baseline only after every absolute SLO and functional check passes. App changes continue to compare against the same workload baseline. Older baseline files remain available; the former 10-user traffic mix is not compared with the current 15-user mix.
 
@@ -77,7 +90,7 @@ Slack gets a separate parent summary for each workflow. Its thread lists failed,
 
 Explicit 429 rejections wait until Retry-After. A network timeout or 5xx is ambiguous: reconcile against Slack history before resending. Stable client IDs and message metadata identify accepted messages. If history permissions/rate limits prevent reconciliation, leave the message uncertain instead of blindly duplicating it. Public-channel bot tokens may be unable to read thread replies with conversations.replies; uncertain replies then require manual reconciliation, while ordinary confirmed deliveries work normally. Slack does not provide an unconditional exactly-once guarantee. Permanent failures such as invalid_auth require configuration repair; pending messages remain on disk. The scheduler retries the outbox between runs. Missing credentials queue messages without exposing test data.
 
-Shared summaries exclude raw error text, titles derived from test data, cookie headers, wallet addresses, screenshots, browser traces and request bodies. Known secret values are redacted from structured run records before disk writes. Raw evidence remains private because binary traces cannot be reliably redacted. Report links appear only when QA_REPORT_BASE_URL is configured; hosting that directory is an explicit deployment step.
+Shared summaries exclude raw error text, titles derived from test data, cookie headers, wallet addresses, screenshots, browser traces and request bodies. Known secret values are redacted from structured run records before disk writes. Raw evidence remains private because binary traces cannot be reliably redacted. With QA_REPORT_BASE_URL configured, report links use the shared HTTPS host. Otherwise they point to the local dashboard and are labelled for use on the scheduler host. Start that dashboard with `npm run dashboard`; shared hosting remains a separate deployment step.
 
 ## Allure report
 

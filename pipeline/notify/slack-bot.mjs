@@ -2,9 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync 
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { RUNS_DIR, config } from '../lib/env.mjs'
-import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS, redactValue } from '../lib/safe-output.mjs'
+import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS, redactValue, dashboardRunUrl } from '../lib/safe-output.mjs'
 import { renderAiReview, splitThreadText } from './ai-review.mjs'
 import { formatRate } from '../lib/quality-rates.mjs'
+import { executionRecovered } from '../lib/run-status.mjs'
 
 function settings(options) {
   return { stateDir:RUNS_DIR, token:process.env.SLACK_BOT_TOKEN, channel:process.env.SLACK_CHANNEL_ID,
@@ -55,7 +56,7 @@ function reportLink(o,s) {
   const id=encodeURIComponent(s.runId), base=o.reportBase&&safeBase(o.reportBase)
   const run=githubRun(o.runUrl)
   const lines=[!o.reportBase&&run?`Report: <${run}|GitHub run and sanitized report>`
-    :!o.reportBase?'Report: retained locally; shared hosting is not configured.'
+    :!o.reportBase?`Report: <${dashboardRunUrl(s.runId)}|Local dashboard (scheduler host)>`
     :base?`Report: <${base}/${id}.md|Sanitized results>`:'Report: retained locally (invalid report base URL).']
   if(o.allureBase&&s.allureReport){
     const allure=safeBase(o.allureBase)
@@ -158,18 +159,32 @@ function queueRun(state,run,o) {
   if(['infra-failed','crashed','timeout','blocked'].includes(run.status)) {
     if(!incidents._infrastructure){actionable=true;incidents._infrastructure={since:run.runId}}
     notes.push(`Execution ${s.status}; investigate the runner/environment. This is not a confirmed product defect.`)
-  }else if(run.status==='passed'&&incidents._infrastructure){notes.push('Recovered: suite execution is healthy again.');delete incidents._infrastructure}
+  }else if(executionRecovered(run)&&incidents._infrastructure){recovered.push('Suite execution is healthy again');notes.push('Recovered: suite execution is healthy again.');delete incidents._infrastructure}
+  const changesOnly=run.trigger==='scheduled'&&config.schedules().schedules.find(s=>s.id===run.scheduleId)?.slack==='changes'
+  state.alertThreads??={}
+  const priorThread=state.alertThreads[scope]
+  if(changesOnly&&!actionable&&!recovered.length&&!failureGroups.size&&!Object.keys(incidents).length) {
+    state.runs[runKey]={queuedAt:o.now,suppressed:true};save(o,state);return
+  }
+  if(changesOnly&&!actionable&&!recovered.length&&priorThread) {
+    const id=`${runKey}:repeat`
+    const text=[`*Repeated smoke failures* — ${s.runId}`,`${s.counts.failed} failed · ${s.counts.blocked} blocked`,...notes,reportLink(o,s)].join('\n')
+    state.runs[runKey]={queuedAt:o.now,groupedInto:priorThread}
+    state.messages.push({id,kind:'repeat',runId:run.runId,channel:o.channel,text,parent:priorThread,clientId:clientId(id),createdAt:o.now,status:'pending',attempts:0,nextAttemptAt:0})
+    save(o,state);return
+  }
   const c=s.counts
   const critical=[...new Set(s.checks.filter(t=>t.critical).flatMap(t=>t.requirementIds))]
   const groups=groupChecks(s.checks)
   const newFailures=s.checks.filter(t=>t.status==='failed').length&&actionable?(s.pipeline.comparison?.newFailures.length||failureGroups.size):0
   const summary=renderSummary(s,groups,critical,o,{actionable,recovered,newFailures})
   const load=s.loadMetrics
-  const metrics=load?`\n\n*Load metrics*\n${load.totalRequests??'unavailable'} requests · ${load.throughputRps??'unavailable'} requests/s · functional check rate ${load.checkPassRate===null?'unavailable':`${(load.checkPassRate*100).toFixed(1)}%`}\n${load.endpoints.map(r=>`• ${r.name}: p95 ${r.p95Ms??'unavailable'}ms · error rate ${r.errorRate===null?'unavailable':`${(r.errorRate*100).toFixed(2)}%`}`).join('\n')}`:''
+  const metrics=load?`\n\n*Load metrics*\n${load.totalRequests??'unavailable'} requests · ${load.throughputRps??'unavailable'} requests/s · functional check rate ${load.checkPassRate===null?'unavailable':`${(load.checkPassRate*100).toFixed(1)}%`}\n${load.endpoints.map(r=>`• ${r.name}: p95 ${r.p95Ms??'unavailable'}ms · error rate ${r.errorRate===null?'unavailable':`${(r.errorRate*100).toFixed(2)}%`}${r.baselineP95Ms!==null?` · baseline ${r.baselineP95Ms}ms${r.p95ChangePct!==null?` (${r.p95ChangePct>=0?'+':''}${r.p95ChangePct}%)`:''}`:''}${r.baselineErrorRate!==null?` · baseline error ${(r.baselineErrorRate*100).toFixed(2)}%`:''}`).join('\n')}\nBaseline: ${load.baselineRunId??'no previous baseline'} · ${load.baselineAction}`:''
   const sources=s.sections.map(r=>`• ${r.label}: source ${r.sourceRunId} · ${r.finishedAt}`).join('\n')
   const details=`*Incidents & diagnostics*\n${notes.slice(0,35).join('\n')||'No new actionable failures or recoveries.'}${notes.length>35?'\nAdditional checks are in the sanitized report.':''}${metrics}${sources?`\n\n*Source runs*\n${sources}`:''}`
   const thread=[...renderCases(groups).map((text,i)=>[`cases-${i+1}`,text]),['details',details],...renderAiReview(run,o.stateDir).map((text,i)=>[`ai-${i+1}`,text]),['pipeline',renderPipeline(s)]]
   const parentId=`${runKey}:summary`
+  if(changesOnly)state.alertThreads[scope]=Object.keys(incidents).length?parentId:null
   state.runs[runKey]={queuedAt:o.now}
   for(const [kind,text,parent] of [['summary',summary,null],...thread.map(([kind,text])=>[kind,text,parentId])]) {
     const id=`${runKey}:${kind}`

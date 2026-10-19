@@ -8,7 +8,7 @@ export function webTestEnvironment(profile = resolveEnvironment('local-docker'))
   return {
     ...profile, name: 'web-isolated', baseUrl: 'http://localhost:3420', appOrigin: 'http://localhost:3420',
     allowWrites: true, navigation: 'activities',
-    stack: { ...profile.stack, composeProject: 'mpc-qa-web-20261015',
+    stack: { ...profile.stack, composeProject: resolveEnvironment('web-isolated').stack.composeProject,
       ports: { web: 3420, anvil: 8565, opbnbAnvil: 8566, postgres: 5450, neonProxy: 4464 } },
   }
 }

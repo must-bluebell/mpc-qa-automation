@@ -1,12 +1,15 @@
 import { execFile } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { target } from '../config/target'
 
 /** Notification UI prerequisites only: no successful transaction, reward, or chain evidence is injected. */
 export async function storedActivity(wallet: string, mode: 'pending' | 'failed') {
   const container = process.env.QA_WEB_FIXTURE_CONTAINER
+  const environments = JSON.parse(readFileSync(new URL('../pipeline/config/environments.json', import.meta.url), 'utf8'))
+  const project = environments[process.env.QA_ENVIRONMENT ?? '']?.stack?.composeProject
   if (!['web-isolated', 'local-docker'].includes(process.env.QA_ENVIRONMENT ?? '') || process.env.QA_ALLOW_WRITES !== '1'
     || !['localhost', '127.0.0.1'].includes(new URL(target().baseUrl).hostname)
-    || container !== 'mpc-qa-web-20261015-web-1' || !/^0x[0-9a-f]{40}$/i.test(wallet)) {
+    || !project || container !== `${project}-web-1` || !/^0x[0-9a-f]{40}$/i.test(wallet)) {
     throw new Error('Stored Activity fixtures require the dedicated isolated web stack')
   }
   const run = (query: string) => new Promise<string>((resolve, reject) => {

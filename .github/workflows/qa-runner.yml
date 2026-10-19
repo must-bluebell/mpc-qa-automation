@@ -1,11 +1,11 @@
-name: MPC QA regression and schedules
+name: MPC PR quality checks and manual runs
 
 on:
   push:
     branches: [main]
   # Recurring QA is owned by the local scheduler.
   repository_dispatch:
-    types: [webapp-merged]
+    types: [webapp-pr]
   workflow_dispatch:
     inputs:
       suite:
@@ -24,10 +24,47 @@ permissions:
 # One delivery-state writer. Each job gets a fresh, isolated Docker project.
 concurrency:
   group: mpc-qa-regression-and-schedules
+  # Retain queued PRs; the default single pending slot would cancel earlier PRs.
+  queue: max
   cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Validate application revision and mark PR pending
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      suite: ${{ steps.plan.outputs.suite }}
+      appRepository: ${{ steps.plan.outputs.appRepository }}
+      appRef: ${{ steps.plan.outputs.appRef }}
+      prNumber: ${{ steps.plan.outputs.prNumber }}
+    defaults:
+      run:
+        working-directory: qa
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: qa
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Validate requested application PR or manual revision
+        id: plan
+        run: node scripts/github-qa.mjs plan
+        env:
+          WEBAPP_REPOSITORY: ${{ vars.WEBAPP_REPOSITORY }}
+          WEBAPP_REF: ${{ vars.WEBAPP_REF || 'main' }}
+          WEBAPP_READ_TOKEN: ${{ secrets.WEBAPP_READ_TOKEN }}
+      - name: Publish pending status on application PR
+        if: steps.plan.outputs.prNumber != ''
+        run: node scripts/github-pr.mjs pending
+        env:
+          WEBAPP_REPOSITORY: ${{ vars.WEBAPP_REPOSITORY }}
+          WEBAPP_REPORT_TOKEN: ${{ secrets.WEBAPP_REPORT_TOKEN }}
+          QA_GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
   code-security:
+    needs: prepare
     name: Application code and dependency security
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -42,22 +79,16 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - name: Select exact application revision
-        id: plan
-        run: node scripts/github-qa.mjs plan
-        env:
-          WEBAPP_REPOSITORY: ${{ vars.WEBAPP_REPOSITORY }}
-          WEBAPP_REF: ${{ vars.WEBAPP_REF || 'main' }}
       - name: Verify application repository access
         env:
           GH_TOKEN: ${{ secrets.WEBAPP_READ_TOKEN }}
-          APP_REPOSITORY: ${{ steps.plan.outputs.appRepository }}
-          APP_REF: ${{ steps.plan.outputs.appRef }}
+          APP_REPOSITORY: ${{ needs.prepare.outputs.appRepository }}
+          APP_REF: ${{ needs.prepare.outputs.appRef }}
         run: node scripts/github-qa.mjs verify-access
       - uses: actions/checkout@v7
         with:
-          repository: ${{ steps.plan.outputs.appRepository }}
-          ref: ${{ steps.plan.outputs.appRef }}
+          repository: ${{ needs.prepare.outputs.appRepository }}
+          ref: ${{ needs.prepare.outputs.appRef }}
           path: WEB MPC
           token: ${{ secrets.WEBAPP_READ_TOKEN }}
           persist-credentials: false
@@ -92,6 +123,7 @@ jobs:
           echo "Typecheck: $TYPES_RESULT; lint: $LINT_RESULT; dependency audit: $AUDIT_RESULT" >> "$GITHUB_STEP_SUMMARY"
           test "$TYPES_RESULT" = success && test "$LINT_RESULT" = success && test "$AUDIT_RESULT" = success
   qa:
+    needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 150
     defaults:
@@ -112,20 +144,17 @@ jobs:
           cache: npm
           cache-dependency-path: qa/package-lock.json
       - run: npm ci
-      - name: Select test suite and application revision
-        id: plan
-        run: node scripts/github-qa.mjs plan
       - name: Verify application repository access
         env:
           GH_TOKEN: ${{ secrets.WEBAPP_READ_TOKEN }}
-          APP_REPOSITORY: ${{ steps.plan.outputs.appRepository }}
-          APP_REF: ${{ steps.plan.outputs.appRef }}
+          APP_REPOSITORY: ${{ needs.prepare.outputs.appRepository }}
+          APP_REF: ${{ needs.prepare.outputs.appRef }}
         run: node scripts/github-qa.mjs verify-access
       - name: Check out application under test
         uses: actions/checkout@v7
         with:
-          repository: ${{ steps.plan.outputs.appRepository }}
-          ref: ${{ steps.plan.outputs.appRef }}
+          repository: ${{ needs.prepare.outputs.appRepository }}
+          ref: ${{ needs.prepare.outputs.appRef }}
           path: WEB MPC
           token: ${{ secrets.WEBAPP_READ_TOKEN }}
           persist-credentials: false
@@ -133,7 +162,7 @@ jobs:
       - run: npm run test:reporting
       - run: npm run check:copy -- --webapp '../WEB MPC'
       - name: Install application scenario dependencies
-        if: contains(fromJSON('["uat","full"]'), steps.plan.outputs.suite)
+        if: contains(fromJSON('["uat","full"]'), needs.prepare.outputs.suite)
         working-directory: WEB MPC
         run: |
           corepack enable
@@ -145,14 +174,14 @@ jobs:
           key: mpc-qa-slack-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: mpc-qa-slack-v1-${{ github.ref_name }}-
       - name: Install Chromium
-        if: contains(fromJSON('["regression","uat","full"]'), steps.plan.outputs.suite)
+        if: contains(fromJSON('["regression","uat","full"]'), needs.prepare.outputs.suite)
         run: npx playwright install --with-deps chromium
       - name: Install application scenario Chromium
-        if: contains(fromJSON('["uat","full"]'), steps.plan.outputs.suite)
+        if: contains(fromJSON('["uat","full"]'), needs.prepare.outputs.suite)
         working-directory: WEB MPC
         run: corepack pnpm exec playwright install --with-deps chromium
       - name: Install k6
-        if: contains(fromJSON('["load","full"]'), steps.plan.outputs.suite)
+        if: contains(fromJSON('["load","full"]'), needs.prepare.outputs.suite)
         shell: bash
         run: |
           set -euo pipefail
@@ -168,7 +197,7 @@ jobs:
         run: npm run stack:up
       - name: Run assertions and publish Slack summary
         env:
-          QA_SUITE: ${{ steps.plan.outputs.suite }}
+          QA_SUITE: ${{ needs.prepare.outputs.suite }}
           QA_SEED_PHRASE: ${{ secrets.QA_SEED_PHRASE }}
           WALLET_ADDRESS: ${{ vars.QA_WALLET_ADDRESS }}
           WALLET_ADDRESS_INDEX: ${{ vars.QA_WALLET_ADDRESS_INDEX || '0' }}
@@ -205,3 +234,25 @@ jobs:
       - name: Stop disposable stack
         if: always() && (steps.stack.outcome == 'success' || steps.stack.outcome == 'failure')
         run: npm run stack:down
+
+  pr-report:
+    name: Publish pre-merge QA result to application PR
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.prNumber != ''
+    needs: [prepare, code-security, qa]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Fresh trusted QA checkout: the reporting token never enters the app/test jobs.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Publish status and update PR report comment
+        run: node scripts/github-pr.mjs complete
+        env:
+          WEBAPP_REPOSITORY: ${{ vars.WEBAPP_REPOSITORY }}
+          WEBAPP_REPORT_TOKEN: ${{ secrets.WEBAPP_REPORT_TOKEN }}
+          QA_GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          QA_JOB_RESULTS: '{"qa":"${{ needs.qa.result }}","code-security":"${{ needs.code-security.result }}"}'

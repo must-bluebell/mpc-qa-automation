@@ -1,19 +1,26 @@
 ---
 name: merge-pr-qa
-description: Use when reviewing an MPC application PR merge, investigating its QA results, or extending the code, security, regression, UAT, API and load checks for merged application commits.
+description: Use when reviewing an MPC application PR before merge, investigating its QA results, or extending the code, security, regression, UAT, API and load checks for application PR revisions.
 ---
 
-# Merged PR quality checks
+# Pre-merge PR quality checks
 
-The application and QA repositories are separate. Application merges send
-`webapp-merged` with `client_payload.repository` and the full merge commit `sha`.
+The application and QA repositories are separate. Application PR creation/updates send
+`webapp-pr` with `client_payload.repository`, exact head commit `sha` and
+`pr_number`. The existing skill directory name is retained for compatibility.
 Read `docs/github/README.md` and `docs/github/app-qa-trigger.yml` in the QA
 repository for installation and permissions. A skill does not register a GitHub
 trigger; the workflow files provide the automation.
 
-Use `scripts/github-qa.mjs` to validate the repository and exact SHA. A merge
+Use `scripts/github-qa.mjs` to validate the repository and exact SHA. A validated open, same-repository PR
 selects `full` in `pipeline/config/suites.json`: API, wallet regression, UAT
-and load. Do not substitute staging or the latest main branch for that SHA.
+and load. Do not substitute staging, a merge commit or the latest main branch for that SHA.
+`prepare` validates the live PR head before execution. `scripts/github-pr.mjs`
+publishes `MPC QA / pre-merge` status and updates the bot report comment with
+a GitHub-hosted Actions report link. Old revisions cannot update the latest
+PR comment. The separate trusted reporting job holds `WEBAPP_REPORT_TOKEN`;
+never give that write-capable token to application execution jobs. Enable the
+required status in the application branch rules after deploying both workflows.
 
 Code and security evidence comes from the separate `code-security` job in
 `.github/workflows/qa-runner.yml`: application TypeScript, lint/boundaries and
@@ -38,6 +45,6 @@ passed / (passed + failed). Also report execution coverage and counts of skipped
 and blocked checks. No executed tests means no pass rate. These percentages
 describe tests in one run; historical PR success rates require separate evidence.
 Each required step must execute assertions for a combined run to pass; a missing
-wallet fixture must block the merge QA gate rather than hide behind passing API
+wallet fixture must block the pre-merge QA gate rather than hide behind passing API
 checks. Report setup failures and unexecuted suites explicitly. Keep credentials, raw
 traces and private test data out of published summaries.
