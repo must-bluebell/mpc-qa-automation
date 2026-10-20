@@ -195,7 +195,7 @@ jobs:
       - name: Build and start application stack
         id: stack
         run: npm run stack:up
-      - name: Run assertions and publish Slack summary
+      - name: Run assertions without Slack notifications
         env:
           QA_SUITE: ${{ needs.prepare.outputs.suite }}
           QA_SEED_PHRASE: ${{ secrets.QA_SEED_PHRASE }}
@@ -206,7 +206,7 @@ jobs:
           QA_OWNER_SLACK_ID: ${{ vars.QA_OWNER_SLACK_ID }}
           QA_GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          node pipeline/orchestrator.mjs --suite "$QA_SUITE" --env local-docker --trigger "github-$GITHUB_EVENT_NAME" --run-id "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          node pipeline/orchestrator.mjs --suite "$QA_SUITE" --env local-docker --trigger "github-$GITHUB_EVENT_NAME" --run-id "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --no-notify
       - name: Add sanitized results to GitHub summary
         if: always()
         shell: bash

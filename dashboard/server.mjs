@@ -9,12 +9,9 @@ import { ROOT, RUNS_DIR, config, knownSecrets, resolveEnvironment } from '../pip
 import { isRunId, newRunId, readIndex, readRun, runDir } from '../pipeline/lib/run-store.mjs'
 import { readLock } from '../pipeline/lib/lock.mjs'
 import { stackStatus } from '../pipeline/adapters/local-stack.mjs'
-import { PROFILES } from '../pipeline/chaos/proxy.mjs'
 import { aiConfig } from '../pipeline/ai/providers.mjs'
 import { aiArgs } from '../pipeline/ai/policy.mjs'
-import { notifyEvent } from '../pipeline/notify/slack.mjs'
-import { sendBotTest } from '../pipeline/notify/slack-bot.mjs'
-import { slackStatus } from './slack-settings.mjs'
+import { dashboardSuites } from './public/requirements.js'
 import { expandSuite, guard } from '../pipeline/orchestrator.mjs'
 
 /**
@@ -95,10 +92,11 @@ function status() {
   return {
     running: busy(),
     jobs: [...jobs.values()].map(({ runId, suite, env, startedAt, exitCode }) => ({ runId, suite, env, startedAt, exitCode: exitCode ?? null })),
-    suites: Object.entries(suites).map(([name, s]) => ({ name, description: s.description, include: s.include ?? null, requiresIsolated: !!s.requiresIsolated, requiresLoad: !!s.requiresLoad })),
+    suites: dashboardSuites.filter(item => suites[item.suite]).map(item => ({ name: item.suite, label: item.name, description: suites[item.suite].description })),
     environments: Object.entries(envs).map(([name, e]) => ({ name, description: e.description, isolated: !!e.isolated, allowWrites: !!e.allowWrites, allowLoad: !!e.allowLoad })),
-    seededDefects: Object.entries(PROFILES).map(([name, p]) => ({ name, kind: p.kind, description: p.description })),
-    slack: slackStatus(),
+    reporting: 'dashboard-only',
+    slack: { configured: false, valid: false, mode: 'disabled', reason: 'Dashboard-only reporting' },
+    scheduler: readLock('scheduler'),
     ai: { provider: ai.provider, configured: ai.configured, model: ai.configured ? ai.model : null, auto: process.env.QA_AI_AUTO === '1' },
     schedules: config.schedules().schedules,
   }
@@ -109,7 +107,7 @@ function startRun({ suite, env, seedDefect, ai }) {
   const envs = config.environments()
   if (typeof suite !== 'string' || !Object.hasOwn(suites, suite)) throw Object.assign(new Error('Unknown suite'), { status: 400 })
   if (typeof env !== 'string' || !Object.hasOwn(envs, env)) throw Object.assign(new Error('Unknown environment'), { status: 400 })
-  if (seedDefect != null && seedDefect !== '' && (typeof seedDefect !== 'string' || !Object.hasOwn(PROFILES, seedDefect))) throw Object.assign(new Error('Unknown seeded defect'), { status: 400 })
+  if (seedDefect) throw Object.assign(new Error('Seeded defects are outside the requested dashboard scope'), { status: 400 })
   const holder = busy()
   if (holder) throw Object.assign(new Error(`A run is already in progress (${holder.runId})`), { status: 409 })
   // Same policy checks the orchestrator applies, reported immediately instead of as a failed job.
@@ -117,7 +115,7 @@ function startRun({ suite, env, seedDefect, ai }) {
   try { guard({ suiteName: suite, env: resolved, steps: expandSuite(suite, suites), seededDefect: seedDefect || null }) } catch (error) { throw Object.assign(error, { status: 422 }) }
 
   const runId = newRunId(suite)
-  const args = [join(ROOT, 'pipeline/orchestrator.mjs'), '--suite', suite, '--env', env, '--run-id', runId, '--trigger', 'dashboard']
+  const args = [join(ROOT, 'pipeline/orchestrator.mjs'), '--suite', suite, '--env', env, '--run-id', runId, '--trigger', 'dashboard', '--no-notify']
   if (seedDefect) args.push('--seed-defect', seedDefect)
   args.push(...aiArgs(ai))
   mkdirSync(JOB_LOG_DIR, { recursive: true, mode: 0o700 })
@@ -194,7 +192,8 @@ async function route(req, res) {
 
   if (req.method === 'GET' && !path.startsWith('/api/')) return serveStatic(res, path)
   if (req.method === 'GET' && path === '/api/status') return send(res, 200, status())
-  if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().slice(-200).reverse())
+  if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().filter(run => Object.hasOwn(config.suites(), run.suite)
+    || ['security', 'security-validation', 'daily-health'].includes(run.suite)).slice(-200).reverse())
   if (req.method === 'GET' && path === '/api/stack') return send(res, 200, await stackStatus(resolveEnvironment('local-docker')))
 
   let m = path.match(/^\/api\/runs\/([^/]+)$/)
@@ -213,10 +212,7 @@ async function route(req, res) {
 
   if (req.method === 'POST' && path === '/api/runs') return send(res, 202, startRun(await readBody(req)))
   if (req.method === 'POST' && path === '/api/slack/test') {
-    await readBody(req)
-    const result = slackStatus().mode==='bot'?await sendBotTest():await notifyEvent({ key: 'qa_dashboard_test', severity: 'info', test: true, environment: 'qa-dashboard',
-      title: 'MPC QA dashboard test alert', summary: 'Slack delivery from the QA dashboard works. No run was started.' })
-    return send(res, 200, { ok: result.ok, code: result.code, attempts: result.attempts })
+    return send(res, 403, { error: 'Slack delivery is disabled. Results are available only on the dashboard.' })
   }
   return send(res, 404, { error: 'Not found' })
 }

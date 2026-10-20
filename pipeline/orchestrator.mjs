@@ -13,6 +13,7 @@ import { appVersion, testSuiteVersion } from './lib/versions.mjs'
 import { runPlaywrightStep } from './adapters/playwright.mjs'
 import { runWebmpcStep } from './adapters/webmpc-scenarios.mjs'
 import { runK6Step, LoadGuardError } from './adapters/k6.mjs'
+import { runRecordedLoadStep } from './adapters/recorded-load.mjs'
 import { stackStatus } from './adapters/local-stack.mjs'
 import { startChaosProxy, PROFILES } from './chaos/proxy.mjs'
 import { notifyRun } from './notify/slack.mjs'
@@ -23,7 +24,7 @@ import { generateAllureReport } from './lib/allure.mjs'
 import { prepareTestData } from './lib/test-data.mjs'
 import { runStatus } from './lib/run-status.mjs'
 
-const ADAPTERS = { playwright: runPlaywrightStep, 'webmpc-scenarios': runWebmpcStep, k6: runK6Step }
+const ADAPTERS = { playwright: runPlaywrightStep, 'webmpc-scenarios': runWebmpcStep, k6: runK6Step, 'recorded-load': runRecordedLoadStep }
 const TRIGGERS = /^[\w-]{1,40}$/
 
 export class GuardError extends Error {}

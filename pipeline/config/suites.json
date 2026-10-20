@@ -19,7 +19,7 @@
     ]
   },
   "api": {
-    "description": "API tests: authentication, permissions, validation, duplicates, state and balances. Write checks run only where the environment allows writes.",
+    "description": "All API and security checks: authentication, authorization, sessions, BOLA/IDOR, injection, hostile input, data exposure, audit, concurrency, validation and business logic.",
     "steps": [
       {
         "adapter": "playwright",
@@ -64,28 +64,33 @@
     ]
   },
   "load": {
-    "description": "Controlled k6 load against the isolated stack, compared with the stored baseline and agreed thresholds.",
+    "description": "Controlled k6 concurrency and baseline checks, plus authenticated local requests adapted from the supplied JMeter recording. Mainnet and third-party traffic are refused; obsolete endpoints remain visibly blocked.",
     "steps": [
       {
         "adapter": "k6",
         "script": "mpc-mix",
         "sessions": 10
+      },
+      {
+        "adapter": "recorded-load"
       }
     ],
     "requiresIsolated": true,
     "requiresLoad": true,
-    "timeoutMs": 1200000,
+    "timeoutMs": 1800000,
     "tags": [
       "@load"
     ]
   },
   "full": {
-    "description": "smoke + api + regression + uat + load in one run.",
+    "description": "Run System Health, API (including security), Web Regression, Web UAT, Load / Performance and QA Automation sequentially.",
     "include": [
+      "health",
       "api",
       "regression",
       "uat",
-      "load"
+      "load",
+      "qa-automation"
     ],
     "timeoutMs": 7200000,
     "tags": [
@@ -120,11 +125,33 @@
     "timeoutMs": 900000
   },
   "nightly-regression": {
-    "description": "Full API and UAT including application scenarios; load runs separately.",
+    "description": "Nightly API, web regression and full UAT; load runs weekly.",
     "include": [
       "api",
+      "regression",
       "uat"
     ],
     "timeoutMs": 4800000
+  },
+  "qa-automation": {
+    "description": "Verify QA scheduler, PR checks, reporting and dashboard behavior.",
+    "steps": [
+      {
+        "adapter": "playwright",
+        "project": "qa-automation"
+      }
+    ],
+    "timeoutMs": 300000
+  },
+  "health": {
+    "description": "Application, database/pool, Docker services and dual-chain RPC health.",
+    "steps": [
+      {
+        "adapter": "playwright",
+        "project": "health"
+      }
+    ],
+    "requiresIsolated": true,
+    "timeoutMs": 180000
   }
 }

@@ -4,7 +4,7 @@ import { createSiweMessage } from 'viem/siwe'
 import { appOrigin, call, requireWrites, signIn } from '../../fixtures/api'
 import { target } from '../../config/target'
 
-test.describe('Authentication security boundaries', { tag: ['@api', '@regression', '@critical', '@feature-auth'] }, () => {
+test.describe('Authentication security boundaries', { tag: ['@api', '@security', '@regression', '@critical', '@feature-auth'] }, () => {
   test.beforeEach(() => requireWrites())
 
   for (const [index, variant] of (['foreign domain', 'wrong chain', 'expired message', 'different signer'] as const).entries()) {

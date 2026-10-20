@@ -21,7 +21,7 @@ export function planGitHubRun(name,event,{appRepository,appRef='main'}={}) {
 }
 export function ciProfile(profile,runId,attempt) {
   if(!/^\d+$/.test(runId??'')||!/^\d+$/.test(attempt??''))throw new Error('Expected numeric GitHub run ID and attempt.')
-  return {...profile,stack:{...profile.stack,composeProject:`mpc-qa-ci-${runId}-${attempt}`,webmpcPath:'../WEB MPC'}}
+  return {...profile,stack:{...profile.stack,copiedWorkspace:false,composeProject:`mpc-qa-ci-${runId}-${attempt}`,webmpcPath:'../WEB MPC'}}
 }
 export async function verifyAppAccess({appRepository,appRef='main',token,fetchImpl=fetch}) {
   if(!/^[\w.-]+\/[\w.-]+$/.test(appRepository??''))throw new Error('Set WEBAPP_REPOSITORY to the application owner/repository.')

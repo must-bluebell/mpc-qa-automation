@@ -28,6 +28,10 @@ export function composeArgs(env, extra) {
     if (!env.isolated) throw new Error('Verification diagnostics require an isolated environment')
     overlays.push('-f', resolve(ROOT, 'pipeline/config/docker-compose.verification.yml'))
   }
+  if (env.stack.copiedWorkspace) {
+    if (!env.isolated) throw new Error('Copied application workspaces require an isolated environment')
+    overlays.push('-f', resolve(ROOT, 'pipeline/config/docker-compose.workspace.yml'))
+  }
   if (env.stack.databasePool) {
     if (!env.isolated) throw new Error('QA pooling requires an isolated environment')
     // Down only parses Compose; it never connects to SQL or needs real credentials.
@@ -50,6 +54,24 @@ export function pooledDatabaseUrl(value) {
   url.hostname = 'pgbouncer'
   url.port = '5432'
   return url.href
+}
+
+/** Measure the managed local app without development instrumentation, then restore functional mode. */
+export async function withLoadRuntime(env, work, switchRuntime) {
+  if (!env.stack?.copiedWorkspace) return work()
+  if (!env.isolated) throw new Error('Load runtime switching requires an isolated environment')
+  let measured
+  try {
+    await switchRuntime('production')
+    measured = await work()
+    return measured
+  } finally {
+    try { await switchRuntime('development') }
+    catch (error) {
+      if (!Array.isArray(measured?.tests)) throw error
+      return { ...measured, errors: [...(measured.errors ?? []), `Local runtime restoration failed: ${error.message}`] }
+    }
+  }
 }
 
 export async function stackStatus(env) {

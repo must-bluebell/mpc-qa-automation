@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { call, requireWrites, signIn } from '../../fixtures/api'
 
-test.describe('Authentication API', { tag: ['@api', '@feature-auth', '@critical', '@regression'] }, () => {
+test.describe('Authentication API', { tag: ['@api', '@security', '@feature-auth', '@critical', '@regression'] }, () => {
   test('A01 - Anonymous session reports no address', { tag: ['@smoke'] }, async ({ request }, info) => {
     const session = await call(request, info, 'GET', '/api/auth/session')
     expect(session.status).toBe(200)

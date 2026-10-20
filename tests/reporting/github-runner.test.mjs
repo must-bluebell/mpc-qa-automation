@@ -1,7 +1,18 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { planGitHubRun, ciProfile, verifyAppAccess } from '../../scripts/github-qa.mjs'
+import { composeArgs } from '../../pipeline/adapters/local-stack.mjs'
 const config={appRepository:'team/web-app',appRef:'main'}
+test('fresh CI checkouts do not inherit a populated local production workspace', () => {
+  const local = { name: 'local-docker', isolated: true, stack: { webmpcPath: '../WEB MPC', verificationRuntime: true, copiedWorkspace: true } }
+  const ci = ciProfile(local, '123', '2')
+  assert.equal(local.stack.copiedWorkspace, true)
+  assert.equal(ci.stack.copiedWorkspace, false)
+  const args = composeArgs(ci, ['up']).args
+  assert.ok(args.some(arg => arg.endsWith('docker-compose.verification.yml')))
+  assert.ok(!args.some(arg => arg.endsWith('docker-compose.workspace.yml')))
+  assert.ok(composeArgs(local, ['up']).args.some(arg => arg.endsWith('docker-compose.workspace.yml')))
+})
 test('main updates run regression and KST schedules select API and load',()=>{
   assert.equal(planGitHubRun('push',{},config).suite,'regression')
   assert.equal(planGitHubRun('schedule',{schedule:'0 */4 * * *'},config).suite,'api')

@@ -6,6 +6,7 @@ import { ROOT, config, isLoopback } from '../lib/env.mjs'
 import { appendEvent } from '../lib/run-store.mjs'
 import { runProcess } from '../lib/proc.mjs'
 import { signInFresh } from '../lib/siwe.mjs'
+import { composeArgs, withLoadRuntime } from './local-stack.mjs'
 
 export class LoadGuardError extends Error {}
 
@@ -53,6 +54,17 @@ export function evaluateLoad(summary, thresholds, baseline) {
 
 export async function runK6Step(step, ctx) {
   assertLoadAllowed(ctx.env, ctx.targetUrl)
+  return withLoadRuntime(ctx.env, () => runMeasuredK6Step(step, ctx), async runtime => {
+    const command = composeArgs(ctx.env, ['up', '-d', '--no-deps', '--wait', '--wait-timeout', '300', 'web'])
+    const result = await runProcess('docker', command.args, {
+      cwd: command.cwd, env: { ...command.env, QA_APP_RUNTIME: runtime }, timeoutMs: 360_000,
+      logFile: join(ctx.stepDir, `runtime-${runtime}.log`), echo: ctx.echo,
+    })
+    if (result.code !== 0 || result.timedOut) throw new Error(`Local ${runtime} runtime did not become healthy; see runtime-${runtime}.log`)
+  })
+}
+
+async function runMeasuredK6Step(step, ctx) {
   const thresholds = config.thresholds()
   const profileName = process.env.QA_LOAD_PROFILE || step.profile || 'baseline'
   const profile = { ...thresholds.profiles[profileName] }
