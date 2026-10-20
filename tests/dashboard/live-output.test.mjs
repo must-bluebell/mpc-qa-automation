@@ -3,16 +3,6 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { chromium, expect } from '@playwright/test'
-import { suiteTestGroups } from '../../dashboard/public/requirements.js'
-
-test('combined results keep security within API and all browser files within Web Regression', () => {
-  const run = { suite: 'full', steps: [{ name: 'api-step', fromSuite: 'api' }, { name: 'browser-step', fromSuite: 'regression' }],
-    tests: [{ title: 'authentication', step: 'api-step' }, { title: 'security boundary', step: 'api-step' },
-      { title: 'wallet journey', step: 'browser-step' }, { title: 'web navigation', step: 'browser-step' }] }
-  const groups = suiteTestGroups(run)
-  assert.deepEqual(groups.map(group => [group.label, group.tests.length]), [['API Testing', 2], ['Web Regression Testing', 2]])
-  assert.deepEqual(groups.flatMap(group => group.tests), run.tests)
-})
 
 // Serve the real dashboard in a browser with controlled API responses. No Docker runs or Slack sends.
 async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, startButton = 'Run' } = {}) {
@@ -25,12 +15,12 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, star
   const status = () => ({
     running: fixture.started && !fixture.complete ? { runId } : null,
     slack: { configured: true, valid: true }, ai: { configured: true, auto: aiAuto },
-    suites: ['smoke', 'api', 'regression', 'uat', 'load', 'qa-automation', 'security', 'health', 'full', 'api-smoke', 'uat-smoke', 'critical-smoke', 'nightly-regression'].map(name => ({ name })),
+    suites: [{ name: 'full' }, { name: 'regression' }],
     environments: [{ name: 'local-docker' }], seededDefects: [],
   })
   await page.route('http://dashboard.test/**', async route => {
     const pathname = new URL(route.request().url()).pathname
-    if (pathname === '/' || pathname === '/app.js' || pathname === '/requirements.js' || pathname === '/style.css') {
+    if (pathname === '/' || pathname === '/app.js' || pathname === '/style.css') {
       const file = pathname === '/' ? 'index.html' : pathname.slice(1)
       return route.fulfill({
         contentType: file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html',
@@ -108,7 +98,7 @@ test('a scheduled run keeps its final output after the scheduler becomes idle', 
 })
 
 test('both run buttons honor checked and unchecked AI review', async t => {
-  for (const startButton of ['Run', 'Run required tests']) {
+  for (const startButton of ['Run', 'Run everything (full)']) {
     for (const aiChecked of [true, false]) {
       const { fixture } = await dashboard(t, { startButton, aiChecked, aiAuto: true })
       assert.equal(fixture.lastStart.ai, aiChecked, `${startButton}: checked=${aiChecked}`)
@@ -119,15 +109,4 @@ test('both run buttons honor checked and unchecked AI review', async t => {
 test('automatic AI configuration selects review by default in the dashboard', async t => {
   const { fixture } = await dashboard(t, { aiAuto: true })
   assert.equal(fixture.lastStart.ai, true)
-})
-
-test('only requested testing categories are selectable and Slack send controls are absent', async t => {
-  const { page } = await dashboard(t)
-  await expect(page.locator('select[name="suite"] option')).toHaveText([
-    'API Testing', 'Web UAT Testing', 'Web Regression Testing', 'Load / Performance Testing', 'QA Automation', 'System Health',
-  ])
-  await expect(page.getByRole('button', { name: 'Send Slack test' })).toHaveCount(0)
-  await expect(page.locator('select[name="defect"]')).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'System Health', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'AI Analysis', exact: true })).toBeVisible()
 })

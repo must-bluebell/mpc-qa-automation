@@ -6,27 +6,6 @@ An independent code/security job checks out the same application revision, insta
 
 The reusable agent instructions are in `skills/merge-pr-qa/SKILL.md`. This repository copy can be installed in an agent's skills directory; GitHub automation is provided by the workflows, independently of skill installation.
 
-## Local dashboard suites
-
-Open `http://127.0.0.1:4500` and select a suite, or choose **Run required tests** to execute all six suites sequentially. Results are grouped by suite with their case counts, evidence and AI analysis. Dashboard runs disable Slack notifications; keep the Slack scheduler stopped during dashboard-only sessions.
-
-| Dashboard suite | Included coverage |
-| --- | --- |
-| API Testing | All `tests/api/*.spec.ts`, including authentication, permissions and security requirements |
-| Web Regression Testing | `wallet-flow.spec.ts`, `wallet-errors.spec.ts` and `web-regression.spec.ts` in `tests/wallet` |
-| Web UAT Testing | `tests/uat` and the application's local scenarios, including transaction and chain assertions |
-| Load / Performance Testing | The isolated k6 workload, thresholds and stored baseline comparison |
-| QA Automation | TypeScript, scheduler, PR, reporting and dashboard checks |
-| System Health | Application endpoints, Docker services, database pool and both local chains |
-
-Security cases belong to API Testing. Functional suites use the local development runtime; load testing temporarily uses the optimized runtime and restores development mode afterward. Historical results remain available when suites are regrouped.
-
-The Load / Performance suite also executes the sanitized inventory in `load/recorded/mpc-recording.json`, adapted from `MPC-load-testing.jmx`. Its 46 source requests map to 44 executable local cases, one blocked obsolete `/my-mine/daily-limits` case, and one excluded Google Analytics request. Alongside the existing eight k6 checks, the suite reports 53 cases. The recorded journey preserves the source's one-user/one-loop shape and reports request timings; the separate k6 workload supplies concurrent latency, error-rate and baseline checks.
-
-Recorded journeys use the application's maintained local mining and voting scenarios to generate fresh SIWE signatures, certificate transactions, rewards, mining records and proposal IDs. Recorded cookies, wallet addresses, transaction signatures and activity IDs are never replayed or committed. `/my-mine/ready` maps to current certificate preparation, and the old state-save payload maps to the validated `/my-mine/run` script protocol. An explicit network guard permits only the isolated app, database proxy and two Anvil services, with redirects disabled. Missing measurements and obsolete cases remain blocked, and incomplete scenario assertions fail the run.
-
-Quest relay cases use their own fresh quest rather than counting membership relays. Successful Activity cards are marked seen, then the runner observes the application's visibility window before dismissing them and checks that they disappear from the owner's feed. Fixture keys follow the application's length limit, and policy/readiness guards remain enabled.
-
 ## QA repository settings
 
 Add these under Settings → Secrets and variables → Actions.

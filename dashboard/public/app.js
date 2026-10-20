@@ -1,6 +1,5 @@
 // MPC QA dashboard. All server data is rendered with textContent (never innerHTML): test titles, error
 // messages and logs come from the app under test and must be treated as untrusted.
-import { testingRequirements, securityRequirements, dashboardSuites, suiteLabel, suiteTestGroups } from './requirements.js'
 const TOKEN = document.querySelector('meta[name="qa-token"]').content
 const app = document.getElementById('app')
 const chips = document.getElementById('chips')
@@ -42,14 +41,10 @@ function renderChips() {
   chips.replaceChildren()
   if (!s) return
   const stack = state.stack
-  const healthText = document.getElementById('system-health')
-  if (healthText && stack) healthText.textContent = `Stack ${stack.project}: ${stack.healthy ? 'healthy' : 'unhealthy'}`
-  const schedulerText = document.getElementById('scheduler-status')
-  if (schedulerText) schedulerText.textContent = s.scheduler && !s.scheduler.stale ? 'Scheduler running.' : 'Scheduler stopped. Test runs start only from this dashboard.'
   chips.append(
     s.running ? h('span', { class: 'chip warn' }, `Running ${s.running.runId}`) : h('span', { class: 'chip ok' }, 'Idle'),
     stack ? h('span', { class: `chip ${stack.healthy ? 'ok' : 'bad'}` }, `Stack ${stack.project}: ${stack.healthy ? 'healthy' : stack.error ?? 'unhealthy'}`) : h('span', { class: 'chip' }, 'Stack …'),
-    h('span', { class: 'chip ok' }, 'Dashboard only · Slack disabled'),
+    h('span', { class: `chip ${s.slack.valid ? 'ok' : s.slack.configured ? 'bad' : 'warn'}` }, `Slack ${s.slack.valid ? 'configured' : s.slack.configured ? s.slack.reason || 'invalid configuration' : 'not configured'}`),
     h('span', { class: `chip ${s.ai.configured ? 'ok' : 'warn'}` }, `AI ${s.ai.configured ? `${s.ai.provider} · ${s.ai.model}` : 'not configured'}`),
   )
 }
@@ -65,8 +60,9 @@ async function refresh() {
 function runForm() {
   const s = state.status
   const msg = h('div', { class: 'msg', role: 'status' })
-  const suite = h('select', { name: 'suite' }, dashboardSuites.filter(x => s.suites.some(suite => suite.name === x.suite)).map(x => h('option', { value: x.suite }, x.name)))
+  const suite = h('select', { name: 'suite' }, s.suites.map(x => h('option', { value: x.name, selected: x.name === 'full' }, x.name)))
   const env = h('select', { name: 'env' }, s.environments.map(x => h('option', { value: x.name, selected: x.name === 'local-docker' }, x.name)))
+  const defect = h('select', { name: 'defect' }, h('option', { value: '' }, 'none'), s.seededDefects.map(x => h('option', { value: x.name }, `${x.name} (${x.kind})`)))
   const ai = h('input', { type: 'checkbox', name: 'ai', checked: s.ai.configured && s.ai.auto })
   const desc = h('p', { class: 'hint' })
   const describe = () => { desc.textContent = s.suites.find(x => x.name === suite.value)?.description ?? '' }
@@ -86,13 +82,19 @@ function runForm() {
   const running = !!s.running
   return h('section', { class: 'panel' },
     h('h2', {}, 'Run tests'),
-    h('form', { class: 'run', onsubmit: e => { e.preventDefault(); start({ suite: suite.value, env: env.value, ai: ai.checked }) } },
-      h('label', {}, 'Testing Name', suite), h('label', {}, 'Environment', env),
+    h('form', { class: 'run', onsubmit: e => { e.preventDefault(); start({ suite: suite.value, env: env.value, seedDefect: defect.value || null, ai: ai.checked }) } },
+      h('label', {}, 'Suite', suite), h('label', {}, 'Environment', env), h('label', {}, 'Seeded defect', defect),
       h('label', { class: 'check' }, ai, 'AI review'),
       h('button', { class: 'primary', type: 'submit', disabled: running }, running ? 'Run in progress' : 'Run')),
     desc,
     h('div', { class: 'actions' },
-      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'full', env: 'local-docker', ai: ai.checked }) }, 'Run required tests')),
+      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'full', env: 'local-docker', ai: ai.checked }) }, 'Run everything (full)'),
+      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'smoke', env: 'local-docker', ai: ai.checked }) }, 'Smoke'),
+      h('button', { type: 'button', onclick: async () => {
+        msg.className = 'msg'; msg.textContent = 'Sending Slack test…'
+        try { const r = await post('/api/slack/test'); msg.className = `msg badge ${r.ok ? 'ok' : 'warn'}`; msg.textContent = r.ok ? 'Slack test delivered' : `Slack not delivered: ${r.code}` }
+        catch (error) { msg.className = 'msg badge bad'; msg.textContent = error.message }
+      } }, 'Send Slack test')),
     msg,
     h('p', { class: 'hint' }, 'UAT and load run only against the isolated local Docker stack; the pipeline refuses them elsewhere. Runs never touch production or staging with writes.'))
 }
@@ -143,38 +145,16 @@ function liveLog() {
 function runsTable() {
   if (!state.runs.length) return h('section', { class: 'panel' }, h('h2', {}, 'Run history'), h('p', { class: 'empty' }, 'No runs yet.'))
   return h('section', { class: 'panel' }, h('h2', {}, 'Run history'), h('div', { class: 'tablewrap' }, h('table', {},
-    h('thead', {}, h('tr', {}, ['Started', 'Testing Name', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration'].map(t => h('th', { class: ['Pass', 'Fail', 'Blocked', 'Duration'].includes(t) ? 'num' : null }, t)))),
+    h('thead', {}, h('tr', {}, ['Started', 'Suite', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration', 'Slack'].map(t => h('th', { class: ['Pass', 'Fail', 'Blocked', 'Duration'].includes(t) ? 'num' : null }, t)))),
     h('tbody', {}, state.runs.map(r => h('tr', { class: 'click', onclick: () => { location.hash = `#/runs/${r.runId}` } },
-      h('td', {}, when(r.startedAt)), h('td', {}, suiteLabel(r.suite)), h('td', {}, r.env), h('td', {}, badge(r.status)),
+      h('td', {}, when(r.startedAt)), h('td', {}, r.suite, r.seededDefect ? ` · ${r.seededDefect}` : ''), h('td', {}, r.env), h('td', {}, badge(r.status)),
       h('td', { class: 'num' }, r.counts?.passed ?? 0), h('td', { class: 'num' }, r.counts?.failed ?? 0), h('td', { class: 'num' }, r.counts?.blocked ?? 0),
-      h('td', { class: 'num' }, secs(r.durationMs))))))))
+      h('td', { class: 'num' }, secs(r.durationMs)),
+      h('td', {}, r.slack?.length ? r.slack.map(n => h('span', { class: `badge ${n.ok ? 'ok' : 'warn'}` }, `${n.kind}: ${n.ok ? 'sent' : n.code}`)) : '—')))))))
 }
 
 function renderHome() {
-  app.replaceChildren(runForm(), requirementsPanel(), operationsPanel(), liveLog() ?? '', runsTable())
-}
-
-function requirementsPanel() {
-  return h('section', { class: 'panel' }, h('h2', {}, 'Testing requirements'),
-    h('p', { class: 'hint' }, 'Your requirements are reproduced below. Slack delivery and queries are disabled for this dashboard-only session.'),
-    testingRequirements.map((item, index) => h('details', {}, h('summary', {}, `${index + 1}. ${item.name}`),
-      h('dl', { class: 'kv' }, ...[
-        ['Schedule / Trigger', item.schedule], ['Testing Requirements', item.requirements],
-        ['Expected Results', item.expected], ['Slack Notification', item.slack],
-      ].flatMap(([label, value]) => [h('dt', {}, label), h('dd', {}, value)])))),
-    h('h2', {}, 'Security checks'),
-    h('dl', { class: 'kv' }, securityRequirements.flatMap(([label, value]) => [h('dt', {}, label), h('dd', {}, value)])))
-}
-
-function operationsPanel() {
-  const scheduler = state.status.scheduler
-  const stack = state.stack
-  return h('section', { class: 'panel' },
-    h('h2', {}, 'QA Scheduler, PR Checks & Slack Reporting'),
-    h('p', { id: 'scheduler-status' }, scheduler && !scheduler.stale ? 'Scheduler running.' : 'Scheduler stopped. Test runs start only from this dashboard.'),
-    h('p', {}, 'PR checks and automation results are available through Verify QA automation. Slack reporting is disabled.'),
-    h('h2', {}, 'System Health'), h('p', { id: 'system-health' }, stack ? `Stack ${stack.project}: ${stack.healthy ? 'healthy' : 'unhealthy'}` : 'Checking stack health…'),
-    h('h2', {}, 'AI Analysis'), h('p', {}, 'Enable AI review when starting a run. Analysis and test evidence are saved with its dashboard results.'))
+  app.replaceChildren(runForm(), liveLog() ?? '', runsTable())
 }
 
 async function renderRun(runId, anchor) {
@@ -187,7 +167,7 @@ async function renderRun(runId, anchor) {
   const c = run.counts
   const overview = h('section', { class: 'panel' },
     h('a', { href: '#/' }, '← All runs'),
-    h('h2', {}, `${suiteLabel(run.suite)} on ${run.env} `, badge(run.status)),
+    h('h2', {}, `${run.suite} on ${run.env} `, badge(run.status)),
     h('dl', { class: 'kv' },
       h('dt', {}, 'Run'), h('dd', {}, run.runId),
       h('dt', {}, 'Target'), h('dd', {}, run.baseUrl),
@@ -218,15 +198,12 @@ async function renderRun(runId, anchor) {
       h('div', { class: 'err' }, g.message),
       h('ul', {}, g.tests.map(t => h('li', {}, t.title))))) : h('p', { class: 'empty' }, 'No failures.'))
 
-  const tests = h('section', { class: 'panel' }, h('h2', {}, `Tests (${run.tests.length})`), suiteTestGroups(run).map(group => h('div', {},
-    h('h3', {}, `${group.label} (${group.tests.length})`),
-    h('p', { class: 'hint' }, ['passed', 'failed', 'skipped', 'blocked'].map(status => `${group.tests.filter(test => test.status === status).length} ${status}`).join(' · ')),
-    h('div', { class: 'tablewrap' }, h('table', {},
+  const tests = h('section', { class: 'panel' }, h('h2', {}, `Tests (${run.tests.length})`), h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, h('th', {}, 'Test'), h('th', {}, 'Status'), h('th', { class: 'num' }, 'Duration'), h('th', {}, 'Evidence'))),
-    h('tbody', {}, group.tests.map(t => h('tr', {},
+    h('tbody', {}, run.tests.map(t => h('tr', {},
       h('td', {}, t.title, h('div', { class: 'hint' }, t.step)), h('td', {}, badge(t.status), t.flaky ? h('span', { class: 'badge warn' }, 'flaky') : ''),
       h('td', { class: 'num' }, secs(t.durationMs)),
-      h('td', { class: 'links' }, (t.evidence ?? []).slice(0, 4).map(e => h('a', { href: fileUrl(run.runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name)))))))))))
+      h('td', { class: 'links' }, (t.evidence ?? []).slice(0, 4).map(e => h('a', { href: fileUrl(run.runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name)))))))))
 
   const extra = []
   if (run.load) {
@@ -240,9 +217,11 @@ async function renderRun(runId, anchor) {
           h('td', {}, r.breaches.length ? h('span', { class: 'badge bad' }, r.breaches.join('; ')) : h('span', { class: 'badge ok' }, 'within SLO')))))))))
   }
   const ai = run.ai ?? {}
-  extra.push(h('section', { class: 'panel' }, h('h2', {}, 'AI Analysis'),
+  extra.push(h('section', { class: 'panel' }, h('h2', {}, 'AI review'),
     h('p', {}, h('span', { class: `badge ${ai.status === 'ok' ? 'ok' : ai.status === 'rejected' ? 'bad' : ''}` }, ai.status ?? 'not-run'), ' ', ai.reason ?? ai.summary ?? ''),
     ai.status === 'ok' ? h('a', { href: fileUrl(run.runId, 'ai-analysis.json'), target: '_blank', rel: 'noopener noreferrer' }, 'ai-analysis.json') : ''))
+  extra.push(h('section', { class: 'panel' }, h('h2', {}, 'Slack alerts'),
+    run.notifications?.length ? h('ul', {}, run.notifications.map(n => h('li', {}, h('span', { class: `badge ${n.ok ? 'ok' : 'warn'}` }, n.ok ? 'delivered' : n.code), ` ${n.kind} · ${n.severity ?? ''} · ${n.title ?? ''}`))) : h('p', { class: 'empty' }, 'No notifications for this run.')))
   if (run.comparison) {
     const cmp = run.comparison
     extra.push(h('section', { class: 'panel' }, h('h2', {}, 'Compared with previous run'),

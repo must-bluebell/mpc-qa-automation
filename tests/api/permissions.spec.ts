@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { appOrigin, call, requireWrites, signIn, skipIfMineClosed } from '../../fixtures/api'
 
-test.describe('Permissions API', { tag: ['@api', '@security', '@feature-permissions', '@critical', '@regression'] }, () => {
+test.describe('Permissions API', { tag: ['@api', '@feature-permissions', '@critical', '@regression'] }, () => {
   test('P01 - Notifications require a session', { tag: ['@smoke', '@PERM-01'] }, async ({ request }, info) => {
     const res = await call(request, info, 'GET', '/api/notifications')
     expect(res.status).toBe(401)

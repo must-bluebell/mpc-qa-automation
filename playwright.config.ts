@@ -51,18 +51,6 @@ export default defineConfig({
 
   projects: [
     {
-      name: 'health',
-      testDir: './tests/health',
-      testMatch: '*.spec.ts',
-      timeout: 30_000,
-    },
-    {
-      name: 'qa-automation',
-      testDir: './tests/qa',
-      testMatch: '*.spec.ts',
-      timeout: 150_000,
-    },
-    {
       name: 'uat',
       testDir: './tests/uat',
       testMatch: '*.spec.ts',

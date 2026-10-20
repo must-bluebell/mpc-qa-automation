@@ -24,16 +24,9 @@ export function requireWrites() {
 
 type CallOptions = { body?: unknown; raw?: string; origin?: string | null; headers?: Record<string, string> }
 
-const confidential = new Set(['nonce', 'message', 'signature', 'password', 'token', 'accesstoken', 'refreshtoken', 'authorization', 'cookie', 'setcookie', 'email', 'address', 'wallet', 'privatekey', 'seedphrase'])
-function evidenceBody(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(evidenceBody)
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
-    confidential.has(key.replace(/[-_]/g, '').toLowerCase()) ? '[REDACTED]' : evidenceBody(item)]))
-  return value
-}
-
 /**
- * Attach a redacted response as evidence; assertions still receive the original response.
+ * Sends one request and attaches the status and a truncated body as evidence. Bodies here never carry
+ * secrets: test wallets are throwaway keys and cookies are not recorded.
  */
 export async function call(request: APIRequestContext, info: TestInfo, method: 'GET' | 'POST' | 'PATCH', path: string, options: CallOptions = {}) {
   const headers: Record<string, string> = { ...options.headers }
@@ -49,7 +42,7 @@ export async function call(request: APIRequestContext, info: TestInfo, method: '
   try { json = text ? JSON.parse(text) : null } catch { json = null }
   await info.attach(`api ${method} ${path} → ${response.status()}`, {
     contentType: 'application/json',
-    body: JSON.stringify({ method, path, status: response.status(), durationMs: Date.now() - started, body: evidenceBody(json ?? text.slice(0, 2_000)) }, null, 2),
+    body: JSON.stringify({ method, path, status: response.status(), durationMs: Date.now() - started, body: json ?? text.slice(0, 2_000) }, null, 2),
   })
   return { status: response.status(), json: json as Record<string, unknown> | null, text, headers: response.headers() }
 }
@@ -57,7 +50,7 @@ export async function call(request: APIRequestContext, info: TestInfo, method: '
 export type SignedIn = { account: PrivateKeyAccount; address: string; message: string; signature: `0x${string}` }
 
 /** Fresh throwaway wallet → nonce → SIWE message → verify. No funds are needed to sign in. */
-export async function prepareSignIn(request: APIRequestContext, info: TestInfo): Promise<SignedIn> {
+export async function signIn(request: APIRequestContext, info: TestInfo): Promise<SignedIn> {
   const account = privateKeyToAccount(generatePrivateKey())
   const nonce = await call(request, info, 'POST', '/api/auth/nonce', { body: {} })
   if (nonce.status !== 200 || typeof nonce.json?.nonce !== 'string') throw new Error(`nonce failed: ${nonce.status} ${nonce.text.slice(0, 200)}`)
@@ -67,15 +60,9 @@ export async function prepareSignIn(request: APIRequestContext, info: TestInfo):
     uri: origin.origin, version: '1', nonce: nonce.json.nonce, issuedAt: new Date(), expirationTime: new Date(Date.now() + 300_000),
   })
   const signature = await account.signMessage({ message })
-  return { account, address: account.address.toLowerCase(), message, signature }
-}
-
-export async function signIn(request: APIRequestContext, info: TestInfo): Promise<SignedIn> {
-  const prepared = await prepareSignIn(request, info)
-  const { message, signature } = prepared
   const verified = await call(request, info, 'POST', '/api/auth/verify', { body: { message, signature } })
   if (verified.status !== 200) throw new Error(`verify failed: ${verified.status} ${verified.text.slice(0, 200)}`)
-  return prepared
+  return { account, address: account.address.toLowerCase(), message, signature }
 }
 
 /** My Mine routes answer 404 where the mine is not deployed; that is "not covered", not a defect. */

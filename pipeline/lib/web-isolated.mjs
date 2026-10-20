@@ -5,10 +5,10 @@ export function webTestEnvironment(profile = resolveEnvironment('local-docker'))
   if (!profile.isolated || !isLoopback(profile.baseUrl) || !profile.stack) {
     throw new Error('Web fixture setup requires an isolated local stack')
   }
-  const verified = resolveEnvironment('web-isolated')
   return {
-    ...profile, ...verified, name: 'web-isolated',
+    ...profile, name: 'web-isolated', baseUrl: 'http://localhost:3420', appOrigin: 'http://localhost:3420',
     allowWrites: true, navigation: 'activities',
-    stack: { ...verified.stack, ports: { ...verified.stack.ports } },
+    stack: { ...profile.stack, composeProject: resolveEnvironment('web-isolated').stack.composeProject,
+      ports: { web: 3420, anvil: 8565, opbnbAnvil: 8566, postgres: 5450, neonProxy: 4464 } },
   }
 }

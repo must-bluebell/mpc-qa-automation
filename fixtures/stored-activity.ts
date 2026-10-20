@@ -34,9 +34,5 @@ export async function storedActivity(wallet: string, mode: 'pending' | 'failed')
     console.log(String(row.id));
   `)
   if (!/^\d+$/.test(id)) throw new Error('Local Activity fixture returned no ID')
-  return {
-    id,
-    snapshot: async () => JSON.parse(await run(`const [row]=await sql\`SELECT id::text,outcome,finished_at::text,seen_at::text,dismissed_at::text FROM transaction_activities WHERE id=\${${JSON.stringify(id)}}::bigint AND wallet=\${wallet}\`; console.log(JSON.stringify(row));`)),
-    cleanup: () => run(`await sql\`DELETE FROM transaction_activities WHERE id=\${${JSON.stringify(id)}}::bigint AND wallet=\${wallet}\`;`),
-  }
+  return { id, cleanup: () => run(`await sql\`DELETE FROM transaction_activities WHERE id=\${${JSON.stringify(id)}}::bigint AND wallet=\${wallet}\`;`) }
 }

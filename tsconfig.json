@@ -13,5 +13,5 @@
     "noEmit": true
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "runs", "playwright-report", "test-results"]
+  "exclude": ["node_modules"]
 }
