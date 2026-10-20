@@ -1,0 +1,5026 @@
+{
+  "info": {
+    "name": "MPC Waitlist API - extended QA",
+    "description": "Generated from source by api-collection/generate.mjs. Contains no secrets; fill variables locally (Postman \"current value\" or an environment file kept out of git). Test against local/stg only.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "walletAddress",
+      "value": ""
+    },
+    {
+      "key": "siweMessage",
+      "value": ""
+    },
+    {
+      "key": "siweSignature",
+      "value": ""
+    },
+    {
+      "key": "cronSecret",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "adminEmail",
+      "value": ""
+    },
+    {
+      "key": "adminPassword",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "qaLatencyLimitMs",
+      "value": "2000",
+      "description": "Provisional per-request response time limit in milliseconds; agree against environment SLOs."
+    }
+  ],
+  "item": [
+    {
+      "name": "activities",
+      "item": [
+        {
+          "name": "POST /api/activities/:id/cancel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/activities/:id/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activities",
+                ":id",
+                "cancel"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/activities/:id/dismiss",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/activities/:id/dismiss",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activities",
+                ":id",
+                "dismiss"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/activities/:id/seen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/activities/:id/seen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activities",
+                ":id",
+                "seen"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/activities/:id/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/activities/:id/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activities",
+                ":id",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/activities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/activities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activities"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "admin",
+      "item": [
+        {
+          "name": "PATCH /api/admin/admins/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/admins/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "admins",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleId\": \"1\",\n  \"disabled\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/admin/admins/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/admins/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "admins",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleId\": \"1\",\n  \"disabled\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/admins",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/admins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "admins"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/admins",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/admins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "admins"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"roleId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/change-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "change-password"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"string\",\n  \"newPassword\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/checkin/reconcile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/checkin/reconcile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "checkin",
+                "reconcile"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"day\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/join-policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/join-policy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "join-policy"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "PATCH /api/admin/join-policy",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/join-policy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "join-policy"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skipEmailOtp\": \"tester@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/ledger/export",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/ledger/export",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "ledger",
+                "export"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "login"
+              ]
+            },
+            "description": "Auth: public or optional session\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\",\n  \"turnstileToken\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "logout"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "DELETE /api/admin/quest-hosts/:host",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quest-hosts/:host",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quest-hosts",
+                ":host"
+              ],
+              "variable": [
+                {
+                  "key": "host",
+                  "value": "{{host}}"
+                }
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/quest-hosts",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quest-hosts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quest-hosts"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"host\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/quest/reconcile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quest/reconcile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quest",
+                "reconcile"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 0,\n  \"questKey\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/quests/:key/edits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quests/:key/edits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quests",
+                ":key",
+                "edits"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": "{{key}}"
+                }
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "PATCH /api/admin/quests/:key",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quests/:key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quests",
+                ":key"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": "{{key}}"
+                }
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/quests/batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quests/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quests",
+                "batch"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batch\": \"string\",\n  \"items\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/quests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quests"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/quests",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quests"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/quiz/batches",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quiz/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quiz",
+                "batches"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batch\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/quiz/items/:id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quiz/items/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quiz",
+                "items",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/quiz/items/bulk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quiz/items/bulk",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quiz",
+                "items",
+                "bulk"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/quiz/items",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quiz/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quiz",
+                "items"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batch\": \"string\",\n  \"items\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/quiz/translations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/quiz/translations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "quiz",
+                "translations"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lang\": \"string\",\n  \"items\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/admin/roles/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/roles/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "roles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "roles"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/roles",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "roles"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"permissions\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/telegram/unlink",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/telegram/unlink",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "telegram",
+                "unlink"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telegramUserId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/votes/lifecycle",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/votes/lifecycle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "votes",
+                "lifecycle"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/admin/votes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/votes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "votes"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/admin/website-analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/website-analytics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "website-analytics"
+              ]
+            },
+            "description": "Auth: admin session cookie (run Admin Login first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "auth",
+      "item": [
+        {
+          "name": "POST /api/auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/auth/nonce",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/nonce",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "nonce"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/auth/session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "session"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/auth/verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"{{siweMessage}}\",\n  \"signature\": \"{{siweSignature}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "claim",
+      "item": [
+        {
+          "name": "POST /api/claim/permit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/claim/permit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "claim",
+                "permit"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/claim/result",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/claim/result",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "claim",
+                "result"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activityId\": \"1\",\n  \"txHash\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/claim/sent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/claim/sent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "claim",
+                "sent"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activityId\": \"1\",\n  \"txHash\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "cron",
+      "item": [
+        {
+          "name": "GET /api/cron/api-latency-cleanup",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/api-latency-cleanup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "api-latency-cleanup"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/audience-retention",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/audience-retention",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "audience-retention"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/chain-index",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/chain-index",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "chain-index"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/chain-replica",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/chain-replica",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "chain-replica"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/checkin-reconcile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/checkin-reconcile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "checkin-reconcile"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/energy-reconcile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/energy-reconcile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "energy-reconcile"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/funnel-failures",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/funnel-failures",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "funnel-failures"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/megafuel-funding",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/megafuel-funding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "megafuel-funding"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/mymine-ranks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/mymine-ranks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "mymine-ranks"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/quest-reconcile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/quest-reconcile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "quest-reconcile"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/cron/relay-sweep",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{cronSecret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cron/relay-sweep",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cron",
+                "relay-sweep"
+              ]
+            },
+            "description": "Auth: Bearer {{cronSecret}}\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "energy",
+      "item": [
+        {
+          "name": "POST /api/energy/bridge/deposit/abandon",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/bridge/deposit/abandon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "bridge",
+                "deposit",
+                "abandon"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"string\",\n  \"activityId\": \"1\",\n  \"challenge\": \"string\",\n  \"amount\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/energy/bridge/deposit/prepare",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/bridge/deposit/prepare",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "bridge",
+                "deposit",
+                "prepare"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 0,\n  \"mode\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/energy/bridge/deposit/register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/bridge/deposit/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "bridge",
+                "deposit",
+                "register"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"txHash\": \"string\",\n  \"activityId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/energy/bridge/deposit/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/bridge/deposit/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "bridge",
+                "deposit",
+                "status"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/energy/bridge/deposit/submit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/bridge/deposit/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "bridge",
+                "deposit",
+                "submit"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge\": \"string\",\n  \"amount\": 0,\n  \"deadline\": \"string\",\n  \"userSig\": \"string\",\n  \"activityId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/energy/compensation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/compensation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "compensation"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/energy/compensation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/compensation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "compensation"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/energy/deposits/:transferId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/deposits/:transferId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "deposits",
+                ":transferId"
+              ],
+              "variable": [
+                {
+                  "key": "transferId",
+                  "value": "{{transferId}}"
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/energy/deposits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/deposits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "deposits"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/energy/history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/energy/portfolio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy",
+                "portfolio"
+              ],
+              "query": [
+                {
+                  "key": "fresh",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/energy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/energy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/energy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "energy"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "home",
+      "item": [
+        {
+          "name": "GET /api/home",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/home",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "home"
+              ]
+            },
+            "description": "Auth: public or optional session\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "join",
+      "item": [
+        {
+          "name": "POST /api/join/event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/join/event",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "join",
+                "event"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"runId\": \"1\",\n  \"step\": \"string\",\n  \"reason\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/join/social-complete",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/join/social-complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "join",
+                "social-complete"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/join/social-complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/join/social-complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "join",
+                "social-complete"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/join/x-open",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/join/x-open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "join",
+                "x-open"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/join/x-open",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/join/x-open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "join",
+                "x-open"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "notifications",
+      "item": [
+        {
+          "name": "GET /api/notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "PATCH /api/notifications",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"all\": \"string\",\n  \"id\": \"1\",\n  \"throughId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "quest",
+      "item": [
+        {
+          "name": "POST /api/quest/link-open",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quest/link-open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quest",
+                "link-open"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/quest/result",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quest/result",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quest",
+                "result"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attemptId\": \"1\",\n  \"ok\": \"string\",\n  \"failCode\": \"000000\",\n  \"rpcCode\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/quest/sent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quest/sent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quest",
+                "sent"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attemptId\": \"1\",\n  \"txHash\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/quest/voucher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quest/voucher",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quest",
+                "voucher"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questKey\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "quests",
+      "item": [
+        {
+          "name": "GET /api/quests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/quests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quests"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "quiz",
+      "item": [
+        {
+          "name": "POST /api/quiz/answer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz/answer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quiz",
+                "answer"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answerIndex\": 0,\n  \"day\": 0,\n  \"itemId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/quiz/checkin/result",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz/checkin/result",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quiz",
+                "checkin",
+                "result"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attemptId\": \"1\",\n  \"ok\": \"string\",\n  \"failCode\": \"000000\",\n  \"rpcCode\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/quiz/checkin/sent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz/checkin/sent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quiz",
+                "checkin",
+                "sent"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attemptId\": \"1\",\n  \"txHash\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/quiz/today",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quiz",
+                "today"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/quiz/voucher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/quiz/voucher",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "quiz",
+                "voucher"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "register",
+      "item": [
+        {
+          "name": "POST /api/register/send-code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/register/send-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "register",
+                "send-code"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tester@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/register/skip-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/register/skip-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "register",
+                "skip-otp"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tester@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/register/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/register/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "register",
+                "status"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/register/verify-code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/register/verify-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "register",
+                "verify-code"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tester@example.com\",\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "relay",
+      "item": [
+        {
+          "name": "POST /api/relay/challenge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/relay/challenge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "relay",
+                "challenge"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"string\",\n  \"questKey\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/relay/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/relay/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "relay",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "challenge",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/relay/submit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/relay/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "relay",
+                "submit"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge\": \"string\",\n  \"userSig\": \"string\",\n  \"attemptId\": \"1\",\n  \"activityId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sbt",
+      "item": [
+        {
+          "name": "GET /api/sbt/:tokenId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sbt/:tokenId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sbt",
+                ":tokenId"
+              ],
+              "variable": [
+                {
+                  "key": "tokenId",
+                  "value": "{{tokenId}}"
+                }
+              ]
+            },
+            "description": "Auth: public or optional session\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "support",
+      "item": [
+        {
+          "name": "POST /api/support/telegram/webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/support/telegram/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "support",
+                "telegram",
+                "webhook"
+              ]
+            },
+            "description": "Auth: platform webhook secret (verify in handler)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "telegram",
+      "item": [
+        {
+          "name": "GET /api/telegram/auth/callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/telegram/auth/callback",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "auth",
+                "callback"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "code",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "error",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/telegram/auth/start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/telegram/auth/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "auth",
+                "start"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"returnTo\": \"string\",\n  \"replace\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/telegram/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/telegram/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "status"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/telegram/verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/telegram/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "verify"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        }
+      ]
+    },
+    {
+      "name": "telemetry",
+      "item": [
+        {
+          "name": "POST /api/telemetry/latency",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/telemetry/latency",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "telemetry",
+                "latency"
+              ]
+            },
+            "description": "Auth: public or optional session\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"samples\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/telemetry/website",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/telemetry/website",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "telemetry",
+                "website"
+              ]
+            },
+            "description": "Auth: public or optional session\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"string\",\n  \"visitor\": \"string\",\n  \"policyVersion\": \"string\",\n  \"basis\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "vote",
+      "item": [
+        {
+          "name": "POST /api/vote/activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vote/activity",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vote",
+                "activity"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"string\",\n  \"proposalId\": \"1\",\n  \"choiceId\": \"1\",\n  \"phase\": \"string\",\n  \"activityId\": \"1\",\n  \"txHash\": \"string\",\n  \"originalTxHash\": \"string\",\n  \"nonce\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/vote/metadata/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/vote/metadata/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vote",
+                "metadata",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Auth: public or optional session\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /api/vote/proposals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/vote/proposals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vote",
+                "proposals"
+              ],
+              "query": [
+                {
+                  "key": "include",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: public or optional session\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /api/vote/relay/prepare",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vote/relay/prepare",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vote",
+                "relay",
+                "prepare"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"string\",\n  \"proposalId\": \"1\",\n  \"choiceId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/vote/relay/submit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/vote/relay/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vote",
+                "relay",
+                "submit"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"string\",\n  \"proposalId\": \"1\",\n  \"nonce\": 0,\n  \"choiceId\": \"1\",\n  \"challenge\": \"string\",\n  \"userSig\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "my-mine (non-/api)",
+      "item": [
+        {
+          "name": "POST /my-mine/attend",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/attend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "attend"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"days\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /my-mine/chain",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/chain",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "chain"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /my-mine/claim",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/claim",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "claim"
+              ],
+              "query": [
+                {
+                  "key": "standing",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/claim",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/claim",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "claim"
+              ],
+              "query": [
+                {
+                  "key": "standing",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /my-mine/claim/self",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/claim/self",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "claim",
+                "self"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /my-mine/claim/submit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/claim/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "claim",
+                "submit"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": \"string\",\n  \"activityId\": \"1\",\n  \"challenge\": \"string\",\n  \"deadline\": \"string\",\n  \"userSig\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /my-mine/draw",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/draw",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "draw"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"index\": 0,\n  \"intent\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /my-mine/energy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/energy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "energy"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/energy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/energy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "energy"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "GET /my-mine/goods",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/goods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "goods"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/jv/claim",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/jv/claim",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "jv",
+                "claim"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/jv/claim/self/register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/jv/claim/self/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "jv",
+                "claim",
+                "self",
+                "register"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"txHash\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /my-mine/jv/claim/self",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/jv/claim/self",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "jv",
+                "claim",
+                "self"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/jv/claim/submit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/jv/claim/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "jv",
+                "claim",
+                "submit"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge\": \"string\",\n  \"owedTo\": \"string\",\n  \"deadline\": \"string\",\n  \"userSig\": \"string\",\n  \"activityId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /my-mine/jv",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/jv",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "jv"
+              ],
+              "query": [
+                {
+                  "key": "challenge",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/jv/settle",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/jv/settle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "jv",
+                "settle"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ref\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /my-mine/ranks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/ranks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "ranks"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/record",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "record"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"moveIndex\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /my-mine/record/self/register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/record/self/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "record",
+                "self",
+                "register"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"moveIndex\": 0,\n  \"txHash\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /my-mine/record/self",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/record/self",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "record",
+                "self"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"moveIndex\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /my-mine/record/submit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/record/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "record",
+                "submit"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"moveIndex\": 0,\n  \"userSig\": \"string\",\n  \"activityId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /my-mine/run",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "run"
+              ],
+              "query": [
+                {
+                  "key": "reconcile",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "run"
+              ],
+              "query": [
+                {
+                  "key": "reconcile",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rollbackFromMoves\": \"string\",\n  \"rollbackTail\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /my-mine/sponsor",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/sponsor",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "sponsor"
+              ]
+            },
+            "description": "Auth: public or optional session\nBody/query keys are inferred from source; confirm against the handler."
+          }
+        },
+        {
+          "name": "POST /my-mine/state-run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}",
+                "description": "Required by guardSameOrigin; must equal the server APP_ORIGIN."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/my-mine/state-run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "my-mine",
+                "state-run"
+              ]
+            },
+            "description": "Auth: SIWE session cookie (run Auth > nonce, verify first)\nBody/query keys are inferred from source; confirm against the handler.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"seq\": \"string\",\n  \"clientState\": \"string\",\n  \"clientBlocked\": \"string\",\n  \"clientOut\": \"string\",\n  \"clientLocks\": \"string\",\n  \"clientStateHash\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "QA additions - 20 API cases",
+      "description": "Run this folder alone for independent anonymous security and public-read cases. Cookies and inherited auth disabled.",
+      "item": [
+        {
+          "name": "API-EXT-01 | Public home JSON",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/home",
+            "description": "successful-read. Expected status: [200]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-02 | Public quests JSON",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/quests",
+            "description": "successful-read. Expected status: [200]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-03 | Public vote proposals JSON",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/vote/proposals",
+            "description": "successful-read. Expected status: [200]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-04 | Anonymous session has no address",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/session",
+            "description": "successful-read. Expected status: [200]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Anonymous session', () => { const data = pm.response.json(); pm.expect(data).to.be.an('object'); pm.expect(data.address == null).to.eql(true); });",
+                  "pm.test('Session must not be cached', () => pm.expect(pm.response.headers.get('Cache-Control') || '').to.include('no-store'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-05 | Notifications rejects anonymous access",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/notifications",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_signed_in'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-06 | Activities rejects anonymous access",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/activities",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_signed_in'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-07 | Energy balance rejects anonymous access",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/energy",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_signed_in'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-08 | Energy history rejects anonymous access",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/energy/history",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_signed_in'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-09 | Energy deposits rejects anonymous access",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/energy/deposits",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_signed_in'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-10 | Energy portfolio rejects anonymous access",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/energy/portfolio",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_signed_in'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-11 | Energy compensation rejects anonymous access",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/energy/compensation",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_signed_in'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-12 | Admin admins requires admin session",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/admins",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_admin'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-13 | Admin quests requires admin session",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/quests",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_admin'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-14 | Admin roles requires admin session",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/roles",
+            "description": "expected-rejection. Expected status: [401]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('not_admin'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-15 | Cron relay-sweep rejects missing bearer",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cron/relay-sweep",
+            "description": "expected-rejection. Expected status: [401, 403]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-16 | Cron funnel-failures rejects missing bearer",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/cron/funnel-failures",
+            "description": "expected-rejection. Expected status: [401, 403]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-17 | Foreign-origin nonce is refused",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "https://attacker.example"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/nonce",
+            "description": "expected-rejection. Expected status: [403]",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([403]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-18 | Foreign-origin logout is refused",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "https://attacker.example"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/logout",
+            "description": "expected-rejection. Expected status: [403]",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([403]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-19 | Vote metadata rejects ID 0",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/vote/metadata/0",
+            "description": "expected-rejection. Expected status: [400]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([400]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('bad_proposal_id'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-EXT-20 | Vote metadata rejects ID invalid",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/vote/metadata/invalid",
+            "description": "expected-rejection. Expected status: [400]"
+          },
+          "protocolProfileBehavior": {
+            "disableCookies": true,
+            "followRedirects": false
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expected status', () => pm.expect(pm.response.code).to.be.oneOf([400]));",
+                  "pm.test('JSON content type', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+                  "pm.test('Valid JSON response', () => pm.expect(() => pm.response.json()).not.to.throw());",
+                  "const limit = Number(pm.variables.get('qaLatencyLimitMs'));",
+                  "pm.test('Latency within configured limit', () => { pm.expect(Number.isFinite(limit) && limit > 0).to.eql(true); pm.expect(pm.response.responseTime).to.be.at.most(limit); });",
+                  "pm.test('Expected error contract', () => pm.expect(pm.response.json().error).to.eql('bad_proposal_id'));",
+                  "console.log('QA_LATENCY', JSON.stringify({case: pm.info.requestName, elapsedMs: pm.response.responseTime, status: pm.response.code}));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+# Keep SQL concurrency within Neon's 20-connection reuse pool. HTTP/1.1 makes
+# the connection ceiling also bound active queries; callers queue in transport.
+:4444 {
+    reverse_proxy https://localhost:4445 {
+        transport http {
+            versions 1.1
+            max_conns_per_host 16
+            keepalive_idle_conns_per_host 16
+            tls_trusted_ca_certs server.pem
+            tls_server_name db.localtest.me
+        }
+        header_up Host db.localtest.me:4445
+    }
+}

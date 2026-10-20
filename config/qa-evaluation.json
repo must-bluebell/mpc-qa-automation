@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "weights": {
+    "defectDetection": 20,
+    "criticalJourneyCoverage": 15,
+    "executionReliability": 15,
+    "alertDeliverySpeed": 10,
+    "alertAccuracy": 10,
+    "diagnosticEvidence": 10,
+    "loadTestQuality": 10,
+    "operationalControls": 5,
+    "aiUsefulness": 5
+  },
+  "targets": {
+    "criticalCoverage": 0.8,
+    "alertLatencySeconds": 120,
+    "reliabilityWindowRuns": 20
+  },
+  "policy": "Every category is always reported. A category without recorded evidence scores 0 and is marked not demonstrated. Categories are never removed and the total is never rescaled.",
+  "acceptanceAuthority": "Explicit assertions mapped to approved requirements. AI cannot override outcomes."
+}

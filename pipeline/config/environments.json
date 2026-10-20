@@ -1,0 +1,81 @@
+{
+  "local-docker": {
+    "description": "Existing isolated QA recovery stack. Shares state with the other local alias; run suites sequentially.",
+    "baseUrl": "http://localhost:3440",
+    "appOrigin": "http://localhost:3440",
+    "chainId": 97,
+    "chainName": "Local Anvil",
+    "navigation": "activities",
+    "allowWrites": true,
+    "allowLoad": true,
+    "allowSeededDefects": true,
+    "isolated": true,
+    "stack": {
+      "databasePool": true,
+      "verificationRuntime": true,
+      "composeProject": "mpc-qa-web-20261020-recovery",
+      "webmpcPath": "../WEB MPC",
+      "ports": {
+        "web": 3440,
+        "anvil": 8585,
+        "opbnbAnvil": 8586,
+        "postgres": 5470,
+        "neonProxy": 4484
+      },
+      "note": "Recovered existing October 20 stack after the application and QA folders moved. Previous projects and volumes are preserved."
+    }
+  },
+  "web-isolated": {
+    "description": "Existing isolated QA recovery stack. Shares state with the other local alias; run suites sequentially.",
+    "baseUrl": "http://localhost:3440",
+    "appOrigin": "http://localhost:3440",
+    "chainId": 97,
+    "chainName": "Local Anvil",
+    "navigation": "activities",
+    "allowWrites": true,
+    "allowLoad": true,
+    "allowSeededDefects": true,
+    "isolated": true,
+    "stack": {
+      "databasePool": true,
+      "verificationRuntime": true,
+      "composeProject": "mpc-qa-web-20261020-recovery",
+      "webmpcPath": "../WEB MPC",
+      "ports": {
+        "web": 3440,
+        "anvil": 8585,
+        "opbnbAnvil": 8586,
+        "postgres": 5470,
+        "neonProxy": 4484
+      },
+      "note": "Recovered existing October 20 stack after the application and QA folders moved. Previous projects and volumes are preserved."
+    }
+  },
+  "preview": {
+    "description": "Vercel preview deployment on BSC testnet. Read-only API checks and wallet UI tests.",
+    "baseUrlEnv": "QA_PREVIEW_BASE_URL",
+    "chainId": 97,
+    "allowWrites": false,
+    "allowLoad": false,
+    "allowSeededDefects": false,
+    "isolated": false
+  },
+  "staging": {
+    "description": "Staging (mainnet bundle, test contracts). Refuses same-origin writes; read-only.",
+    "baseUrl": "https://globalmpc-webapp.vercel.app",
+    "chainId": 56,
+    "allowWrites": false,
+    "allowLoad": false,
+    "allowSeededDefects": false,
+    "isolated": false
+  },
+  "production": {
+    "description": "Production. Read-only smoke and UI regression only; never writes, load or seeded defects.",
+    "baseUrl": "https://app.globalmpc.tech",
+    "chainId": 56,
+    "allowWrites": false,
+    "allowLoad": false,
+    "allowSeededDefects": false,
+    "isolated": false
+  }
+}

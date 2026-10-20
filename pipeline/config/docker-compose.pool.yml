@@ -1,0 +1,57 @@
+# QA-only overlay. Keep PostgreSQL's connection ceiling; queue bursts at a bounded pool.
+services:
+  pool-auth:
+    image: postgres:16-alpine
+    env_file: .env
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        umask 077
+        export PGPASSWORD="$$POSTGRES_PASSWORD"
+        psql -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Atc 'SELECT chr(34) || rolname || chr(34) || chr(32) || chr(34) || rolpassword || chr(34) FROM pg_authid WHERE rolname = current_user' > /auth/userlist.txt
+        chown 70:70 /auth/userlist.txt
+    volumes: [qa_pool_auth:/auth]
+    depends_on:
+      postgres: {condition: service_healthy}
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.1-p0@sha256:4a8371e79d6627e74f553d0aaa8e4c5ace20e30034fb296e569b71c89c99e108
+    environment:
+      DATABASE_URL: "${DATABASE_URL}"
+      AUTH_TYPE: scram-sha-256
+      AUTH_FILE: /auth/userlist.txt
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "3000"
+      DEFAULT_POOL_SIZE: "32"
+      MAX_DB_CONNECTIONS: "40"
+      MAX_USER_CONNECTIONS: "40"
+      LOG_CONNECTIONS: "0"
+      LOG_DISCONNECTIONS: "0"
+    ulimits:
+      nofile: {soft: 8192, hard: 8192}
+    volumes: [qa_pool_auth:/auth:ro]
+    depends_on:
+      postgres: {condition: service_healthy}
+      pool-auth: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -p 5432']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  neon-proxy:
+    image: mpc-qa-neon-proxy-release:58abce0
+    build:
+      context: "${QA_POOL_CONFIG_DIR:?QA pool config directory is required}/../docker"
+      dockerfile: neon-proxy.Dockerfile
+    environment:
+      PG_CONNECTION_STRING: "${QA_POOLED_DATABASE_URL:?QA pooled database URL is required}"
+      RUST_LOG: warn
+    volumes:
+      - "${QA_POOL_CONFIG_DIR:?QA pool config directory is required}/Caddyfile.neon:/app/Caddyfile:ro"
+    depends_on:
+      pgbouncer: {condition: service_healthy}
+  web:
+    environment:
+      QA_LOCAL_LOAD: "1"
+volumes:
+  qa_pool_auth:

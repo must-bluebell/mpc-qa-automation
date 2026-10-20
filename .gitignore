@@ -1,0 +1,34 @@
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+allure-results/
+allure-report/
+allure-history.jsonl
+playwright/.cache/
+
+# 🔴 Never commit. QA_SEED_PHRASE is a real seed phrase.
+.env
+.env.local
+*.tsbuildinfo
+
+# Run history, evidence and logs (may contain wallet addresses, cookies in transit, app output)
+runs/
+*.log
+.DS_Store
+.claude/
+__pycache__/
+.env.*
+!.env.example
+
+# Interviewer-only material belongs in a restricted store outside this repository.
+hiring-quest/*CONFIDENTIAL*
+ci-slack-report.json
+
+# Private signing keys and credential bundles stay outside version control.
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519

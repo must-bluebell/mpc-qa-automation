@@ -1,0 +1,8 @@
+# Only the dedicated verification profile loads this overlay.
+# Reserve Docker memory for two chains, PostgreSQL, the proxy and scenario processes.
+services:
+  web:
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=3072 --import=/qa-runtime/next-worker.mjs"
+    volumes:
+      - "${QA_POOL_CONFIG_DIR:?QA pool config directory is required}/../docker:/qa-runtime:ro"

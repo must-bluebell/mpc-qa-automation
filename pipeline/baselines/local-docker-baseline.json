@@ -1,0 +1,43 @@
+{
+  "createdAt": "2026-10-09T06:25:33.683Z",
+  "runId": "20261009-061119-full-e01b",
+  "profile": "baseline",
+  "profileSpec": {
+    "vus": 5,
+    "duration": "60s"
+  },
+  "appVersion": "mpc-waitlist@0.1.0+src-2026-10-06T04:42",
+  "endpoints": {
+    "GET /api/home": {
+      "p95Ms": 83.30439999999999,
+      "errorRate": 0,
+      "requests": 247
+    },
+    "GET /api/quests": {
+      "p95Ms": 596.9942,
+      "errorRate": 0,
+      "requests": 247
+    },
+    "GET /api/vote/proposals": {
+      "p95Ms": 570.5032999999997,
+      "errorRate": 0,
+      "requests": 247
+    },
+    "GET /api/auth/session": {
+      "p95Ms": 123.53649999999988,
+      "errorRate": 0,
+      "requests": 311
+    },
+    "POST /api/auth/nonce": {
+      "p95Ms": 103.58149999999996,
+      "errorRate": 0,
+      "requests": 311
+    },
+    "GET /api/notifications": {
+      "p95Ms": 633.722,
+      "errorRate": 0,
+      "requests": 311
+    }
+  },
+  "throughputRps": 27.60797344000808
+}

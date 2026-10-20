@@ -1,0 +1,157 @@
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -1,5 +1,5 @@
+ import type { NextConfig } from 'next'
+-import { PHASE_PRODUCTION_BUILD, type PHASE_TYPE } from 'next/constants'
++import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, type PHASE_TYPE } from 'next/constants'
+ import { CI_WALLETCONNECT_SENTINEL } from './src/platform/config/reown-project-id'
+ import { verifyReownProjectId } from './src/platform/config/reown-project-id-build'
+
+@@ -220,6 +220,13 @@
+   phase: PHASE_TYPE,
+   request: typeof fetch = fetch,
+ ): Promise<NextConfig> {
++  if (phase === PHASE_DEVELOPMENT_SERVER && process.env.QA_LOCAL_LOAD === '1') {
++    return {
++      ...nextConfig,
++      experimental: { ...nextConfig.experimental, turbopackFileSystemCacheForDev: false },
++      logging: { incomingRequests: false },
++    }
++  }
+   if (phase === PHASE_PRODUCTION_BUILD) {
+     // GitHub Actions verifies code; it does not deploy this bundle. Give the client compiler the
+     // string WalletConnect's constructor requires without making CI own or validate a Reown ID.
+--- a/next.config.test.ts
++++ b/next.config.test.ts
+@@ -11,6 +11,22 @@
+
+ describe('required Reown build wiring', () => {
+   afterEach(() => vi.unstubAllEnvs())
++
++  it('does not restore persistent development cache in the local load harness', async () => {
++    vi.stubEnv('QA_LOCAL_LOAD', '1')
++    const config = await resolveNextConfig(PHASE_DEVELOPMENT_SERVER)
++    expect(config.experimental?.turbopackFileSystemCacheForDev).toBe(false)
++    expect(config.logging).toEqual({ incomingRequests: false })
++    expect(config.headers).toBe(nextConfig.headers)
++  })
++
++  it('keeps local load overrides out of production builds', async () => {
++    vi.stubEnv('QA_LOCAL_LOAD', '1')
++    vi.stubEnv('GITHUB_ACTIONS', '')
++    vi.stubEnv('NEXT_PUBLIC_REOWN_PROJECT_ID', 'local-build-test')
++    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 200 }))
++    await expect(resolveNextConfig(PHASE_PRODUCTION_BUILD, request)).resolves.toBe(nextConfig)
++  })
+
+   it('refuses a production build when the public projectId is missing', async () => {
+     vi.stubEnv('GITHUB_ACTIONS', '')
+--- a/docker/run-app.mjs
++++ b/docker/run-app.mjs
+@@ -1,6 +1,7 @@
+ import { spawn } from 'node:child_process'
+ import { setTimeout as delay } from 'node:timers/promises'
+ import { createChainWatch } from './chain-watch.mjs'
++import { preserveDevCache } from './load-cache.mjs'
+
+ const children = new Map()
+ const root = process.env.WORKSPACE_ROOT || '/app'
+@@ -51,6 +52,7 @@
+ ] })
+ try {
+   await checkChains({ startup: true })
++  if (!closing && process.env.QA_LOCAL_LOAD === '1') await preserveDevCache(root)
+   if (!closing) start(`${root}/node_modules/next/dist/bin/next`, ['dev', '-H', process.env.SCENARIO_ON_RUNNER === '1' ? '127.0.0.1' : '0.0.0.0', '-p', port])
+   let cronStarted = false
+   while (!closing) {
+--- /dev/null
++++ b/docker/load-cache.mjs
+@@ -0,0 +1,14 @@
++import { mkdir, rename } from 'node:fs/promises'
++import { join } from 'node:path'
++import { randomUUID } from 'node:crypto'
++
++// A local load restart must not restore a partially written development tree.
++// Preserve it for diagnosis; leave production builds and all state volumes alone.
++export async function preserveDevCache(root) {
++  const parent = join(root, '.next', 'qa-load-backups')
++  await mkdir(parent, { recursive: true })
++  const backup = join(parent, `dev-${randomUUID()}`)
++  try { await rename(join(root, '.next', 'dev'), backup) }
++  catch (error) { if (error.code === 'ENOENT') return null; throw error }
++  return backup
++}
+--- /dev/null
++++ b/docker/load-cache.test.mjs
+@@ -0,0 +1,20 @@
++import test from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtemp, mkdir, writeFile, readFile, rm, access } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { preserveDevCache } from './load-cache.mjs'
++
++test('local load restart preserves stale development files and keeps production output', async () => {
++  const root = await mkdtemp(join(tmpdir(), 'mpc-load-cache-'))
++  try {
++    await mkdir(join(root, '.next/dev'), { recursive: true })
++    await writeFile(join(root, '.next/dev/marker'), 'stale state')
++    await writeFile(join(root, '.next/BUILD_ID'), 'production output')
++    const backup = await preserveDevCache(root)
++    assert.equal(await readFile(join(backup, 'marker'), 'utf8'), 'stale state')
++    await assert.rejects(access(join(root, '.next/dev')), { code: 'ENOENT' })
++    assert.equal(await readFile(join(root, '.next/BUILD_ID'), 'utf8'), 'production output')
++    assert.equal(await preserveDevCache(root), null)
++  } finally { await rm(root, { recursive: true, force: true }) }
++})
+--- a/docker/start-dev.sh
++++ b/docker/start-dev.sh
+@@ -3,13 +3,13 @@
+ . /app/docker/local-keys.sh
+
+ if [ ! -f /app/config/deployments.json ]; then
+-  cp -a /app-config-source/. /app/config/
++  sh /app/docker/copy-config.sh /app-config-source/. /app/config/
+   node -e "const fs=require('fs');const p='/app/config/deployments.json';const d=JSON.parse(fs.readFileSync(p));delete d['5611'];delete d['97'];fs.writeFileSync(p,JSON.stringify(d,null,2)+'\\n')"
+ fi
+ for source in /app-config-source/*; do
+   [ -e "$source" ] || continue
+   [ "${source##*/}" = "deployments.json" ] && continue
+-  cp -a "$source" /app/config/
++  sh /app/docker/copy-config.sh "$source" /app/config/
+ done
+
+ pnpm install --frozen-lockfile
+--- /dev/null
++++ b/docker/copy-config.sh
+@@ -0,0 +1,6 @@
++#!/bin/sh
++set -eu
++task_config_stage=$(mktemp -d)
++trap 'rm -rf "$task_config_stage"' EXIT HUP INT TERM
++cp -a "$1" "$task_config_stage/"
++cp -a "$task_config_stage/$(basename "$1")" "$2"
+--- /dev/null
++++ b/docker/copy-config.test.mjs
+@@ -0,0 +1,21 @@
++import test from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { spawnSync } from 'node:child_process'
++import { fileURLToPath } from 'node:url'
++
++test('config copy handles an identical source and destination without losing contents', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'mpc-config-copy-'))
++  try {
++    writeFileSync(join(dir, 'brand.json'), '{"fixture":true}')
++    const result = spawnSync('sh', [fileURLToPath(new URL('./copy-config.sh', import.meta.url)), join(dir, 'brand.json'), dir])
++    assert.equal(result.status, 0, result.stderr.toString())
++    assert.equal(readFileSync(join(dir, 'brand.json'), 'utf8'), '{"fixture":true}')
++    mkdirSync(join(dir, 'target'))
++    const tree = spawnSync('sh', [fileURLToPath(new URL('./copy-config.sh', import.meta.url)), dir + '/.', join(dir, 'target')])
++    assert.equal(tree.status, 0, tree.stderr.toString())
++    assert.equal(readFileSync(join(dir, 'target/brand.json'), 'utf8'), '{"fixture":true}')
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
