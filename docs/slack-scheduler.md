@@ -98,7 +98,7 @@ Every Playwright step writes Allure results to `runs/<runId>/allure-results/`. B
 
 When `QA_ALLURE_BASE_URL` is set, the Slack summary adds `Allure: <base>/<runId>/index.html`. The same HTTPS rules as `QA_REPORT_BASE_URL` apply. Hosting is a deployment step, for example `aws s3 sync runs/allure s3://your-bucket/allure --exclude history.jsonl` after each run. Unlike `runs/published/`, Allure reports are **not** sanitized: they contain screenshots, traces, video and raw error text, so serve them only behind team-only access (SSO or VPN), never publicly. View one locally with `npx allure open runs/allure/<runId>`.
 
-Every configured test schedule explicitly requests AI review, including passing runs. Manual runs inherit `QA_AI_AUTO=1` for failures and blocked runs unless `--ai` or `--no-ai` is supplied. The local OpenClaw provider requires its authenticated gateway and dedicated tools-disabled review agent to be available. AI failures are recorded separately from assertion outcomes and can be retried with `node pipeline/ai/analyze.mjs <runId>`; AI has no durable retry outbox.
+Every configured test schedule explicitly requests AI review, including passing runs. Manual runs inherit `QA_AI_AUTO=1` for failures and blocked runs unless `--ai` or `--no-ai` is supplied. The local Ollama provider requires Ollama to be running on the pipeline host with `gpt-oss:20b` downloaded. AI failures are recorded separately from assertion outcomes and can be retried with `node pipeline/ai/analyze.mjs <runId>`; AI has no durable retry outbox.
 
 AI uses the existing approved-requirement validation and cannot change assertion outcomes. It remains optional; an exhausted API credit balance does not prevent tests or Slack delivery.
 

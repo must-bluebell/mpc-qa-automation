@@ -43,3 +43,13 @@ test('unknown providers fail closed and existing cloud configuration remains exp
   assert.equal(aiConfig({QA_AI_PROVIDER:'typo',OPENAI_API_KEY:'fake',OPENAI_MODEL:'model'}).configured,false)
   assert.equal(aiConfig({QA_AI_PROVIDER:'openai',OPENAI_API_KEY:'fake',OPENAI_MODEL:'model'}).provider,'openai')
 })
+
+test('removed gateway provider cannot send evidence even with legacy credentials', async () => {
+  const cfg = aiConfig({QA_AI_PROVIDER:'openclaw',QA_OPENCLAW_TOKEN:'legacy-private-token'})
+  assert.equal(cfg.configured, false)
+  let called = false
+  await assert.rejects(requestAnalysisWith(cfg, {
+    input:{findings:[]}, schema:{type:'object'}, fetchImpl:async()=>{called=true},
+  }), /not configured/)
+  assert.equal(called, false)
+})
