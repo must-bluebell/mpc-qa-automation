@@ -34,7 +34,7 @@ jobs:
   #    the two would mean either skipping self-checks or inventing a target.
   static:
     name: Typecheck and copy drift
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     steps:
       - uses: actions/checkout@v7
         with: { persist-credentials: false }
@@ -67,7 +67,7 @@ jobs:
     name: Wallet tests
     # Browser tests run only when a target deployment is supplied.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7

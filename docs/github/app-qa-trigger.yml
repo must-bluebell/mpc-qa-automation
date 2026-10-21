@@ -10,7 +10,7 @@ permissions:
 jobs:
   request-quality:
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     steps:
       - name: Trigger QA against this exact PR head commit
         env:
