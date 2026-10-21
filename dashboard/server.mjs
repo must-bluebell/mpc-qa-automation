@@ -2,7 +2,7 @@
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, statSync, openSync, fstatSync, readSync, closeSync } from 'node:fs'
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ROOT, RUNS_DIR, config, knownSecrets, resolveEnvironment } from '../pipeline/lib/env.mjs'
@@ -16,11 +16,13 @@ import { notifyEvent } from '../pipeline/notify/slack.mjs'
 import { sendBotTest } from '../pipeline/notify/slack-bot.mjs'
 import { slackStatus } from './slack-settings.mjs'
 import { expandSuite, guard } from '../pipeline/orchestrator.mjs'
+import { outputRedactor } from '../pipeline/lib/output-redactor.mjs'
 
 /**
  * Local QA dashboard: browse run history and start suites without opening the WEB MPC project.
  * Security model: loopback bind only; Host header pinned (blocks DNS rebinding); every state-changing
- * request needs the per-process token from the served page, a JSON body and a same-origin Origin;
+ * API access needs a private startup-link session; state-changing requests also need the per-process
+ * token from the served page, a JSON body and a same-origin Origin;
  * suite/env/defect names are whitelisted from config; artifact paths cannot leave their run folder;
  * text artifacts are re-redacted on the way out; nothing secret is ever returned, only "configured" flags.
  */
@@ -30,6 +32,9 @@ const PORT = Number(process.env.QA_DASHBOARD_PORT || 4500)
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`])
 const ALLOWED_ORIGINS = new Set([...ALLOWED_HOSTS].map(h => `http://${h}`))
 const TOKEN = randomBytes(32).toString('hex')
+// Independent of the public page's CSRF token: only the launching user's terminal receives this key.
+const ACCESS_TOKEN = randomBytes(32).toString('hex')
+const SESSION_COOKIE = `mpc_qa_session_${PORT}`
 const JOB_LOG_DIR = join(RUNS_DIR, '.dashboard')
 const MAX_BODY = 4_096
 const REDACT_LIMIT = 8 * 1024 * 1024
@@ -67,6 +72,17 @@ function tokenOk(req) {
   const given = Buffer.from(String(req.headers['x-qa-token'] ?? ''))
   const want = Buffer.from(TOKEN)
   return given.length === want.length && timingSafeEqual(given, want)
+}
+
+function accessOk(value) {
+  if (typeof value !== 'string') return false
+  const given = Buffer.from(value), want = Buffer.from(ACCESS_TOKEN)
+  return given.length === want.length && timingSafeEqual(given, want)
+}
+function sessionOk(req) {
+  const cookie = String(req.headers.cookie ?? '').split(';').map(c => c.trim())
+    .find(c => c.startsWith(`${SESSION_COOKIE}=`))
+  return accessOk(cookie?.slice(SESSION_COOKIE.length + 1))
 }
 
 async function readBody(req) {
@@ -126,11 +142,11 @@ function startRun({ suite, env, seedDefect, ai }) {
   const child = spawn(process.execPath, args, { cwd: ROOT, env: { ...process.env, FORCE_COLOR: '0' }, stdio: ['ignore', 'pipe', 'pipe'] })
   const job = { runId, suite, env, pid: child.pid, startedAt: new Date().toISOString(), logFile, exitCode: undefined }
   jobs.set(runId, job)
-  const write = chunk => log.write(redact(chunk.toString()))
-  child.stdout.on('data', write)
-  child.stderr.on('data', write)
-  child.on('error', error => { log.write(`\n${error.message}\n`); job.exitCode = -1 })
-  child.on('close', code => { job.exitCode = code ?? -1; log.end() })
+  const stdout = outputRedactor(text => log.write(text)), stderr = outputRedactor(text => log.write(text))
+  child.stdout.on('data', chunk => stdout.write(chunk))
+  child.stderr.on('data', chunk => stderr.write(chunk))
+  child.on('error', error => { log.write(redact(`\n${error.message}\n`)); job.exitCode = -1 })
+  child.on('close', code => { stdout.end(); stderr.end(); job.exitCode = code ?? -1; log.end() })
   return { runId }
 }
 
@@ -138,8 +154,23 @@ function jobLog(runId) {
   const job = jobs.get(runId)
   const file = job?.logFile ?? join(JOB_LOG_DIR, `${runId}.log`)
   if (!existsSync(file)) return null
-  const text = readFileSync(file, 'utf8')
-  return { runId, exitCode: job?.exitCode ?? null, running: job ? job.exitCode === undefined : false, log: redact(text.slice(-60_000)) }
+  const fd = openSync(file, 'r')
+  let text
+  try {
+    const size = fstatSync(fd).size
+    // Four bytes per character, plus overlap for a secret crossing the beginning of the read.
+    const overlap = Math.max(0, ...knownSecrets().map(s => Buffer.byteLength(s)))
+    const length = Math.min(size, 60_000 * 4 + overlap), buffer = Buffer.alloc(length)
+    let bytes = 0
+    while (bytes < length) {
+      const read = readSync(fd, buffer, bytes, length - bytes, size - length + bytes)
+      if (!read) break
+      bytes += read
+    }
+    text = redact(buffer.subarray(0, bytes).toString('utf8')).slice(-60_000)
+    if (/^[\uDC00-\uDFFF]/.test(text)) text = text.slice(1)
+  } finally { closeSync(fd) }
+  return { runId, exitCode: job?.exitCode ?? null, running: job ? job.exitCode === undefined : false, log: text }
 }
 
 /** Serves a file inside runs/<id>/ only. Symlinks are resolved first, so they cannot point outside either. */
@@ -192,6 +223,15 @@ async function route(req, res) {
     if (!tokenOk(req)) return send(res, 403, { error: 'Missing or invalid dashboard token (reload the page)' })
   }
 
+  if (req.method === 'POST' && path === '/api/session') {
+    const body = await readBody(req)
+    if (!accessOk(body?.access)) return send(res, 403, { error: 'Invalid private dashboard link' })
+    return send(res, 200, { ok: true }, { 'Set-Cookie': `${SESSION_COOKIE}=${ACCESS_TOKEN}; HttpOnly; SameSite=Strict; Path=/api/` })
+  }
+  if (path.startsWith('/api/') && !sessionOk(req)) {
+    return send(res, 403, { error: 'Open the private dashboard link printed by npm run dashboard.' })
+  }
+
   if (req.method === 'GET' && !path.startsWith('/api/')) return serveStatic(res, path)
   if (req.method === 'GET' && path === '/api/status') return send(res, 200, status())
   if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().slice(-200).reverse())
@@ -230,4 +270,4 @@ const server = http.createServer((req, res) => {
 })
 server.requestTimeout = 30_000
 server.headersTimeout = 15_000
-server.listen(PORT, HOST, () => console.log(`MPC QA dashboard: http://${HOST}:${PORT}  (loopback only)`))
+server.listen(PORT, HOST, () => console.log(`MPC QA dashboard: http://${HOST}:${PORT}/#access=${ACCESS_TOKEN}  (private link; loopback only)`))

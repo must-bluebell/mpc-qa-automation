@@ -75,6 +75,7 @@ export function rebuildIndex() {
 /** Most recent finished run for the same suite + environment, for diffing. Seeded runs compare among themselves. */
 export function previousRun(run) {
   const index = readIndex().filter(r => r.runId !== run.runId && r.suite === run.suite && r.env === run.env
+    && (r.seededDefect || null) === (run.seededDefect || null)
     && r.startedAt < run.startedAt && !['running', 'skipped-overlap'].includes(r.status))
   const last = index.at(-1)
   return last ? readRun(last.runId) : null

@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { chromium, expect } from '@playwright/test'
 
 // Serve the real dashboard in a browser with controlled API responses. No Docker runs or Slack sends.
-async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, startButton = 'Run' } = {}) {
+async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, startButton = 'Run', accessToken } = {}) {
   const browser = await chromium.launch()
   t.after(() => browser.close())
   const page = await browser.newPage()
@@ -28,7 +28,8 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, star
       })
     }
     let data
-    if (pathname === '/api/status') { fixture.statusRequests++; data = status() }
+    if (pathname === '/api/session') { fixture.sessionRequest = route.request().postDataJSON(); data = {ok:true} }
+    else if (pathname === '/api/status') { fixture.statusRequests++; data = status() }
     else if (pathname === '/api/stack') data = { project: 'ui-test', healthy: true }
     else if (pathname === '/api/runs' && route.request().method() === 'POST') { fixture.lastStart = route.request().postDataJSON(); fixture.started = true; data = { runId } }
     else if (pathname === '/api/runs') data = fixture.complete ? [{ runId, suite: 'regression', status: 'passed', counts: { passed: 22 } }] : []
@@ -44,7 +45,7 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, star
     else throw new Error(`Unexpected dashboard request: ${pathname}`)
     await route.fulfill({ json: data })
   })
-  await page.goto('http://dashboard.test/')
+  await page.goto(`http://dashboard.test/${accessToken ? '#access='+accessToken : ''}`)
   if (!scheduled) {
     if (aiChecked !== undefined) await page.getByRole('checkbox', { name: 'AI review' }).setChecked(aiChecked)
     await page.getByRole('button', { name: startButton, exact: true }).click()
@@ -124,4 +125,12 @@ test('slow log requests never overlap interval ticks',async t=>{
   fixture.complete=true
   release()
   await expect(page.locator('pre.log')).toContainText('Finished: 22 passed')
+})
+
+
+test('the private startup link establishes a session and removes its key from the URL',async t=>{
+  const {page,fixture}=await dashboard(t,{accessToken:'private-startup-key'})
+  assert.deepEqual(fixture.sessionRequest,{access:'private-startup-key'})
+  assert.equal(new URL(page.url()).hash,'')
+  assert.equal(fixture.started,true)
 })

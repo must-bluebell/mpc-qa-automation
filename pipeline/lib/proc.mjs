@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { SECRET_KEYS, knownSecrets } from './env.mjs'
+import { outputRedactor } from './output-redactor.mjs'
 
 /** Child environment without our secrets unless the child really needs them (only the wallet tests do). */
 export function childEnv(extra = {}, { passSecrets = false } = {}) {
@@ -25,15 +26,14 @@ export function runProcess(command, args, { cwd, env, timeoutMs, logFile, echo =
     const log = logFile ? createWriteStream(logFile, { mode: 0o600 }) : null
     let tail = ''
     const child = spawn(command, args, { cwd, env: childEnv(env, { passSecrets }), detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
-    const onData = chunk => {
-      let text = chunk.toString()
-      for (const s of secrets) text = text.split(s).join('[REDACTED]')
+    const onData = text => {
       log?.write(text)
       if (echo) process.stdout.write(text)
       tail = (tail + text).slice(-8_000)
     }
-    child.stdout.on('data', onData)
-    child.stderr.on('data', onData)
+    const stdout = outputRedactor(onData, secrets), stderr = outputRedactor(onData, secrets)
+    child.stdout.on('data', chunk => stdout.write(chunk))
+    child.stderr.on('data', chunk => stderr.write(chunk))
     let timedOut = false
     const kill = signal => { try { process.kill(-child.pid, signal) } catch { /* already gone */ } }
     const timer = timeoutMs ? setTimeout(() => { timedOut = true; kill('SIGTERM'); setTimeout(() => kill('SIGKILL'), 10_000).unref() }, timeoutMs) : null
@@ -41,6 +41,7 @@ export function runProcess(command, args, { cwd, env, timeoutMs, logFile, echo =
     process.once('exit', onParentExit)
     child.on('error', error => { tail += `\n${error.message}` })
     child.on('close', (code, signal) => {
+      stdout.end(); stderr.end()
       if (timer) clearTimeout(timer)
       process.off('exit', onParentExit)
       log?.end()

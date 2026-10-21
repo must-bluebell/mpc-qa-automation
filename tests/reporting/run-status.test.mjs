@@ -26,3 +26,10 @@ test('every required step must execute assertions before a combined run can pass
   assert.equal(runStatus({tests:tests.slice(0,1),steps}), 'blocked')
   assert.equal(runStatus({tests:[tests[0],{...row('passed'),step:'wallet'}],steps}), 'passed')
 })
+
+
+test('a timeout takes precedence over assertions recorded before interruption',()=>{
+  for(const kind of ['product','infrastructure']) {
+    assert.equal(runStatus({tests:[row('failed',kind)],steps:[{timedOut:true,exitCode:null}]}),'timeout')
+  }
+})

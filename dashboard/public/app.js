@@ -240,4 +240,13 @@ async function render() {
 
 window.addEventListener('hashchange', () => render())
 setInterval(() => refresh().catch(() => {}), 10_000)
-refresh().then(render).catch(error => app.replaceChildren(h('section', { class: 'panel' }, `Dashboard API unavailable: ${error.message}`)))
+async function connectDashboard() {
+  if (location.hash.startsWith('#access=')) {
+    const access = location.hash.slice('#access='.length)
+    history.replaceState(null, '', location.pathname + location.search)
+    await post('/api/session', { access })
+  }
+  await refresh()
+  await render()
+}
+connectDashboard().catch(error => app.replaceChildren(h('section', { class: 'panel' }, `Dashboard API unavailable: ${error.message}`)))

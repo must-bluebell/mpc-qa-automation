@@ -113,8 +113,10 @@ Wallet readiness checks now allow 60 seconds for the authenticated session and c
 For KST schedules, threaded Slack summaries, bot installation and private configuration, see [Slack scheduler setup](docs/slack-scheduler.md).
 
 ```sh
-npm run dashboard          # http://127.0.0.1:4500
+npm run dashboard          # Open the private link printed in the terminal
 ```
+
+The dashboard prints a private startup link that establishes a browser session for API calls and evidence downloads. Open that link once after each dashboard restart; keep it private. The browser removes the access key from the address bar after use.
 
 The dashboard starts any suite (`smoke`, `api`, `regression`, `uat`, `load`, `full`) on any configured environment, streams live output, and shows run history, grouped failures, load results against SLOs, AI review status, Slack delivery and per-step Playwright HTML reports. The same runs are available from the CLI: `npm run qa:full`, `npm run qa:uat`, `npm run qa:load`, and so on. `npm run stack:status` reports the isolated Docker stack.
 
