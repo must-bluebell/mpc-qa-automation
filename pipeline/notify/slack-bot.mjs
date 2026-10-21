@@ -15,12 +15,24 @@ function settings(options) {
 }
 function load(o) {
   const path=join(o.stateDir,'slack-bot-state.json')
-  if (!existsSync(path)) return {messages:[],runs:{},incidents:{}}
-  return JSON.parse(readFileSync(path,'utf8')) // corrupt state must never silently reset deduplication
+  const backup=`${path}.backup`
+  if (!existsSync(path)&&!existsSync(backup)) return {messages:[],runs:{},incidents:{}}
+  try {return JSON.parse(readFileSync(path,'utf8'))}
+  catch {
+    let state
+    try {state=JSON.parse(readFileSync(backup,'utf8'))}
+    catch {throw new Error('Slack delivery state is unreadable; restore slack-bot-state.json from a verified snapshot before retrying.')}
+    // Restore the same snapshot saved before the primary write, including delivery IDs and receipts.
+    save(o,state)
+    return state
+  }
 }
 function save(o,state) {
   const path=join(o.stateDir,'slack-bot-state.json'), tmp=`${path}.${process.pid}.tmp`
-  writeFileSync(tmp,JSON.stringify(state,null,2),{mode:0o600});renameSync(tmp,path)
+  const data=JSON.stringify(state,null,2)
+  // Both files hold the current snapshot, so recovery cannot replay a previous sent receipt.
+  writeFileSync(`${tmp}.backup`,data,{mode:0o600});renameSync(`${tmp}.backup`,`${path}.backup`)
+  writeFileSync(tmp,data,{mode:0o600});renameSync(tmp,path)
 }
 async function locked(o,work) {
   mkdirSync(o.stateDir,{recursive:true,mode:0o700})

@@ -119,10 +119,18 @@ export async function completeJob(state,job,code,{readRunImpl=readRun,saveRunImp
   }
   // A durable intermediate state closes the crash window between run completion and outbox creation.
   job.status='notifying';job.exitCode=code;job.pid=null;persistImpl(state)
-  publishImpl(run)
-  const delivery=await notify(run)
-  if(!delivery.queued)return
-  job.status='finished';job.finishedAt=new Date().toISOString();persistImpl(state)
+  try {
+    publishImpl(run)
+    const delivery=await notify(run)
+    if(!delivery.queued) {
+      job.reportError='Report publication or notification queueing failed; retry pending.'
+      persistImpl(state);return
+    }
+  }catch {
+    job.reportError='Report publication or notification queueing failed; retry pending.'
+    persistImpl(state);return
+  }
+  job.status='finished';job.finishedAt=new Date().toISOString();delete job.reportError;persistImpl(state)
 }
 
 export async function completeSummaryJob(state,job,spec,{generate=generateHealthSummary,persistImpl=persist}={}) {
@@ -160,7 +168,13 @@ export async function runScheduler({once=false,runNow=null}={}) {
       enqueueDue(state,spec.schedules,new Date(),spec.timezone)
       enqueueRotation(state,spec.rotation,new Date())
       state.pid=process.pid;state.heartbeatAt=new Date().toISOString();persist(state)
-      await flushBotOutbox()
+      try {
+        await flushBotOutbox()
+        delete state.deliveryError
+      }catch {
+        state.deliveryError='Slack outbox delivery failed; retry pending.'
+      }
+      persist(state)
       for(const job of state.jobs.filter(j=>j.status==='notifying'))await finish(job,job.exitCode)
       for(const job of state.jobs.filter(j=>j.status==='running'&&j.kind!=='summary')) {
         const worker=workers.get(job.id)

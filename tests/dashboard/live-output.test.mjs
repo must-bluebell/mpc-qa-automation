@@ -110,3 +110,18 @@ test('automatic AI configuration selects review by default in the dashboard', as
   const { fixture } = await dashboard(t, { aiAuto: true })
   assert.equal(fixture.lastStart.ai, true)
 })
+
+
+test('slow log requests never overlap interval ticks',async t=>{
+  const {page,fixture}=await dashboard(t)
+  let release
+  fixture.holdLog=new Promise(resolve=>{release=resolve})
+  t.after(()=>release())
+  await page.clock.runFor(2100)
+  await expect.poll(()=>fixture.logRequests).toBe(2)
+  await page.clock.runFor(6100)
+  assert.equal(fixture.logRequests,2)
+  fixture.complete=true
+  release()
+  await expect(page.locator('pre.log')).toContainText('Finished: 22 passed')
+})
