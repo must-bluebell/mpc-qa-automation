@@ -24,7 +24,7 @@ export async function verifyPullRequest(plan,{token,fetchImpl=fetch,allowStale=f
   if(!allowStale&&(pr.state!=='open'||pr.head.sha!==plan.appRef))throw new Error('PR must be open and dispatch must match its current head SHA; request checks again for the latest revision.')
   return pr
 }
-export async function reportPullRequest(plan,{token,runUrl,phase,results={},fetchImpl=fetch}={}) {
+export async function reportPullRequest(plan,{token,runUrl,phase,results={},report,fetchImpl=fetch}={}) {
   validate(plan)
   if(!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/.test(runUrl??''))throw new Error('Expected a hosted GitHub Actions run URL.')
   if(!['pending','complete'].includes(phase))throw new Error('Expected pending or complete PR reporting phase.')
@@ -45,9 +45,11 @@ export async function reportPullRequest(plan,{token,runUrl,phase,results={},fetc
   const actor=await api('/user')
   const existing=comments.find(c=>c.user?.login===actor.login&&c.body?.includes(marker))
   const outcome=value=>['success','failure','cancelled','skipped'].includes(value)?value:'not completed'
+  const details=report ? (await import('../pipeline/lib/ci-report.mjs')).formatCiReport(report) : 'QA evidence or AI analysis is unavailable. See the workflow jobs for setup failures.'
   const body=[marker,'### MPC QA before merge',`Commit: \`${plan.appRef}\``,
     `Code and security: ${outcome(results['code-security'])}`,`Full QA: ${outcome(results.qa)}`,
     'Full QA includes API, web regression, UAT and controlled load on a disposable stack.',
+    details,
     `[View report, job results and sanitized downloadable artifact](${runUrl})`,
     'Review failing, skipped and blocked checks in the report before merging.'].join('\n\n')
   await api(existing?`${base}/issues/comments/${existing.id}`:`${base}/issues/${plan.prNumber}/comments`,{method:existing?'PATCH':'POST',body:{body}})
@@ -58,6 +60,11 @@ async function main() {
   const {planGitHubRun}=await import('./github-qa.mjs')
   const event=JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH,'utf8'))
   const plan=planGitHubRun(process.env.GITHUB_EVENT_NAME,event,{appRepository:process.env.WEBAPP_REPOSITORY})
-  await reportPullRequest(plan,{token:process.env.WEBAPP_REPORT_TOKEN,runUrl:process.env.QA_GITHUB_RUN_URL,phase:process.argv[2],results:JSON.parse(process.env.QA_JOB_RESULTS||'{}')})
+  let report
+  if(process.argv[2]==='complete' && process.env.QA_CI_REPORT_FILE) {
+    try { report=(await import('../pipeline/lib/ci-report.mjs')).readCiReport(process.env.QA_CI_REPORT_FILE,
+      `gh-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`, {suite:plan.suite}) } catch { /* status and unavailable notice still publish */ }
+  }
+  await reportPullRequest(plan,{token:process.env.WEBAPP_REPORT_TOKEN,runUrl:process.env.QA_GITHUB_RUN_URL,phase:process.argv[2],report,results:JSON.parse(process.env.QA_JOB_RESULTS||'{}')})
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{console.error(error.message);process.exitCode=1})

@@ -71,7 +71,30 @@ After reviewing and reproducing a defect, annotate the relevant test with `{ typ
 
 ### Optional model review
 
-AI review supports OpenAI and Anthropic. Configure one provider in the private QA `.env`; keep `QA_AI_PROVIDER=none` to run tests without model review.
+AI review supports Codex CLI with a saved ChatGPT login, OpenAI, and Anthropic. Configure one provider in the private QA `.env`; keep `QA_AI_PROVIDER=none` to run tests without model review.
+
+To use your ChatGPT subscription, install the current Codex CLI on the QA host and sign in as the same OS user that runs the dashboard, scheduler, or Actions runner:
+
+```sh
+npm install -g @openai/codex
+export CODEX_HOME="$HOME/.codex-qa"
+codex -c 'cli_auth_credentials_store="file"' login --device-auth
+codex -c 'cli_auth_credentials_store="file"' login status
+```
+
+Select it in `.env`:
+
+```dotenv
+QA_AI_PROVIDER=codex-cli
+QA_CODEX_MODEL=
+QA_AI_AUTO=1
+```
+
+Blank `QA_CODEX_MODEL` uses the Codex default model; set it to a model available to your account to override. `QA_CODEX_BIN` optionally selects an absolute executable path. The CLI must support `exec --ignore-user-config`, `--ignore-rules`, `--ephemeral`, and `--output-schema`. This provider requires a saved ChatGPT login, removes API-key variables from the child environment, and does not fall back to API billing. A missing login, unavailable CLI, subscription limit, or five-minute timeout rejects the review while preserving test results. Provider selection alone does not verify authentication.
+
+Codex runs in a private temporary directory with a read-only sandbox, shell tools and web search disabled, and user configuration ignored. Host skill discovery, plugins, hooks, and project instructions are disabled. The provider refuses a login directory containing global `AGENTS.md` or `AGENTS.override.md` files so unrelated private instructions cannot enter the review. It receives the brief on stdin, requests the existing JSON schema, reads only the final response file, and removes temporary files afterward. CLI diagnostics are suppressed. Use the same dedicated `CODEX_HOME` for local login and the local QA process; the default is `~/.codex` if unset. Never commit that directory or include it in report artifacts. Subscription limits apply. The application PR workflow uses separate GitHub-hosted runners and a dedicated subscription session stored in protected environment secrets, so the Mac can be off. See [Codex non-interactive authentication](https://learn.chatgpt.com/docs/non-interactive-mode) and [GitHub Actions setup](docs/github/README.md#codex-analysis-with-a-chatgpt-login-on-github-hosted-runners).
+
+For direct OpenAI API access, configure:
 
 ```dotenv
 QA_AI_PROVIDER=openai
@@ -96,7 +119,7 @@ To review the standalone Playwright report with the configured provider:
 npm run analyze:ai
 ```
 
-The model reviews approved requirements and redacted execution evidence, summarizes findings, groups likely duplicate failures as hypotheses, and proposes difficult scenarios and regression checks. The OpenAI path uses the Responses API with `store: false`; both providers request structured JSON output. No provider receives recovery phrases, browser storage, trace files, or screenshot contents. Output is validated against recorded evidence before use. Without model configuration, the automatic file remains clearly labelled **model not run**.
+The model reviews approved requirements and redacted execution evidence, summarizes findings, groups likely duplicate failures as hypotheses, and proposes difficult scenarios and regression checks. The OpenAI API path uses the Responses API with `store: false`; all three paths request structured JSON output. No provider receives recovery phrases, browser storage, trace files, or screenshot contents. Output is validated against recorded evidence before use. Without model configuration, the automatic file remains clearly labelled **model not run**.
 
 Generated output is checked against existing evidence IDs and approved requirement IDs. AI cannot promote an unconfirmed defect. Proposed scenarios remain marked **not an acceptance check**; no generated code executes automatically. Review requirement mapping, reproduce a failing assertion, implement the test, run it, and examine evidence before using it for acceptance or release decisions.
 

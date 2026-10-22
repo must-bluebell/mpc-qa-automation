@@ -42,7 +42,7 @@ export function resolveEnvironment(name) {
 
 /** Every secret value we know about, for redaction of anything written to disk or sent to Slack/AI. */
 // Keep retired provider credentials protected when they remain in an upgraded installation's .env.
-export const SECRET_KEYS = ['QA_SEED_PHRASE', 'OPENAI_API_KEY', 'QA_OPENCLAW_TOKEN', 'ANTHROPIC_API_KEY', 'SLACK_ALERT_WEBHOOK_URL', 'SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN', 'SLACK_VERIFICATION_TOKEN', 'CRON_SECRET', 'WEBAPP_READ_TOKEN']
+export const SECRET_KEYS = ['QA_SEED_PHRASE', 'OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_AUTH_JSON', 'CODEX_AUTH_WRITE_TOKEN', 'QA_OPENCLAW_TOKEN', 'ANTHROPIC_API_KEY', 'SLACK_ALERT_WEBHOOK_URL', 'SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN', 'SLACK_VERIFICATION_TOKEN', 'CRON_SECRET', 'WEBAPP_READ_TOKEN', 'WEBAPP_REPORT_TOKEN']
 
 export function knownSecrets() {
   return SECRET_KEYS.map(k => process.env[k]).filter(v => v && v.length >= 8)

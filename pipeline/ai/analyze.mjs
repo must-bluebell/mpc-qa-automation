@@ -40,7 +40,7 @@ export function buildBrief(run, requirements) {
 
 export async function analyzeRun(run, dir = runDir(run.runId), requirements = config.requirements(), { client, fetchImpl } = {}) {
   const cfg = aiConfig()
-  if (!cfg.configured) return { status: 'not-configured', provider: cfg.provider, reason: 'Configure an OpenAI or Anthropic API key.' }
+  if (!cfg.configured) return { status: 'not-configured', provider: cfg.provider, reason: 'Select codex-cli with a saved ChatGPT login, or configure an OpenAI or Anthropic API key.' }
   const { brief, regression } = buildBrief(run, requirements)
   writeFileSync(join(dir, 'ai-input.json'), JSON.stringify(brief, null, 2))
   const started = Date.now()

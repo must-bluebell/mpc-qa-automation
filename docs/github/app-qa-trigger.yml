@@ -4,13 +4,12 @@ on:
   # Base-branch workflow only; never check out or execute PR code here.
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
 permissions:
   contents: read
 jobs:
   request-quality:
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Linux, x64]
+    runs-on: ubuntu-24.04
     steps:
       - name: Trigger QA against this exact PR head commit
         env:
@@ -18,9 +17,11 @@ jobs:
           APP_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           APP_SHA: ${{ github.event.pull_request.head.sha }}
+          QA_REPOSITORY: ${{ vars.QA_REPOSITORY || 'globalmpc/mpc-automation' }}
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$QA_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
           jq -n --arg repo "$APP_REPOSITORY" --arg sha "$APP_SHA" --argjson pr "$PR_NUMBER" \
             '{event_type:"webapp-pr",client_payload:{repository:$repo,sha:$sha,pr_number:$pr}}' \
-            | gh api --method POST repos/must-bluebell/mpc-qa-automation/dispatches --input -
+            | gh api --method POST "repos/$QA_REPOSITORY/dispatches" --input -
