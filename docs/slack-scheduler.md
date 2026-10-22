@@ -30,17 +30,17 @@ Unresolved failures are reconstructed chronologically from real results for the 
 
 A synthetic "adapter did not produce results" failure resolves after the same adapter, project/workload and test filter completes successfully with actual passing assertions. A partial smoke run cannot clear a failed full-regression adapter. Historical failure records remain available for audit.
 
-The current environment is `local-docker`, Compose project `mpc-qa-web-20261019`, created after the previous stack refused unsafe chain snapshot restoration on October 19. `web-isolated` is an alias for the same database and chains; run suites sequentially:
+The current environment is `local-docker`, Compose project `mpc-qa-dashboard-20261021`. `web-isolated` is an alias for the same database and chains; run suites sequentially:
 
 | Service | Host endpoint | Container port |
 | --- | --- | --- |
-| WEB MPC (Next.js development server) | http://localhost:3420 | 3400 |
-| BSC Anvil (chain 97) | http://localhost:8565 | 8545 |
-| opBNB Anvil (chain 5611) | http://localhost:8566 | 8545 |
-| PostgreSQL 16 | localhost:5450 | 5432 |
-| Neon HTTP proxy | http://localhost:4464 | 4444 |
+| WEB MPC (Next.js development server) | http://localhost:3460 | 3400 |
+| BSC Anvil (chain 97) | http://localhost:8605 | 8545 |
+| opBNB Anvil (chain 5611) | http://localhost:8606 | 8545 |
+| PostgreSQL 16 | localhost:5490 | 5432 |
+| Neon HTTP proxy | http://localhost:4494 | 4444 |
 
-UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3420` as the Origin and SIWE domain. Host-side browsers use port 3420. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
+UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3460` as the Origin and SIWE domain. Host-side browsers use port 3460. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
 
 Both chains in `mpc-qa-web-20261015` refused restoration after an unclean shutdown. That project’s volumes, the earlier `mpc-qa-recovery-20261011-1752` volumes and all older volumes remain preserved. The active project uses fresh chains and a fresh database, and enables compiler-cache eviction to avoid Docker memory exhaustion. Use `npm run stack:status` to confirm all required services are healthy before running suites.
 
@@ -98,7 +98,7 @@ Every Playwright step writes Allure results to `runs/<runId>/allure-results/`. B
 
 When `QA_ALLURE_BASE_URL` is set, the Slack summary adds `Allure: <base>/<runId>/index.html`. The same HTTPS rules as `QA_REPORT_BASE_URL` apply. Hosting is a deployment step, for example `aws s3 sync runs/allure s3://your-bucket/allure --exclude history.jsonl` after each run. Unlike `runs/published/`, Allure reports are **not** sanitized: they contain screenshots, traces, video and raw error text, so serve them only behind team-only access (SSO or VPN), never publicly. View one locally with `npx allure open runs/allure/<runId>`.
 
-Every configured test schedule explicitly requests AI review, including passing runs. Manual runs inherit `QA_AI_AUTO=1` for failures and blocked runs unless `--ai` or `--no-ai` is supplied. The local Ollama provider requires Ollama to be running on the pipeline host with `gpt-oss:20b` downloaded. AI failures are recorded separately from assertion outcomes and can be retried with `node pipeline/ai/analyze.mjs <runId>`; AI has no durable retry outbox.
+Every configured test schedule explicitly requests AI review, including passing runs. Manual runs inherit `QA_AI_AUTO=1` for failures and blocked runs unless `--ai` or `--no-ai` is supplied. AI review requires an explicitly configured OpenAI or Anthropic provider with its API key. Set `QA_AI_PROVIDER=none` to disable it. AI failures are recorded separately from assertion outcomes and can be retried with `node pipeline/ai/analyze.mjs <runId>`; AI has no durable retry outbox.
 
 AI uses the existing approved-requirement validation and cannot change assertion outcomes. It remains optional; an exhausted API credit balance does not prevent tests or Slack delivery.
 

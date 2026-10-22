@@ -6,7 +6,7 @@ This repository has its own [Dockerfile](../Dockerfile) and [Compose service](..
 
 Use Docker Engine with Compose on Linux. Docker Desktop on macOS also works with **Settings → Resources → Network → Enable host networking** enabled; see [Docker's host networking documentation](https://docs.docker.com/engine/network/drivers/host/).
 
-Host networking keeps the existing loopback-only dashboard, isolated-write/load safeguards, application URLs and local Ollama URL working. There are no published `ports` mappings. The dashboard stays on `127.0.0.1` and must be accessed locally or through an SSH tunnel. The automation service uses the host Docker socket to inspect and manage the separate application stack; give this access only to the trusted QA runner.
+Host networking keeps the existing loopback-only dashboard, isolated-write/load safeguards, and application URLs working. There are no published `ports` mappings. The dashboard stays on `127.0.0.1` and must be accessed locally or through an SSH tunnel. The automation service uses the host Docker socket to inspect and manage the separate application stack; give this access only to the trusted QA runner.
 
 Keep both repositories on the same Docker host. The application's checkout path must match `stack.webmpcPath` in [environments.json](../pipeline/config/environments.json), resolved relative to the automation checkout. With the current profiles the layout is:
 

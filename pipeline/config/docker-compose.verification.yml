@@ -3,6 +3,6 @@
 services:
   web:
     environment:
-      NODE_OPTIONS: "--max-old-space-size=3072 --import=/qa-runtime/next-worker.mjs"
+      NODE_OPTIONS: "--max-old-space-size=1536 --import=/qa-runtime/next-worker.mjs"
     volumes:
       - "${QA_POOL_CONFIG_DIR:?QA pool config directory is required}/../docker:/qa-runtime:ro"

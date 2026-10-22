@@ -71,22 +71,16 @@ After reviewing and reproducing a defect, annotate the relevant test with `{ typ
 
 ### Optional model review
 
-The default local setup uses Ollama with `gpt-oss:20b`. On the pipeline host, install Ollama, start its service (`ollama serve` if it is not already running), then download the model:
-
-```sh
-ollama pull gpt-oss:20b
-```
-
-Configure the private QA `.env`:
+AI review supports OpenAI and Anthropic. Configure one provider in the private QA `.env`; keep `QA_AI_PROVIDER=none` to run tests without model review.
 
 ```dotenv
-QA_AI_PROVIDER=ollama
-QA_AI_MODEL=gpt-oss:20b
-QA_AI_BASE_URL=http://127.0.0.1:11434
+QA_AI_PROVIDER=openai
+OPENAI_API_KEY=your-private-api-key
+OPENAI_MODEL=your-selected-model
 QA_AI_AUTO=1
 ```
 
-Ollama and the pipeline must run on the same host. The adapter accepts only loopback HTTP endpoints and refuses redirects. No gateway or API token is required.
+For Anthropic, set `QA_AI_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_MODEL` instead.
 
 Review an existing completed pipeline run without rerunning tests:
 
@@ -94,21 +88,19 @@ Review an existing completed pipeline run without rerunning tests:
 node pipeline/ai/analyze.mjs <runId>
 ```
 
-Success requires `status: "ok"`; results are saved under `runs/<runId>/ai-analysis.json` and shown in the dashboard. Model service outages, quota failures, malformed output and missing evidence references produce a rejected review while preserving test outcomes. There is no durable AI retry queue; use the saved-run command to retry. Restart the dashboard and scheduler after changing provider settings. Smoke schedules inherit automatic failure-only review; nightly regression explicitly requests review on every result. Per-schedule `ai: true` or `ai: false` overrides automatic mode and is preserved in durable queued jobs.
+Success requires `status: "ok"`; results are saved under `runs/<runId>/ai-analysis.json` and shown in the dashboard. Model service outages, quota failures, malformed output and missing evidence references produce a rejected review while preserving test outcomes. There is no durable AI retry queue; use the saved-run command to retry. Restart the dashboard and scheduler after changing provider settings. Configured test schedules explicitly request AI review, including passing runs. Per-schedule `ai: true` or `ai: false` overrides automatic mode and is preserved in durable queued jobs.
 
-For local analysis without an API key, start Ollama, install a model (`ollama pull gpt-oss:20b`), and set `QA_AI_PROVIDER=ollama` and `QA_AI_MODEL=gpt-oss:20b` in `.env`. The default endpoint is `http://127.0.0.1:11434`; only local loopback endpoints are accepted. A Mac with 16 GB of memory has limited room for this model alongside Docker, so avoid running model inference during load measurements. The download is large and is a separate installation step. [Official local GPT-OSS guide](https://developers.openai.com/cookbook/articles/gpt-oss/run-locally-ollama).
-
-Alternatively configure `OPENAI_API_KEY` and `OPENAI_MODEL`, or the existing Anthropic provider. Then run:
+To review the standalone Playwright report with the configured provider:
 
 ```sh
 npm run analyze:ai
 ```
 
-The model reviews approved requirements and redacted execution evidence, summarizes findings, groups likely duplicate failures as hypotheses, and proposes difficult scenarios and regression checks. Ollama uses local structured JSON output without credentials; the OpenAI path uses the Responses API with `store: false`. No provider receives recovery phrases, browser storage, trace files, or screenshot contents. Output is validated against recorded evidence before use. Without model configuration, the automatic file remains clearly labelled **model not run**.
+The model reviews approved requirements and redacted execution evidence, summarizes findings, groups likely duplicate failures as hypotheses, and proposes difficult scenarios and regression checks. The OpenAI path uses the Responses API with `store: false`; both providers request structured JSON output. No provider receives recovery phrases, browser storage, trace files, or screenshot contents. Output is validated against recorded evidence before use. Without model configuration, the automatic file remains clearly labelled **model not run**.
 
 Generated output is checked against existing evidence IDs and approved requirement IDs. AI cannot promote an unconfirmed defect. Proposed scenarios remain marked **not an acceptance check**; no generated code executes automatically. Review requirement mapping, reproduce a failing assertion, implement the test, run it, and examine evidence before using it for acceptance or release decisions.
 
-The dashboard's **AI review** checkbox applies to Run, Run everything, and Smoke. Checking it reviews the selected run after tests finish; unchecking it explicitly skips review for that run. Set `QA_AI_AUTO=1` to select the checkbox by default and automatically review failed, blocked, timed-out, or infrastructure-failed CLI and scheduled runs. Passing scheduled runs skip automatic review. CLI `--ai` and `--no-ai` override automatic mode. Restart the dashboard and scheduler after changing `.env`. View the result in the run's AI review panel and `ai-analysis.json`; AI does not change test outcomes.
+The dashboard's **AI review** checkbox applies to Run, Run everything, and Smoke. Checking it reviews the selected run after tests finish; unchecking it explicitly skips review for that run. Set `QA_AI_AUTO=1` to select the checkbox by default and automatically review failed, blocked, timed-out, or infrastructure-failed CLI and scheduled runs. Passing runs skip automatic failure-only review unless their schedule explicitly requests AI. CLI `--ai` and `--no-ai` override automatic mode. Restart the dashboard and scheduler after changing `.env`. View the result in the run's AI review panel and `ai-analysis.json`; AI does not change test outcomes.
 
 `config/qa-evaluation.json` assigns 45% to execution reliability, 40% to confirmed defect detection, 10% to coverage and 5% to AI usefulness. No score is invented from a single passing run: history, reference defects, coverage and validated contributions must be measured first. The cart failure in the requested notification example is retained as an unapproved illustration, not a reported defect or an approved requirement.
 
