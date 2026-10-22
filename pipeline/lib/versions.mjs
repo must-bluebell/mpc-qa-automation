@@ -33,7 +33,7 @@ export function testSuiteVersion() {
 /** Application version: local WEB MPC checkout (commit or source mtime fingerprint) or the remote deployment id. */
 export async function appVersion(env) {
   if (process.env.QA_VERSION) return { id: process.env.QA_VERSION, source: 'QA_VERSION' }
-  if (env.stack?.webmpcPath) {
+  if (env.externalRepositoriesAllowed !== false && env.stack?.webmpcPath) {
     const path = resolve(ROOT, env.stack.webmpcPath)
     const commit = git(path, 'rev-parse', '--short', 'HEAD')
     if (commit) return { id: commit, source: 'webmpc-git' }

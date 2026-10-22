@@ -36,7 +36,7 @@ export function resolveEnvironment(name) {
   const baseUrl = (profile.baseUrlEnv ? process.env[profile.baseUrlEnv] : profile.baseUrl) || ''
   if (!baseUrl) throw new Error(`Environment "${name}" needs ${profile.baseUrlEnv} in .env`)
   const isolated = !!profile.isolated && isLoopback(baseUrl)
-  return { name, ...profile, baseUrl: baseUrl.replace(/\/+$/, ''), appOrigin: (profile.appOrigin || baseUrl).replace(/\/+$/, ''), isolated,
+  return { name, ...profile, externalRepositoriesAllowed: process.env.QA_EXTERNAL_REPOSITORIES !== '0', baseUrl: baseUrl.replace(/\/+$/, ''), appOrigin: (profile.appOrigin || baseUrl).replace(/\/+$/, ''), isolated,
     allowWrites: !!profile.allowWrites && isolated, allowLoad: !!profile.allowLoad && isolated, allowSeededDefects: !!profile.allowSeededDefects && isolated }
 }
 

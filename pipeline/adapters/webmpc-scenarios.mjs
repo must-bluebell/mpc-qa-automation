@@ -28,6 +28,12 @@ function walk(suite, file, out) {
 }
 
 export async function runWebmpcStep(step, ctx) {
+  if (ctx.env.externalRepositoriesAllowed === false) {
+    const reason = 'Repository scope limits execution to mpc-automation; external application scenarios were not run.'
+    return { tests: [{key:'webmpc-scenarios:scope',title:'External application scenarios blocked by repository scope',
+      adapter:'webmpc-scenarios',project:null,status:'blocked',skipReason:reason,annotations:[{type:'blocked',description:reason}],
+      tags:['@uat'],errors:[],evidence:[],durationMs:0,retries:0}],errors:[],exitCode:null }
+  }
   const webmpc = resolve(ROOT, ctx.env.stack?.webmpcPath ?? '../WEB MPC')
   if (!existsSync(join(webmpc, 'playwright.local.config.ts'))) {
     return { tests: [], errors: [`WEB MPC checkout not found at ${webmpc}`], infra: 'WEB MPC checkout missing' }

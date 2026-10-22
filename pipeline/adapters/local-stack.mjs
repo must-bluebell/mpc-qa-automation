@@ -52,13 +52,16 @@ export function pooledDatabaseUrl(value) {
   return url.href
 }
 
-export async function stackStatus(env) {
+export async function stackStatus(env, {execImpl=exec}={}) {
   if (!env.stack) return null
   try {
-    const { cwd, env: ports, args } = composeArgs(env, ['ps', '--format', 'json'])
-    const { stdout } = await exec('docker', args, { cwd, env: childEnv(ports), timeout: 20_000 })
-    const services = stdout.trim().split('\n').filter(Boolean).flatMap(line => { const v = JSON.parse(line); return Array.isArray(v) ? v : [v] })
-      .map(s => ({ service: s.Service, state: s.State, health: s.Health || null, status: s.Status }))
+    // Inspect the already-running project without loading Compose files or another checkout's .env.
+    const options={env:childEnv(),timeout:20_000}
+    const {stdout:ids}=await execImpl('docker',['ps','--all','--quiet','--filter',`label=com.docker.compose.project=${env.stack.composeProject}`],options)
+    const containers=ids.trim()?JSON.parse((await execImpl('docker',['inspect',...ids.trim().split(/\s+/)],options)).stdout):[]
+    const services=containers.filter(s=>String(s.Config?.Labels?.['com.docker.compose.oneoff']).toLowerCase()!=='true')
+      .map(s=>({service:s.Config?.Labels?.['com.docker.compose.service'],state:s.State?.Status,
+      health:s.State?.Health?.Status||null,status:s.State?.Status}))
     return { project: env.stack.composeProject, ...evaluateStackHealth(services, env.stack), services }
   } catch (error) {
     return { project: env.stack.composeProject, healthy: false, services: [], error: /Cannot connect|daemon/i.test(String(error.stderr ?? error.message)) ? 'Docker is not running' : String(error.message).slice(0, 300) }
@@ -73,11 +76,13 @@ export function evaluateStackHealth(services, { databasePool = false } = {}) {
 }
 
 export async function stackUp(env, {build=true}={}) {
+  if(env.externalRepositoriesAllowed===false)throw new Error('Repository scope forbids starting a stack from another checkout.')
   const { cwd, env: ports, args } = composeArgs(env, ['up', '-d', ...(build?['--build']:['--no-build']), '--wait', '--wait-timeout', '1500'])
   return runProcess('docker', args, { cwd, env: ports, timeoutMs: 1_800_000 })
 }
 
 export async function stackDown(env, { volumes = false } = {}) {
+  if(env.externalRepositoriesAllowed===false)throw new Error('Repository scope forbids stopping a stack using another checkout.')
   const cwd = resolve(ROOT, env.stack.webmpcPath)
   // No application checkout means no stack was ever started from it, so there is nothing to stop.
   if (!existsSync(resolve(cwd, 'docker/docker-compose.yml'))) {
