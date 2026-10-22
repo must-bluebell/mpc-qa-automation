@@ -1,11 +1,39 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn, execFileSync } from 'node:child_process'
 
 const moduleUrl = new URL('../../pipeline/lib/lock.mjs', import.meta.url).href
+
+test('a previous container namespace cannot keep a reused live PID locked', { skip: process.platform !== 'linux' }, async t => {
+  const { acquireLock, readLock } = await import(moduleUrl)
+  const directory = mkdtempSync(join(tmpdir(), 'qa-namespace-lock-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  writeFileSync(join(directory, 'pipeline.lock'), JSON.stringify({
+    runId: 'previous-container', pid: process.pid, pidNamespace: 'pid:[previous-container]', startedAt: '2000-01-01',
+  }))
+  assert.equal(readLock('pipeline', { directory }).stale, true)
+  const lock = acquireLock('new-container', 'pipeline', { directory })
+  try {
+    assert.equal(readLock('pipeline', { directory }).stale, false)
+    assert.throws(() => acquireLock('contender', 'pipeline', { directory }), /Another pipeline run/)
+  } finally { lock.release() }
+})
+
+test('a previous process cannot keep its lock when a container reuses both PID and namespace', { skip: process.platform !== 'linux' }, async t => {
+  const { acquireLock, readLock } = await import(moduleUrl)
+  const directory = mkdtempSync(join(tmpdir(), 'qa-reused-pid-lock-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  writeFileSync(join(directory, 'pipeline.lock'), JSON.stringify({
+    runId: 'previous-process', pid: process.pid, pidStartTime: 'previous-start', startedAt: '2000-01-01',
+  }))
+  assert.equal(readLock('pipeline', { directory }).stale, true)
+  const lock = acquireLock('new-process', 'pipeline', { directory })
+  try { assert.equal(readLock('pipeline', { directory }).stale, false) }
+  finally { lock.release() }
+})
 
 test('a live owner cannot be replaced because its heartbeat is old', () => {
   const dir = mkdtempSync(join(tmpdir(), 'qa-live-lock-'))

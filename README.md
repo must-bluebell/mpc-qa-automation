@@ -4,6 +4,8 @@ Playwright tests for wallet discovery, connection, SIWE sign-in, connected-addre
 
 ## Setup
 
+To run the automation runner, dashboard and Slack scheduler in their own container, use the root [Dockerfile](Dockerfile), [docker-compose.yml](docker-compose.yml), and [DevOps Docker instructions](docs/docker.md).
+
 ```sh
 npm ci
 npx playwright install chromium

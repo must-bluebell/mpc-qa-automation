@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync, renameSync, rmdirSync } from 'node:fs'
+import { mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync, renameSync, rmdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { RUNS_DIR } from './env.mjs'
@@ -10,6 +10,17 @@ import { RUNS_DIR } from './env.mjs'
  * A live PID always keeps its lock, even if its event loop delays heartbeats.
  */
 const LOCK_DIR = join(RUNS_DIR, '.locks')
+// Container restarts can reuse PIDs while retaining lock files on the host.
+const PID_NAMESPACE = (() => { try { return readlinkSync('/proc/self/ns/pid') } catch { return null } })()
+
+/** Linux process birth time also distinguishes restarts that retain the same PID namespace. */
+export function processStartTime(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return null
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    return stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[19] || null
+  } catch { return null }
+}
 
 export class LockBusyError extends Error {
   constructor(holder) { super(`Another pipeline run is in progress (${holder.runId}, pid ${holder.pid}, since ${holder.startedAt})`); this.holder = holder }
@@ -25,7 +36,10 @@ export function readLock(name = 'pipeline', { directory = LOCK_DIR } = {}) {
     const value = JSON.parse(readFileSync(join(directory, `${name}.lock`), 'utf8'))
     // Older Slack locks contain only a PID.
     const holder = typeof value === 'number' ? { pid: value, runId: 'legacy-slack', startedAt: 'unknown' } : value
-    return { ...holder, stale: !alive(holder.pid) }
+    const otherNamespace = !!(PID_NAMESPACE && holder.pidNamespace && holder.pidNamespace !== PID_NAMESPACE)
+    const started = processStartTime(holder.pid)
+    const reusedPid = !!(holder.pidStartTime && started && holder.pidStartTime !== started)
+    return { ...holder, stale: otherNamespace || reusedPid || !alive(holder.pid) }
   } catch { return null }
 }
 
@@ -53,7 +67,7 @@ export function acquireLock(runId, name = 'pipeline', { directory = LOCK_DIR } =
   const body = guarded(path, () => {
     const existing = readLock(name, { directory })
     if (existing && !existing.stale) throw new LockBusyError(existing)
-    const holder = { runId, token: randomUUID(), pid: process.pid, startedAt: now, heartbeatAt: now,
+    const holder = { runId, token: randomUUID(), pid: process.pid, pidNamespace: PID_NAMESPACE, pidStartTime: processStartTime(process.pid), startedAt: now, heartbeatAt: now,
       tookOverFrom: existing?.stale ? existing.runId : null }
     if (existing?.stale) rmSync(path)
     try { writeFileSync(path, JSON.stringify(holder), { flag: 'wx', mode: 0o600 }) }

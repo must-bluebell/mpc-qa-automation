@@ -6,6 +6,14 @@ import { redactValue } from '../../pipeline/lib/safe-output.mjs'
 
 const schedules = [{ id: 'web-30m', suite: 'regression', env: 'local-docker', cron: '*/30 * * * *', graceMinutes: 60, enabled: true }]
 const rotation={id:'qa-rotation',suites:['regression','uat','api','load'],env:'local-docker',gapMinutes:30,enabled:true}
+test('scheduler recovery does not mistake a previous container worker for a reused live PID', async () => {
+  const { workerAlive } = await import('../../pipeline/scheduler.mjs')
+  const job = { pid: process.pid, pidNamespace: 'pid:[old]' }
+  assert.equal(workerAlive(job, 'pid:[new]'), false)
+  assert.equal(workerAlive(job, 'pid:[old]'), true)
+  if (process.platform === 'linux') assert.equal(workerAlive({ ...job, pidStartTime: 'previous-start' }, 'pid:[old]'), false)
+  assert.equal(workerAlive({ pid: 2147483647 }, 'pid:[new]'), false)
+})
 test('rotation starts with web, waits thirty minutes after completion and repeats in order',()=>{
   const state={jobs:[]},start=new Date('2026-10-10T05:00:00Z')
   enqueueRotation(state,rotation,start)

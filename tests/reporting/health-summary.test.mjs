@@ -107,10 +107,15 @@ test('unresolved failures carry over the window, close only on a later explicit 
  assert.doesNotMatch(JSON.stringify(r)+text,/private unknown title/)
 })
 
-test('daily report supplies working local dashboard links when shared hosting is unconfigured',()=>{
+test('daily report supplies working local dashboard links when shared hosting is unconfigured',t=>{
+ const previous=process.env.QA_DASHBOARD_PORT
+ t.after(()=>{if(previous===undefined)delete process.env.QA_DASHBOARD_PORT;else process.env.QA_DASHBOARD_PORT=previous})
+ delete process.env.QA_DASHBOARD_PORT
  const r=buildHealthSummary({end,env:'local-docker',schedules:[],jobs:[],runs:[run()]})
  assert.match(renderHealthSummary(r),/http:\/\/127\.0\.0\.1:4500\/#\/runs\/run-1/)
  assert.match(renderHealthSummary(r),/local scheduler host/)
+ process.env.QA_DASHBOARD_PORT='4501'
+ assert.match(renderHealthSummary(r),/http:\/\/127\.0\.0\.1:4501\/#\/runs\/run-1/)
 })
 
 test('a completed execution with product failures clears an older infrastructure outage',()=>{
