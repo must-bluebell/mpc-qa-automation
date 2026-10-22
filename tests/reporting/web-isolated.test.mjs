@@ -12,14 +12,17 @@ test('web setup refuses remote or non-isolated stack profiles before enabling wr
   ]) assert.throws(() => webTestEnvironment(profile), /isolated local stack/)
 })
 
-test('web setup preserves the existing stack and binds origin to its new local target', () => {
-  const profile = { baseUrl: 'http://localhost:3410', isolated: true, stack: { composeProject: 'existing', ports: { web: 3410 } } }
+test('web setup uses the supplied stack target and ports without mutating the profile', () => {
+  const profile = { baseUrl: 'http://localhost:3410', appOrigin: 'http://127.0.0.1:3410', isolated: true,
+    stack: { composeProject: 'existing', ports: { web: 3410, anvil: 8555, opbnbAnvil: 8556, postgres: 5440, neonProxy: 4454 } } }
+  const original = structuredClone(profile)
   const env = webTestEnvironment(profile)
-  assert.notEqual(env.stack.composeProject, profile.stack.composeProject)
-  assert.notEqual(env.stack.ports.web, profile.stack.ports.web)
-  assert.equal(env.appOrigin, env.baseUrl)
-  assert.equal(profile.stack.composeProject, 'existing')
-  assert.equal(profile.stack.ports.web, 3410)
+  assert.equal(env.baseUrl, 'http://localhost:3410')
+  assert.equal(env.appOrigin, 'http://127.0.0.1:3410')
+  assert.equal(env.stack.composeProject, 'existing')
+  assert.deepEqual(env.stack.ports, original.stack.ports)
+  env.stack.ports.web = 9999
+  assert.deepEqual(profile, original)
 })
 
 test('only the isolated verification profile receives the bounded-memory diagnostic overlay', () => {
@@ -34,6 +37,9 @@ test('default QA and verification aliases target the same verified stack with ru
   const verified = resolveEnvironment('web-isolated')
   const standalone = webTestEnvironment()
   assert.equal(standalone.stack.composeProject, active.stack.composeProject)
+  assert.equal(standalone.baseUrl, verified.baseUrl)
+  assert.equal(standalone.appOrigin, verified.appOrigin)
+  assert.deepEqual(standalone.stack.ports, verified.stack.ports)
   assert.equal(active.baseUrl, verified.baseUrl)
   assert.equal(active.appOrigin, active.baseUrl)
   assert.equal(active.stack.composeProject, verified.stack.composeProject)

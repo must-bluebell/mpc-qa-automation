@@ -1,14 +1,13 @@
 import { isLoopback, resolveEnvironment } from './env.mjs'
 
 /** Resolve the verified QA target without mutating the supplied profile. */
-export function webTestEnvironment(profile = resolveEnvironment('local-docker')) {
+export function webTestEnvironment(profile = resolveEnvironment('web-isolated')) {
   if (!profile.isolated || !isLoopback(profile.baseUrl) || !profile.stack) {
     throw new Error('Web fixture setup requires an isolated local stack')
   }
   return {
-    ...profile, name: 'web-isolated', baseUrl: 'http://localhost:3420', appOrigin: 'http://localhost:3420',
+    ...profile, name: 'web-isolated',
     allowWrites: true, navigation: 'activities',
-    stack: { ...profile.stack, composeProject: resolveEnvironment('web-isolated').stack.composeProject,
-      ports: { web: 3420, anvil: 8565, opbnbAnvil: 8566, postgres: 5450, neonProxy: 4464 } },
+    stack: { ...profile.stack, ports: { ...profile.stack.ports } },
   }
 }
