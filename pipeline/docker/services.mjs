@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const services = ['dashboard/server.mjs']
 if (process.env.QA_SCHEDULER_ENABLED === '1') services.push('pipeline/scheduler.mjs')
+if (process.env.QA_SLACK_AGENT_ENABLED === '1') services.push('pipeline/slack-agent/server.mjs')
 const children = new Set()
 let stopping = false, result = 0, deadline
 

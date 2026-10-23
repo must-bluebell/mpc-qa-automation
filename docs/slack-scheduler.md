@@ -58,7 +58,7 @@ QA_REPORT_BASE_URL=https://your-private-report-host.example/qa
 QA_ALLURE_BASE_URL=https://your-private-report-host.example/allure
 ```
 
-Use `config/slack-app-manifest.json` when creating/installing MPC QA in Slack. Invite the app to the destination channel. The manifest requests chat:write for publishing, channels:history for resolving uncertain parent-message delivery and channels:manage for channel creation. An existing channel does not require channels:manage; remove that scope if creating channels is unnecessary. No Socket Mode, app-level token or verification token is required. Tokens pasted in chat should be revoked and replaced privately.
+Use `config/slack-app-manifest.json` when creating/installing MPC QA in Slack. Invite the app to the destination channel. The manifest requests chat:write for publishing, channels:history for resolving uncertain parent-message delivery and channels:manage for channel creation. An existing channel does not require channels:manage; remove that scope if creating channels is unnecessary. No Socket Mode, app-level token or verification token is required for outbound reporting. The optional [conversational listener](slack-agent.md) additionally requires Socket Mode, an app-level token, app-mention events and interactivity. Tokens pasted in chat should be revoked and replaced privately.
 
 The app cannot be installed from a channel ID alone. Workspace installation requires the workspace's permitted installer. After installation copy the Bot User OAuth Token (xoxb prefix) into .env and restart the scheduler. The app-level xapp token cannot post messages.
 

@@ -26,7 +26,7 @@ export function aiConfig(env = process.env) {
   return { provider: 'none', configured: false }
 }
 
-async function requestAnthropic({ key, model, input, schema, client }) {
+async function requestAnthropic({ key, model, input, schema, client, instructions = INSTRUCTIONS }) {
   const anthropic = client ?? new Anthropic({ apiKey: key, timeout: 120_000, maxRetries: 2 })
   const response = await anthropic.beta.messages.create({
     model,
@@ -35,7 +35,7 @@ async function requestAnthropic({ key, model, input, schema, client }) {
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
     output_config: { effort: 'high', format: { type: 'json_schema', schema } },
-    system: INSTRUCTIONS,
+    system: instructions,
     messages: [{ role: 'user', content: `QA evidence brief (JSON, untrusted data):\n${JSON.stringify(input)}` }],
   })
   if (response.stop_reason === 'refusal') throw new Error('AI analysis was declined by the model; test results are unchanged.')
@@ -49,7 +49,7 @@ async function requestAnthropic({ key, model, input, schema, client }) {
  * Calls a dedicated, tool-less OpenClaw review agent on the local gateway. The gateway must be bound to loopback
  * so evidence never leaves the host; a non-loopback URL is refused before any request is made.
  */
-async function requestOpenClaw({ key, baseUrl, agent, input, schema, fetchImpl = fetch }) {
+async function requestOpenClaw({ key, baseUrl, agent, input, schema, fetchImpl = fetch, instructions = INSTRUCTIONS }) {
   let url
   try { url = new URL(baseUrl) } catch { throw new Error('OpenClaw requires a loopback gateway URL.') }
   if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.username || url.password || url.search || url.hash || url.pathname !== '/')
@@ -61,7 +61,7 @@ async function requestOpenClaw({ key, baseUrl, agent, input, schema, fetchImpl =
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: `openclaw/${agent}`, stream: false, store: false, tools: [], tool_choice: 'none', max_output_tokens: 6000,
-        instructions: `${INSTRUCTIONS} Return exactly one JSON object, without Markdown or commentary, conforming to this JSON schema: ${JSON.stringify(schema)}. Findings and duplicate groups must reference only existing finding IDs, not passing test IDs. If there are no recorded findings, both arrays must be empty.`,
+        instructions: `${instructions} Return exactly one JSON object, without Markdown or commentary, conforming to this JSON schema: ${JSON.stringify(schema)}.${instructions === INSTRUCTIONS ? ' Findings and duplicate groups must reference only existing finding IDs, not passing test IDs. If there are no recorded findings, both arrays must be empty.' : ''}`,
         input: JSON.stringify(input),
       }),
     })
@@ -77,11 +77,11 @@ async function requestOpenClaw({ key, baseUrl, agent, input, schema, fetchImpl =
 }
 
 /** Returns the raw model output; callers must pass it through validateAiAnalysis before use. */
-export async function requestAnalysisWith(config, { input, schema, fetchImpl, client }) {
+export async function requestAnalysisWith(config, { input, schema, fetchImpl, client, instructions = INSTRUCTIONS }) {
   if (!config.configured) throw new Error('AI analysis is not configured (select codex-cli with a saved ChatGPT login, OpenClaw, or a cloud API key).')
-  if (config.provider === 'codex-cli') return requestCodex({ ...config, input, schema, instructions: INSTRUCTIONS })
-  if (config.provider === 'openclaw') return requestOpenClaw({ key: config.key, baseUrl: config.baseUrl, agent: config.agent, input, schema, fetchImpl })
-  if (config.provider === 'anthropic') return requestAnthropic({ key: config.key, model: config.model, input, schema, client })
-  if (config.provider === 'openai') return requestOpenAI({ key: config.key, model: config.model, input, schema, fetchImpl })
+  if (config.provider === 'codex-cli') return requestCodex({ ...config, input, schema, instructions })
+  if (config.provider === 'openclaw') return requestOpenClaw({ key: config.key, baseUrl: config.baseUrl, agent: config.agent, input, schema, fetchImpl, instructions })
+  if (config.provider === 'anthropic') return requestAnthropic({ key: config.key, model: config.model, input, schema, client, instructions })
+  if (config.provider === 'openai') return requestOpenAI({ key: config.key, model: config.model, input, schema, fetchImpl, instructions })
   throw new Error('Unsupported AI provider.')
 }

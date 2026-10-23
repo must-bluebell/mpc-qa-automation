@@ -133,6 +133,8 @@ Wallet readiness checks now allow 60 seconds for the authenticated session and c
 
 For KST schedules, threaded Slack summaries, bot installation and private configuration, see [Slack scheduler setup](docs/slack-scheduler.md).
 
+The existing Slack app also supports an opt-in conversational Socket Mode listener for evidence-based questions and authorized, confirmed reruns. See [conversational agent setup](docs/slack-agent.md). It uses a separate app-level token and preserves the scheduler's execution and repository restrictions.
+
 ```sh
 npm run dashboard          # Open the private link printed in the terminal
 ```

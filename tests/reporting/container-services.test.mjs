@@ -6,13 +6,14 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-function serviceFixture(t, { scheduler = '1', fail = false } = {}) {
+function serviceFixture(t, { scheduler = '1', fail = false, agent = '0' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'mpc-container-'))
   mkdirSync(join(root, 'pipeline/docker'), { recursive: true })
   mkdirSync(join(root, 'dashboard'))
   copyFileSync('pipeline/docker/services.mjs', join(root, 'pipeline/docker/services.mjs'))
-  for (const name of ['dashboard', 'scheduler']) {
-    const file = name === 'dashboard' ? 'dashboard/server.mjs' : 'pipeline/scheduler.mjs'
+  mkdirSync(join(root, 'pipeline/slack-agent'), { recursive: true })
+  for (const name of ['dashboard', 'scheduler', 'agent']) {
+    const file = name === 'dashboard' ? 'dashboard/server.mjs' : name === 'agent' ? 'pipeline/slack-agent/server.mjs' : 'pipeline/scheduler.mjs'
     writeFileSync(join(root, file), `
       import fs from 'node:fs';
       fs.writeFileSync(${JSON.stringify(join(root, `${name}.pid`))}, String(process.pid));
@@ -26,7 +27,7 @@ function serviceFixture(t, { scheduler = '1', fail = false } = {}) {
     `)
   }
   const child = spawn(process.execPath, [join(root, 'pipeline/docker/services.mjs')], {
-    env: { ...process.env, QA_SCHEDULER_ENABLED: scheduler }, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, QA_SCHEDULER_ENABLED: scheduler, QA_SLACK_AGENT_ENABLED: agent }, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let output = ''
   child.stdout.on('data', chunk => { output += chunk })
@@ -62,5 +63,19 @@ test('dashboard-only mode does not start a scheduler and shuts down cleanly', { 
   assert.equal(code, 0, f.output())
   assert.doesNotMatch(f.output(), /scheduler ready/)
   const pid = Number(readFileSync(join(f.root, 'dashboard.pid'), 'utf8'))
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' })
+})
+
+
+test('conversational agent is supervised only when explicitly enabled', { timeout: 10000 }, async t => {
+  const f = serviceFixture(t, { scheduler: '0', agent: '1' })
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(f.output())), 5000)
+    const check = () => { if (f.output().includes('agent ready') && f.output().includes('dashboard ready')) { clearTimeout(timer); resolve() } }
+    f.child.stdout.on('data', check); check()
+  })
+  f.child.kill('SIGTERM')
+  assert.equal((await f.closed)[0], 0)
+  const pid = Number(readFileSync(join(f.root, 'agent.pid'), 'utf8'))
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' })
 })

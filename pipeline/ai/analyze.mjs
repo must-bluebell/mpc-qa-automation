@@ -32,7 +32,7 @@ export function buildBrief(run, requirements) {
     comparison: run.comparison && {
       newFailures: run.comparison.newFailures.map(f => ids.get(f.key)), recurring: run.comparison.persisting.map(f => ids.get(f.key)),
       newVariants: run.comparison.newVariants.map(f => ids.get(f.key)), recovered: run.comparison.recovered.map(f => f.title) },
-    tests: records.map(r => ({ id: r.id, title: r.title, status: r.status })),
+    tests: run.tests.map(t => ({ id: ids.get(t.key), title: t.title, status: t.status })),
     load: run.load ? { breaches: run.load.breaches, throughputRps: run.load.throughputRps } : undefined,
   }
   return { brief:redactValue(brief), regression, ids }
