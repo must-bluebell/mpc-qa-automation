@@ -4,6 +4,8 @@ Playwright tests for wallet discovery, connection, SIWE sign-in, connected-addre
 
 ## Setup
 
+To run the automation runner, dashboard and Slack scheduler in their own container, use the root [Dockerfile](Dockerfile), [docker-compose.yml](docker-compose.yml), and [DevOps Docker instructions](docs/docker.md).
+
 ```sh
 npm ci
 npx playwright install chromium
@@ -69,18 +71,39 @@ After reviewing and reproducing a defect, annotate the relevant test with `{ typ
 
 ### Optional model review
 
-To use an existing OpenClaw GPT login, enable its Responses HTTP endpoint and create a dedicated `qa-review` agent with `tools.deny: ["*"]`, no skills, and its own workspace. Configure the private QA `.env`:
+AI review supports Codex CLI with a saved ChatGPT login, OpenAI, and Anthropic. Configure one provider in the private QA `.env`; keep `QA_AI_PROVIDER=none` to run tests without model review.
+
+To use your ChatGPT subscription, install the current Codex CLI on the QA host and sign in as the same OS user that runs the dashboard, scheduler, or Actions runner:
+
+```sh
+npm install -g @openai/codex
+export CODEX_HOME="$HOME/.codex-qa"
+codex -c 'cli_auth_credentials_store="file"' login --device-auth
+codex -c 'cli_auth_credentials_store="file"' login status
+```
+
+Select it in `.env`:
 
 ```dotenv
-QA_AI_PROVIDER=openclaw
-QA_AI_MODEL=openai/gpt-6-astra
-QA_OPENCLAW_BASE_URL=http://127.0.0.1:18789
-QA_OPENCLAW_AGENT=qa-review
-QA_OPENCLAW_TOKEN=your-private-gateway-token
+QA_AI_PROVIDER=codex-cli
+QA_CODEX_MODEL=
 QA_AI_AUTO=1
 ```
 
-`QA_AI_MODEL` labels the configured backend; the dedicated agent's OpenClaw configuration selects the actual GPT model and manages OAuth. The QA project uses only the gateway token. This adapter accepts only loopback HTTP endpoints and refuses redirects. Requests use independent sessions and disable tools. OpenClaw's Responses compatibility layer does not guarantee schema-constrained generation, so the schema is included in the instructions and the project validates all returned evidence and requirement references before accepting the review. Gateway transcripts may retain the sanitized evidence; `store: false` is not a retention guarantee for OpenClaw. Keep the gateway token private and the gateway accessible only to trusted callers. [OpenClaw endpoint documentation](https://docs.openclaw.ai/gateway/openresponses-http-api).
+Blank `QA_CODEX_MODEL` uses the Codex default model; set it to a model available to your account to override. `QA_CODEX_BIN` optionally selects an absolute executable path. The CLI must support `exec --ignore-user-config`, `--ignore-rules`, `--ephemeral`, and `--output-schema`. This provider requires a saved ChatGPT login, removes API-key variables from the child environment, and does not fall back to API billing. A missing login, unavailable CLI, subscription limit, or five-minute timeout rejects the review while preserving test results. Provider selection alone does not verify authentication.
+
+Codex runs in a private temporary directory with a read-only sandbox, shell tools and web search disabled, and user configuration ignored. Host skill discovery, plugins, hooks, and project instructions are disabled. The provider refuses a login directory containing global `AGENTS.md` or `AGENTS.override.md` files so unrelated private instructions cannot enter the review. It receives the brief on stdin, requests the existing JSON schema, reads only the final response file, and removes temporary files afterward. CLI diagnostics are suppressed. Use the same dedicated `CODEX_HOME` for local login and the local QA process; the default is `~/.codex` if unset. Never commit that directory or include it in report artifacts. Subscription limits apply. The application PR workflow uses separate GitHub-hosted runners and a dedicated subscription session stored in protected environment secrets, so the Mac can be off. See [Codex non-interactive authentication](https://learn.chatgpt.com/docs/non-interactive-mode) and [GitHub Actions setup](docs/github/README.md#codex-analysis-with-a-chatgpt-login-on-github-hosted-runners).
+
+For direct OpenAI API access, configure:
+
+```dotenv
+QA_AI_PROVIDER=openai
+OPENAI_API_KEY=your-private-api-key
+OPENAI_MODEL=your-selected-model
+QA_AI_AUTO=1
+```
+
+For Anthropic, set `QA_AI_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_MODEL` instead.
 
 Review an existing completed pipeline run without rerunning tests:
 
@@ -88,21 +111,19 @@ Review an existing completed pipeline run without rerunning tests:
 node pipeline/ai/analyze.mjs <runId>
 ```
 
-Success requires `status: "ok"`; results are saved under `runs/<runId>/ai-analysis.json` and shown in the dashboard. Gateway outages, quota failures, malformed output and missing evidence references produce a rejected review while preserving test outcomes. There is no durable AI retry queue; use the saved-run command to retry. Restart the dashboard and scheduler after changing provider settings. Smoke schedules inherit automatic failure-only review; nightly regression explicitly requests review on every result. Per-schedule `ai: true` or `ai: false` overrides automatic mode and is preserved in durable queued jobs.
+Success requires `status: "ok"`; results are saved under `runs/<runId>/ai-analysis.json` and shown in the dashboard. Model service outages, quota failures, malformed output and missing evidence references produce a rejected review while preserving test outcomes. There is no durable AI retry queue; use the saved-run command to retry. Restart the dashboard and scheduler after changing provider settings. Configured test schedules explicitly request AI review, including passing runs. Per-schedule `ai: true` or `ai: false` overrides automatic mode and is preserved in durable queued jobs.
 
-For local analysis without an API key, start Ollama, install a model (`ollama pull gpt-oss:20b`), and set `QA_AI_PROVIDER=ollama` and `QA_AI_MODEL=gpt-oss:20b` in `.env`. The default endpoint is `http://127.0.0.1:11434`; only local loopback endpoints are accepted. A Mac with 16 GB of memory has limited room for this model alongside Docker, so avoid running model inference during load measurements. The download is large and is a separate installation step. [Official local GPT-OSS guide](https://developers.openai.com/cookbook/articles/gpt-oss/run-locally-ollama).
-
-Alternatively configure `OPENAI_API_KEY` and `OPENAI_MODEL`, or the existing Anthropic provider. Then run:
+To review the standalone Playwright report with the configured provider:
 
 ```sh
 npm run analyze:ai
 ```
 
-The model reviews approved requirements and redacted execution evidence, summarizes findings, groups likely duplicate failures as hypotheses, and proposes difficult scenarios and regression checks. Ollama uses local structured JSON output without credentials; the OpenAI path uses the Responses API with `store: false`. No provider receives recovery phrases, browser storage, trace files, or screenshot contents. Output is validated against recorded evidence before use. Without model configuration, the automatic file remains clearly labelled **model not run**.
+The model reviews approved requirements and redacted execution evidence, summarizes findings, groups likely duplicate failures as hypotheses, and proposes difficult scenarios and regression checks. The OpenAI API path uses the Responses API with `store: false`; all three paths request structured JSON output. No provider receives recovery phrases, browser storage, trace files, or screenshot contents. Output is validated against recorded evidence before use. Without model configuration, the automatic file remains clearly labelled **model not run**.
 
 Generated output is checked against existing evidence IDs and approved requirement IDs. AI cannot promote an unconfirmed defect. Proposed scenarios remain marked **not an acceptance check**; no generated code executes automatically. Review requirement mapping, reproduce a failing assertion, implement the test, run it, and examine evidence before using it for acceptance or release decisions.
 
-The dashboard's **AI review** checkbox applies to Run, Run everything, and Smoke. Checking it reviews the selected run after tests finish; unchecking it explicitly skips review for that run. Set `QA_AI_AUTO=1` to select the checkbox by default and automatically review failed, blocked, timed-out, or infrastructure-failed CLI and scheduled runs. Passing scheduled runs skip automatic review. CLI `--ai` and `--no-ai` override automatic mode. Restart the dashboard and scheduler after changing `.env`. View the result in the run's AI review panel and `ai-analysis.json`; AI does not change test outcomes.
+The dashboard's **AI review** checkbox applies to Run, Run everything, and Smoke. Checking it reviews the selected run after tests finish; unchecking it explicitly skips review for that run. Set `QA_AI_AUTO=1` to select the checkbox by default and automatically review failed, blocked, timed-out, or infrastructure-failed CLI and scheduled runs. Passing runs skip automatic failure-only review unless their schedule explicitly requests AI. CLI `--ai` and `--no-ai` override automatic mode. Restart the dashboard and scheduler after changing `.env`. View the result in the run's AI review panel and `ai-analysis.json`; AI does not change test outcomes.
 
 `config/qa-evaluation.json` assigns 45% to execution reliability, 40% to confirmed defect detection, 10% to coverage and 5% to AI usefulness. No score is invented from a single passing run: history, reference defects, coverage and validated contributions must be measured first. The cart failure in the requested notification example is retained as an unapproved illustration, not a reported defect or an approved requirement.
 
@@ -125,7 +146,7 @@ Application PRs can trigger code/type checks, dependency security auditing and a
 UAT and load run only against the isolated `local-docker` stack (`pipeline/config/environments.json`, Compose project and host ports under `stack`). The pipeline refuses them on preview, staging and production.
 
 For the complete web suite, including the write-gated cases, start Docker and run `npm run test:web:isolated`.
-This command uses the verified `mpc-qa-web-20261019` Compose project at `http://localhost:3420`, prepares a fresh local member through real registration and certificate transactions, and runs only the Chromium project with local writes enabled. This stack is now shared by the `local-docker` and `web-isolated` profiles; run tests sequentially. The previous recovery stack and its volumes are preserved. The first startup installs app dependencies and deploys local contracts; subsequent runs reuse the stack. The local app Docker image must already be built.
+This command derives its target, Compose project, and service ports from the shared `web-isolated` profile in `pipeline/config/environments.json`. The current profile uses `mpc-qa-dashboard-20261021` at `http://localhost:3460`, with chain RPC ports 8605 and 8606. It prepares a fresh local member through real registration and certificate transactions, and runs only the Chromium project with local writes enabled. This stack is shared by the `local-docker` and `web-isolated` profiles; run tests sequentially. The previous recovery stack and its volumes are preserved. The first startup installs app dependencies and deploys local contracts; subsequent runs reuse the stack. The local app Docker image must already be built.
 
 The Activity refresh and dismissal cases create owned pending/failed notification records in this disposable database and remove those records afterward. Their HTTP responses, authentication, and UI actions remain real; these notification fixtures do not establish blockchain transaction correctness. Running `npx playwright test --project=chromium` directly still uses `.env` and skips write-gated cases unless its target and prerequisites are configured.
 

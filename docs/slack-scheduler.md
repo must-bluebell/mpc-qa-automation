@@ -20,7 +20,7 @@ All three scheduled test workflows explicitly enable AI reviews, including passi
 
 The local scheduler owns recurring execution; GitHub recurring triggers are removed. GitHub push, pre-merge PR dispatch and manual triggers remain available (see [PR setup](github/README.md)). Deploy the workflow change to the default branch to disable remote recurring triggers. The former suite rotation is disabled. Migration cancels obsolete queued jobs while preserving running jobs, notification work and history.
 
-Critical smoke covers read-only API checks and three account-access journeys: session restoration, identity isolation and sign-in after logout. Full nightly UAT also runs the application's wider scenario suite. Nightly does not include load.
+Critical smoke covers read-only API checks and three account-access journeys: session restoration, identity isolation and sign-in after logout. With `QA_EXTERNAL_REPOSITORIES=0`, full/nightly runs execute the API, browser, UAT and load tests owned by mpc-automation; application-owned scenarios are recorded as blocked without accessing another checkout. Test-data preparation cannot import an external answer key, and stack lifecycle commands are refused. Health checks inspect existing Docker containers instead of loading external Compose files. Nightly does not include load.
 
 All suites use the isolated local Docker stack. One test worker runs at a time because the suites share accounts and application state. The scheduler keeps recording slots during long runs; smoke queued more than ten minutes late is marked missed. Nightly and weekly load have six-hour grace periods and take precedence over smoke. The daily summary has a 24-hour grace period and can run while a test worker is busy. A first start does not backfill earlier slots; restart catches up at most 24 hours, with older absences visible in daily reports. Keep the host awake and Docker running. This local process does not install an OS startup service.
 
@@ -30,17 +30,17 @@ Unresolved failures are reconstructed chronologically from real results for the 
 
 A synthetic "adapter did not produce results" failure resolves after the same adapter, project/workload and test filter completes successfully with actual passing assertions. A partial smoke run cannot clear a failed full-regression adapter. Historical failure records remain available for audit.
 
-The current environment is `local-docker`, Compose project `mpc-qa-web-20261019`, created after the previous stack refused unsafe chain snapshot restoration on October 19. `web-isolated` is an alias for the same database and chains; run suites sequentially:
+The current environment is `local-docker`, Compose project `mpc-qa-dashboard-20261021`. `web-isolated` is an alias for the same database and chains; run suites sequentially:
 
 | Service | Host endpoint | Container port |
 | --- | --- | --- |
-| WEB MPC (Next.js development server) | http://localhost:3420 | 3400 |
-| BSC Anvil (chain 97) | http://localhost:8565 | 8545 |
-| opBNB Anvil (chain 5611) | http://localhost:8566 | 8545 |
-| PostgreSQL 16 | localhost:5450 | 5432 |
-| Neon HTTP proxy | http://localhost:4464 | 4444 |
+| WEB MPC (Next.js development server) | http://localhost:3460 | 3400 |
+| BSC Anvil (chain 97) | http://localhost:8605 | 8545 |
+| opBNB Anvil (chain 5611) | http://localhost:8606 | 8545 |
+| PostgreSQL 16 | localhost:5490 | 5432 |
+| Neon HTTP proxy | http://localhost:4494 | 4444 |
 
-UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3420` as the Origin and SIWE domain. Host-side browsers use port 3420. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
+UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3460` as the Origin and SIWE domain. Host-side browsers use port 3460. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
 
 Both chains in `mpc-qa-web-20261015` refused restoration after an unclean shutdown. That project’s volumes, the earlier `mpc-qa-recovery-20261011-1752` volumes and all older volumes remain preserved. The active project uses fresh chains and a fresh database, and enables compiler-cache eviction to avoid Docker memory exhaustion. Use `npm run stack:status` to confirm all required services are healthy before running suites.
 
@@ -98,7 +98,7 @@ Every Playwright step writes Allure results to `runs/<runId>/allure-results/`. B
 
 When `QA_ALLURE_BASE_URL` is set, the Slack summary adds `Allure: <base>/<runId>/index.html`. The same HTTPS rules as `QA_REPORT_BASE_URL` apply. Hosting is a deployment step, for example `aws s3 sync runs/allure s3://your-bucket/allure --exclude history.jsonl` after each run. Unlike `runs/published/`, Allure reports are **not** sanitized: they contain screenshots, traces, video and raw error text, so serve them only behind team-only access (SSO or VPN), never publicly. View one locally with `npx allure open runs/allure/<runId>`.
 
-Every configured test schedule explicitly requests AI review, including passing runs. Manual runs inherit `QA_AI_AUTO=1` for failures and blocked runs unless `--ai` or `--no-ai` is supplied. The local OpenClaw provider requires its authenticated gateway and dedicated tools-disabled review agent to be available. AI failures are recorded separately from assertion outcomes and can be retried with `node pipeline/ai/analyze.mjs <runId>`; AI has no durable retry outbox.
+Every configured test schedule explicitly requests AI review, including passing runs. Manual runs inherit `QA_AI_AUTO=1` for failures and blocked runs unless `--ai` or `--no-ai` is supplied. For subscription-based analysis, set `QA_AI_PROVIDER=codex-cli`, `QA_AI_AUTO=1`, `QA_CODEX_BIN` to your installed CLI if necessary, and `CODEX_HOME` to the dedicated file-backed ChatGPT login directory. See [Codex setup](../README.md#optional-model-review). Restart the dashboard and scheduler after changing `.env`; the dashboard's AI review checkbox is then selected by default. Checking it reviews passing and failing dashboard runs. Explicitly unchecking it skips analysis for that run. OpenAI and Anthropic API providers remain optional alternatives. Set `QA_AI_PROVIDER=none` to disable model review. AI failures are recorded separately from assertion outcomes and can be retried with `node pipeline/ai/analyze.mjs <runId>`; AI has no durable retry outbox.
 
 AI uses the existing approved-requirement validation and cannot change assertion outcomes. It remains optional; an exhausted API credit balance does not prevent tests or Slack delivery.
 

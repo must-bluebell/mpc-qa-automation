@@ -3,6 +3,33 @@ import assert from 'node:assert/strict'
 import { childEnv } from '../../pipeline/lib/proc.mjs'
 import { SECRET_KEYS } from '../../pipeline/lib/env.mjs'
 import { classifyFailure } from '../../pipeline/lib/classify.mjs'
+import { outputRedactor } from '../../pipeline/lib/output-redactor.mjs'
+
+test('legacy OpenClaw credentials are stripped from child environments', t => {
+  const previous = process.env.QA_OPENCLAW_TOKEN
+  t.after(() => {
+    if (previous === undefined) delete process.env.QA_OPENCLAW_TOKEN
+    else process.env.QA_OPENCLAW_TOKEN = previous
+  })
+  process.env.QA_OPENCLAW_TOKEN = 'legacy-openclaw-token-for-test'
+  assert.equal(childEnv().QA_OPENCLAW_TOKEN, undefined)
+  assert.equal(childEnv({ QA_OPENCLAW_TOKEN: 'extra-legacy-token' }).QA_OPENCLAW_TOKEN, undefined)
+})
+
+test('legacy OpenClaw credentials remain redacted from output', t => {
+  const previous = process.env.QA_OPENCLAW_TOKEN
+  t.after(() => {
+    if (previous === undefined) delete process.env.QA_OPENCLAW_TOKEN
+    else process.env.QA_OPENCLAW_TOKEN = previous
+  })
+  process.env.QA_OPENCLAW_TOKEN = 'legacy-openclaw-token-for-test'
+  let output = ''
+  const redactor = outputRedactor(text => { output += text })
+  redactor.write('token=legacy-openclaw-')
+  redactor.write('token-for-test\n')
+  redactor.end()
+  assert.equal(output, 'token=[REDACTED]\n')
+})
 
 test('wallet workers receive only explicitly allowed secrets, including extra env values', () => {
   const extra = Object.fromEntries(SECRET_KEYS.map(key => [key, `private-${key}`]))

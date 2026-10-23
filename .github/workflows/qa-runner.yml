@@ -31,7 +31,7 @@ concurrency:
 jobs:
   prepare:
     name: Validate application revision and mark PR pending
-    runs-on: [self-hosted, Linux, x64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       suite: ${{ steps.plan.outputs.suite }}
@@ -66,7 +66,7 @@ jobs:
   code-security:
     needs: prepare
     name: Application code and dependency security
-    runs-on: [self-hosted, Linux, x64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -124,7 +124,7 @@ jobs:
           test "$TYPES_RESULT" = success && test "$LINT_RESULT" = success && test "$AUDIT_RESULT" = success
   qa:
     needs: prepare
-    runs-on: [self-hosted, Linux, x64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 150
     defaults:
       run:
@@ -190,6 +190,7 @@ jobs:
         id: stack
         run: npm run stack:up
       - name: Run assertions without reporting credentials
+        id: assertions
         env:
           QA_SUITE: ${{ needs.prepare.outputs.suite }}
           QA_SEED_PHRASE: ${{ secrets.QA_SEED_PHRASE }}
@@ -197,7 +198,7 @@ jobs:
           WALLET_ADDRESS_INDEX: ${{ vars.QA_WALLET_ADDRESS_INDEX || '0' }}
           QA_GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          node pipeline/orchestrator.mjs --suite "$QA_SUITE" --env local-docker --trigger "github-$GITHUB_EVENT_NAME" --run-id "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --no-notify
+          node pipeline/orchestrator.mjs --suite "$QA_SUITE" --env local-docker --trigger "github-$GITHUB_EVENT_NAME" --run-id "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --no-notify --no-ai
       - name: Export allowlisted Slack report data
         if: always()
         run: node scripts/ci-slack-report.mjs export "runs/gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/run.json" "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
@@ -232,11 +233,68 @@ jobs:
         if: always() && (steps.stack.outcome == 'success' || steps.stack.outcome == 'failure')
         run: npm run stack:down
 
+  ai-report:
+    name: Analyze QA evidence with Codex
+    if: always() && needs.prepare.result == 'success' && github.event.repository.private == true
+    needs: [prepare, qa]
+    runs-on: ubuntu-24.04
+    environment: qa-ai
+    timeout-minutes: 15
+    steps:
+      # Trusted QA source only: application code never runs with the subscription login.
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v7
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - name: Install pinned Codex CLI
+        run: npm install --global @openai/codex@0.163.0
+      - name: Select a private login directory outside the checkout
+        run: echo "CODEX_HOME=$RUNNER_TEMP/mpc-qa-codex" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: mpc-qa-slack-${{ github.run_id }}-${{ github.run_attempt }}
+          path: incoming-report
+      - name: Validate evidence and produce advisory AI report
+        id: review
+        continue-on-error: true
+        env:
+          QA_AI_PROVIDER: codex-cli
+          QA_CODEX_MODEL: ${{ vars.QA_CODEX_MODEL }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+          CODEX_AUTH_PERSIST_CONFIGURED: ${{ secrets.CODEX_AUTH_WRITE_TOKEN != '' }}
+          QA_EXPECTED_SUITE: ${{ needs.prepare.outputs.suite }}
+          QA_APP_REF: ${{ needs.prepare.outputs.appRef }}
+        run: node scripts/ci-ai-report.mjs incoming-report/ci-slack-report.json "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+      - name: Persist refreshed subscription login for the next serialized job
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.CODEX_AUTH_WRITE_TOKEN }}
+        shell: bash
+        run: |
+          if [ -f "$CODEX_HOME/auth.json" ]; then
+            gh secret set CODEX_AUTH_JSON --repo "$GITHUB_REPOSITORY" --env qa-ai < "$CODEX_HOME/auth.json"
+          fi
+      - name: Upload validated report with AI analysis
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mpc-qa-reviewed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-review-report.json
+            ci-review-report.md
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Remove runner credentials and private AI intermediates
+        if: always()
+        run: rm -rf -- "$CODEX_HOME" ci-ai-private
+
   slack-report:
     name: Publish QA results from a trusted reporting runner
     if: always() && needs.prepare.result == 'success'
-    needs: [prepare, qa]
-    runs-on: [self-hosted, Linux, x64]
+    needs: [prepare, qa, ai-report]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
@@ -247,9 +305,16 @@ jobs:
         with: { node-version: '22', cache: npm }
       - run: npm ci
       - uses: actions/download-artifact@v8
+        continue-on-error: true
         with:
           name: mpc-qa-slack-${{ github.run_id }}-${{ github.run_attempt }}
           path: incoming-report
+      - name: Download report with AI analysis when available
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: mpc-qa-reviewed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reviewed-report
       - name: Restore Slack incident and delivery state
         uses: actions/cache/restore@v6
         with:
@@ -259,11 +324,15 @@ jobs:
       - name: Validate report data and publish Slack summary
         env:
           QA_EXPECTED_SUITE: ${{ needs.prepare.outputs.suite }}
+          QA_APP_REF: ${{ needs.prepare.outputs.appRef }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
           QA_OWNER_SLACK_ID: ${{ vars.QA_OWNER_SLACK_ID }}
           QA_GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node scripts/ci-slack-report.mjs send incoming-report/ci-slack-report.json "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+        run: |
+          report=incoming-report/ci-slack-report.json
+          if [ -f reviewed-report/ci-review-report.json ]; then report=reviewed-report/ci-review-report.json; fi
+          node scripts/ci-slack-report.mjs send "$report" "gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
       - name: Save Slack incident and delivery state
         if: always() && hashFiles('runs/slack-bot-state.json') != ''
         uses: actions/cache/save@v6
@@ -274,8 +343,8 @@ jobs:
   pr-report:
     name: Publish pre-merge QA result to application PR
     if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.prNumber != ''
-    needs: [prepare, code-security, qa]
-    runs-on: [self-hosted, Linux, x64]
+    needs: [prepare, code-security, qa, ai-report]
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       # Fresh trusted QA checkout: the reporting token never enters the app/test jobs.
@@ -285,6 +354,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
+      - run: npm ci
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: mpc-qa-reviewed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reviewed-report
       - name: Publish status and update PR report comment
         run: node scripts/github-pr.mjs complete
         env:
@@ -292,3 +367,4 @@ jobs:
           WEBAPP_REPORT_TOKEN: ${{ secrets.WEBAPP_REPORT_TOKEN }}
           QA_GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           QA_JOB_RESULTS: '{"qa":"${{ needs.qa.result }}","code-security":"${{ needs.code-security.result }}"}'
+          QA_CI_REPORT_FILE: reviewed-report/ci-review-report.json

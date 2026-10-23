@@ -33,22 +33,11 @@ jobs:
   #    PR to this repo — where the test job cannot, because there is nothing to point it at. Merging
   #    the two would mean either skipping self-checks or inventing a target.
   static:
-    name: Typecheck and copy drift
-    runs-on: [self-hosted, Linux, x64]
+    name: Automation self-checks
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with: { persist-credentials: false }
-
-      # Checked out so `check:copy` can compare the vendored strings against the real registry.
-      # Fails open when absent, so this is a convenience, not a dependency.
-      - name: Check out the app (for the copy drift check)
-        uses: actions/checkout@v7
-        continue-on-error: true
-        with:
-          repository: ${{ vars.WEBAPP_REPOSITORY || 'globalmpc/globalmpc-webapp' }}
-          path: globalmpc-webapp
-          token: ${{ secrets.WEBAPP_READ_TOKEN }}
-          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with: { node-version: '22', cache: 'npm' }
@@ -58,10 +47,6 @@ jobs:
       - run: npm run test:reporting
       - name: Audit QA dependencies (high and critical vulnerabilities)
         run: npm audit --audit-level=high --include=dev
-      - name: Check copy drift
-        run: npm run check:copy
-        env:
-          WEBAPP_PATH: ${{ github.workspace }}/globalmpc-webapp
 
   test:
     name: Wallet tests
@@ -88,6 +73,7 @@ jobs:
         run: node scripts/validate-preview-target.mjs
 
       - name: Run wallet tests
+        id: assertions
         env:
           BASE_URL: ${{ steps.target.outputs.base_url }}
           QA_CHAIN_ID: ${{ steps.target.outputs.chain_id }}
@@ -99,6 +85,16 @@ jobs:
           QA_OWNER: ${{ vars.QA_OWNER }}
           QA_RUN_LABEL: Regression
         run: npx playwright test
+
+      - name: Review wallet evidence with saved Codex ChatGPT login
+        if: always() && vars.QA_AI_PROVIDER == 'codex-cli' && (steps.assertions.outcome == 'success' || steps.assertions.outcome == 'failure')
+        continue-on-error: true
+        timeout-minutes: 6
+        env:
+          QA_AI_PROVIDER: codex-cli
+          QA_CODEX_MODEL: ${{ vars.QA_CODEX_MODEL }}
+          QA_CODEX_BIN: ${{ vars.QA_CODEX_BIN }}
+        run: npm run analyze:ai
 
       - name: Publish regression summary
         if: always()

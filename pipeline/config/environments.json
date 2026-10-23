@@ -1,8 +1,8 @@
 {
   "local-docker": {
     "description": "Existing isolated QA recovery stack. Shares state with the other local alias; run suites sequentially.",
-    "baseUrl": "http://localhost:3440",
-    "appOrigin": "http://localhost:3440",
+    "baseUrl": "http://localhost:3460",
+    "appOrigin": "http://localhost:3460",
     "chainId": 97,
     "chainName": "Local Anvil",
     "navigation": "activities",
@@ -13,22 +13,22 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-web-20261020-recovery",
+      "composeProject": "mpc-qa-dashboard-20261021",
       "webmpcPath": "../WEB MPC",
       "ports": {
-        "web": 3440,
-        "anvil": 8585,
-        "opbnbAnvil": 8586,
-        "postgres": 5470,
-        "neonProxy": 4484
+        "web": 3460,
+        "anvil": 8605,
+        "opbnbAnvil": 8606,
+        "postgres": 5490,
+        "neonProxy": 4494
       },
-      "note": "Recovered existing October 20 stack after the application and QA folders moved. Previous projects and volumes are preserved."
+      "note": "Fresh isolated dashboard test stack; earlier snapshots and volumes preserved."
     }
   },
   "web-isolated": {
     "description": "Existing isolated QA recovery stack. Shares state with the other local alias; run suites sequentially.",
-    "baseUrl": "http://localhost:3440",
-    "appOrigin": "http://localhost:3440",
+    "baseUrl": "http://localhost:3460",
+    "appOrigin": "http://localhost:3460",
     "chainId": 97,
     "chainName": "Local Anvil",
     "navigation": "activities",
@@ -39,16 +39,16 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-web-20261020-recovery",
+      "composeProject": "mpc-qa-dashboard-20261021",
       "webmpcPath": "../WEB MPC",
       "ports": {
-        "web": 3440,
-        "anvil": 8585,
-        "opbnbAnvil": 8586,
-        "postgres": 5470,
-        "neonProxy": 4484
+        "web": 3460,
+        "anvil": 8605,
+        "opbnbAnvil": 8606,
+        "postgres": 5490,
+        "neonProxy": 4494
       },
-      "note": "Recovered existing October 20 stack after the application and QA folders moved. Previous projects and volumes are preserved."
+      "note": "Fresh isolated dashboard test stack; earlier snapshots and volumes preserved."
     }
   },
   "preview": {

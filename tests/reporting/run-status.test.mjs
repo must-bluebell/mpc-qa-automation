@@ -33,3 +33,20 @@ test('a timeout takes precedence over assertions recorded before interruption',(
     assert.equal(runStatus({tests:[row('failed',kind)],steps:[{timedOut:true,exitCode:null}]}),'timeout')
   }
 })
+
+test('failed test-data preparation cannot be hidden by passing assertions',()=>{
+  const tests=[row('passed')],steps=[{exitCode:0,errors:[]}]
+  assert.equal(runStatus({tests,steps,testData:{status:'failed'}}),'infra-failed')
+  for(const status of ['ready','skipped'])assert.equal(runStatus({tests,steps,testData:{status}}),'passed')
+  assert.equal(runStatus({tests:[row('failed','product')],steps,testData:{status:'failed'}}),'failed')
+  assert.equal(runStatus({tests,steps:[{timedOut:true}],testData:{status:'failed'}}),'timeout')
+})
+
+test('failed preparation never announces infrastructure recovery even when assertions execute',async()=>{
+  const {executionRecovered}=await import('../../pipeline/lib/run-status.mjs')
+  for(const status of ['passed','failed']){
+    const run={status,tests:[row('passed')],steps:[],errors:[],testData:{status:'failed'}}
+    assert.equal(executionRecovered(run),false)
+    assert.equal(executionRecovered({...run,testData:{status:'ready'}}),true)
+  }
+})

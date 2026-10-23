@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
 import { ROOT, RUNS_DIR, config } from './lib/env.mjs'
-import { acquireLock, readLock } from './lib/lock.mjs'
+import { acquireLock, readLock, processStartTime } from './lib/lock.mjs'
 import { createRunDir, readRun, saveRun, writeJsonAtomic } from './lib/run-store.mjs'
 import { kstTime, opaqueId, publishSummary } from './lib/safe-output.mjs'
 import { aiArgs } from './ai/policy.mjs'
@@ -108,6 +108,13 @@ function loadState() {return existsSync(statePath)?JSON.parse(readFileSync(state
 function persist(state){writeJsonAtomic(statePath,state)}
 function alive(pid){if(!Number.isInteger(pid)||pid<=0)return false;try{process.kill(pid,0);return true}catch{return false}}
 
+export function workerAlive(job,pidNamespace) {
+  if(pidNamespace&&job.pidNamespace&&pidNamespace!==job.pidNamespace)return false
+  const started=processStartTime(job.pid)
+  if(job.pidStartTime&&started&&job.pidStartTime!==started)return false
+  return alive(job.pid)
+}
+
 export async function completeJob(state,job,code,{readRunImpl=readRun,saveRunImpl=saveRun,createDirImpl=createRunDir,notify=notifyBotRun,persistImpl=persist,publishImpl=publishSummary}={}) {
   let run=readRunImpl(job.runId)
   if(code===3&&!run){job.status='queued';job.pid=null;persistImpl(state);return}
@@ -178,7 +185,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
       for(const job of state.jobs.filter(j=>j.status==='notifying'))await finish(job,job.exitCode)
       for(const job of state.jobs.filter(j=>j.status==='running'&&j.kind!=='summary')) {
         const worker=workers.get(job.id)
-        if(worker?.done||!alive(job.pid)) {
+        if(worker?.done||!workerAlive(job,lock.pidNamespace)) {
           await finish(job,worker?.code??null);workers.delete(job.id)
         }
       }
@@ -201,7 +208,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
             console.log(`${kstTime(Date.now())} starting ${job.suite}; ${job.runId}`)
             const log=openSync(join(RUNS_DIR,`${job.runId}.log`),'a',0o600)
             const child=spawn(process.execPath,[join(ROOT,'pipeline/orchestrator.mjs'),'--suite',job.suite,'--env',job.env,'--trigger','scheduled','--schedule-id',job.scheduleId,'--run-id',job.runId,'--no-notify','--quiet',...aiArgs(job.ai)],{cwd:ROOT,stdio:['ignore',log,log]})
-            closeSync(log);job.pid=child.pid;persist(state)
+            closeSync(log);job.pid=child.pid;job.pidNamespace=lock.pidNamespace;job.pidStartTime=processStartTime(child.pid);persist(state)
             const worker={done:false,code:null}
             worker.promise=new Promise(resolvePromise=>{
               const done=code=>{worker.done=true;worker.code=code;resolvePromise(code)}
