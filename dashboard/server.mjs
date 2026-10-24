@@ -2,11 +2,12 @@
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, statSync, openSync, fstatSync, readSync, closeSync } from 'node:fs'
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, statSync, openSync, fstatSync, readSync, closeSync, watch } from 'node:fs'
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ROOT, RUNS_DIR, config, knownSecrets, resolveEnvironment } from '../pipeline/lib/env.mjs'
 import { isRunId, newRunId, readIndex, readRun, runDir } from '../pipeline/lib/run-store.mjs'
+import { runStatus } from '../pipeline/lib/run-status.mjs'
 import { readLock } from '../pipeline/lib/lock.mjs'
 import { stackStatus } from '../pipeline/adapters/local-stack.mjs'
 import { PROFILES } from '../pipeline/chaos/proxy.mjs'
@@ -105,30 +106,85 @@ function busy() {
   return live ? { runId: live.runId, startedAt: live.startedAt } : null
 }
 
+// Normal saveRun writes invalidate synchronously through the index signature; manual run.json
+// repairs invalidate when the filesystem event arrives. Without a watcher, revalidate each poll.
+// Cache negative lookups too: a history with no load run must not be decoded on every poll.
+const categoryRuns = new Map()
+let categoryCache = null, categoryIndexVersion, categoryWatcher
+function fileVersion(file) {
+  try { const s = statSync(file, { bigint: true }); return `${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}` } catch { return null }
+}
+function watchCategoryRuns() {
+  if (categoryWatcher) return true
+  try {
+    categoryWatcher = watch(RUNS_DIR, { recursive: true }, (_event, filename) => {
+      const parts = String(filename ?? '').split(/[\\/]/)
+      if (!filename) { categoryCache = null; categoryRuns.clear(); return }
+      if (parts.length === 1 && parts[0] === 'index.json') {
+        if (fileVersion(join(RUNS_DIR, 'index.json')) !== categoryIndexVersion) categoryCache = null
+      } else if (isRunId(parts[0]) && (parts.at(-1) === 'run.json' || parts.length === 1)) {
+        const cached = categoryRuns.get(parts[0])
+        if (!cached || cached.version !== fileVersion(join(runDir(parts[0]), 'run.json'))) categoryCache = null
+      }
+    })
+    categoryWatcher.on('error', () => {
+      categoryWatcher?.close()
+      categoryWatcher = null
+      categoryCache = null
+      categoryRuns.clear()
+    })
+    categoryWatcher.unref()
+    categoryCache = null // Revalidate changes made before this watcher was established.
+    return true
+  } catch { return false }
+}
+function cachedCategoryRun(runId) {
+  if (!isRunId(runId)) return null
+  const version = fileVersion(join(runDir(runId), 'run.json'))
+  const cached = categoryRuns.get(runId)
+  if (cached && cached.version === version) return cached.run
+  const run = readRun(runId)
+  categoryRuns.set(runId, { version, run })
+  return run
+}
+function categoryMatches(suite, source, project, adapter) {
+  // Explicit suite provenance wins over adapter/project guesses in combined runs.
+  if (REPORT_CATEGORIES.some(c => c.suite === source) || source === 'uat') return source === suite
+  return (suite === 'api' && project === 'api') || (suite === 'regression' && project === 'chromium')
+    || (suite === 'load' && adapter === 'k6')
+}
 function latestCategoryResults() {
+  const watching = watchCategoryRuns()
+  const version = fileVersion(join(RUNS_DIR, 'index.json'))
+  if (watching && categoryCache && version === categoryIndexVersion) return categoryCache
   const latest = new Map()
-  const entries = readIndex().filter(r => r.env === 'local-docker' && r.finishedAt && !r.seededDefect && !r.reportOnly && !['running', 'skipped-overlap'].includes(r.status))
+  const index = readIndex()
+  const runIds = new Set(index.map(r => r.runId))
+  for (const runId of categoryRuns.keys()) if (!runIds.has(runId)) categoryRuns.delete(runId)
+  const entries = index.filter(r => r.env === 'local-docker' && r.finishedAt && !r.seededDefect && !r.reportOnly && !['running', 'skipped-overlap'].includes(r.status))
     .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))
   for (const entry of entries) {
-    const run = readRun(entry.runId)
-    if (!run || run.reportOnly || run.seededDefect) continue
+    const run = cachedCategoryRun(entry.runId)
+    if (!run || run.reportOnly || run.seededDefect || run.env !== 'local-docker' || !run.finishedAt || ['running', 'skipped-overlap'].includes(run.status)) continue
     for (const { suite } of REPORT_CATEGORIES) {
       if (latest.has(suite)) continue
+      const steps = (run.steps ?? []).filter(step => categoryMatches(suite, step.fromSuite ?? run.suite, step.project, step.adapter))
       const tests = (run.tests ?? []).filter(t => {
         const step = run.steps?.find(s => s.name === t.step)
-        const source = step?.fromSuite ?? run.suite
-        return source === suite || (suite === 'api' && (t.project ?? step?.project) === 'api')
-          || (suite === 'regression' && (t.project ?? step?.project) === 'chromium')
-          || (suite === 'load' && (t.adapter ?? step?.adapter) === 'k6')
+        return categoryMatches(suite, step?.fromSuite ?? run.suite, t.project ?? step?.project, t.adapter ?? step?.adapter)
       })
-      if (!tests.length) continue
+      const executionFailed = steps.some(s => s.timedOut || s.errors?.length || (s.exitCode != null && s.exitCode !== 0))
+      if (!tests.length && !executionFailed) continue
       const counts = Object.fromEntries(['passed', 'failed', 'skipped', 'blocked'].map(status => [status, tests.filter(t => t.status === status).length]))
-      const status = counts.failed ? 'failed' : counts.blocked ? 'blocked' : counts.passed ? 'passed' : 'skipped'
+      const status = executionFailed ? runStatus({ tests, steps })
+        : counts.failed ? 'failed' : counts.blocked ? 'blocked' : counts.passed ? 'passed' : 'skipped'
       latest.set(suite, { suite, runId: run.runId, env: run.env, finishedAt: run.finishedAt, status, counts })
     }
     if (latest.size === REPORT_CATEGORIES.length) break
   }
-  return REPORT_CATEGORIES.flatMap(({ suite }) => latest.has(suite) ? [latest.get(suite)] : [])
+  categoryIndexVersion = version
+  categoryCache = REPORT_CATEGORIES.flatMap(({ suite }) => latest.has(suite) ? [latest.get(suite)] : [])
+  return categoryCache
 }
 
 function status() {

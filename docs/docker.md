@@ -29,6 +29,14 @@ export MPC_WEBAPP_PATH="$(cd '../WEB MPC' && pwd -P)"
 docker compose build automation
 ```
 
+For this trusted two-checkout setup, edit the automation `.env` and explicitly set:
+
+```dotenv
+QA_EXTERNAL_REPOSITORIES=1
+```
+
+The copied `.env.example` defaults to `QA_EXTERNAL_REPOSITORIES=0`. Keep that default for automation-only use. The opt-in above authorizes access to the separate application checkout and is required before `stack:up`, `stack:down`, and application-owned UAT scenarios can run. Mounting the checkout alone does not grant that access. Compose reads this setting from `.env`; recreate an already-running automation container after changing it.
+
 On Docker Desktop, select its Unix socket if `/var/run/docker.sock` is unavailable:
 
 ```sh
@@ -57,7 +65,7 @@ docker compose run --rm --no-deps automation npm run stack:up
 docker compose run --rm --no-deps automation npm run stack:status
 ```
 
-The current target is the separate `mpc-qa-dashboard-20261021` application stack at `http://localhost:3460`. Its containers and volumes are not part of the automation Compose project, so stopping automation leaves the application data intact.
+The target is the separate application stack selected by the `local-docker` profile in [environments.json](../pipeline/config/environments.json), currently at `http://localhost:3460`. Its containers and volumes are not part of the automation Compose project, so stopping automation leaves the application data intact.
 
 ## Dashboard, tests and Slack scheduler
 

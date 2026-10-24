@@ -4,6 +4,7 @@ import { config } from '../lib/env.mjs'
 import { publicSummary, safeText, dashboardRunUrl } from '../lib/safe-output.mjs'
 import { explainEvidence } from './explain.mjs'
 import { answerPullRequest } from './pr-evidence.mjs'
+import { runStatus } from '../lib/run-status.mjs'
 
 export const plain = value => safeText(value).replace(/[<>&`]/g,'').slice(0,2800)
 const help = 'Ask about my testing capabilities, reporting repository, latest test results, failed cases, last passing run, evidence, testing schedules, or the last tested/merged PR. For example: “what can you do?”, “how did the tests go?”, or “who merged the code?”. To request a rerun: “rerun api” (also smoke, regression, uat, load, full). A rerun requires authorization and confirmation.'
@@ -84,6 +85,31 @@ function suiteTests(run,suite) {
   const names=new Set((run.steps||[]).filter(s=>s.fromSuite===suite).map(s=>s.name))
   return (run.tests||[]).filter(t=>names.has(t.step)||(suite==='api'&&t.project==='api')||(suite==='uat'&&t.project==='uat')||(suite==='load'&&t.adapter==='k6')||(suite==='regression'&&t.project==='chromium'))
 }
+function passingEvidence(run,suite) {
+  const tests=suiteTests(run,suite)
+  if(!tests.length||!tests.every(t=>t.status==='passed'))return false
+  if(!suite||run.suite===suite) {
+    return run.status==='passed'&&runStatus({tests,steps:run.steps||[]})==='passed'&&!run.errors?.length
+  }
+  // A combined run can fail elsewhere. Accept only a fully recorded requested suite:
+  // every configured step must have exited successfully, with all its checks attributed.
+  if(!['passed','failed','infra-failed','timeout','blocked'].includes(run.status))return false
+  const expected=config.suites()[suite]?.steps
+  if(!expected?.length)return false
+  const names=new Set(tests.map(t=>t.step))
+  const steps=(run.steps||[]).filter(s=>s.fromSuite===suite||names.has(s.name))
+  if(steps.length!==expected.length||steps.some(s=>s.fromSuite!==suite)
+    ||tests.some(t=>!t.step||!steps.some(s=>s.name===t.step)))return false
+  const remaining=[...steps]
+  for(const spec of expected) {
+    const index=remaining.findIndex(s=>s.adapter===spec.adapter&&(s.project||null)===(spec.project||null)
+      &&(s.grep||null)===(spec.grep||null))
+    if(index<0)return false
+    remaining.splice(index,1)
+  }
+  return steps.every(s=>s.exitCode===0&&!s.timedOut&&!s.errors?.length)
+    &&runStatus({tests,steps})==='passed'
+}
 export async function answerQuestion(question, options={}) {
   const {index=readIndex,read=readRun,scheduler=()=>readLock('scheduler'),schedules=config.schedules,environment=process.env,
     ai=false,explain=explainEvidence,prEvidence=answerPullRequest}=options
@@ -102,10 +128,7 @@ export async function answerQuestion(question, options={}) {
   }
   const runs=index().slice(-100).reverse().map(r=>read(r.runId)).filter(r=>r&&r.finishedAt&&r.status!=='running'&&!r.seededDefect&&!r.reportOnly)
   const relevant=runs.filter(r=>(!parsed.runId||r.runId===parsed.runId)&&(!parsed.suite||r.suite===parsed.suite||suiteTests(r,parsed.suite).length))
-  const chosen=parsed.kind==='last-pass'?relevant.find(r=>{
-    const tests=suiteTests(r,parsed.suite)
-    return tests.length>0&&tests.every(t=>t.status==='passed')&&!['infra-failed','crashed','timed-out'].includes(r.status)
-  }):relevant[0]
+  const chosen=parsed.kind==='last-pass'?relevant.find(r=>passingEvidence(r,parsed.suite)):relevant[0]
   if(parsed.kind==='explain') {
     if(!ai) return `${help}\nAI explanations are disabled; recorded facts are available through the questions above.`
     const evidence=relevant.slice(0,5).map(r=>{

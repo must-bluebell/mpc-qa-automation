@@ -4,7 +4,7 @@ import {spawn} from 'node:child_process'
 import {once} from 'node:events'
 import {chromium,expect} from '@playwright/test'
 import {createServer} from 'node:net'
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync,symlinkSync} from 'node:fs'
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync,symlinkSync,renameSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 
@@ -23,8 +23,13 @@ async function dashboardServer(t) {
   const preload=join(dir,'instrument.mjs')
   writeFileSync(preload,`
     import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
-    const readFile=fs.readFileSync,read=fs.readSync;
+    const readFile=fs.readFileSync,read=fs.readSync,stat=fs.statSync;
+    fs.statSync=function(file,...args){
+      if(String(file).endsWith('/run.json'))fs.appendFileSync(process.env.QA_TEST_READ_EVENTS,JSON.stringify({runStat:String(file)})+'\\n');
+      return stat.call(this,file,...args);
+    };
     fs.readFileSync=function(file,...args){
+      if(String(file).endsWith('/run.json'))fs.appendFileSync(process.env.QA_TEST_READ_EVENTS,JSON.stringify({runRead:String(file)})+'\\n');
       if(String(file)===process.env.QA_TEST_LOG_FILE)fs.appendFileSync(process.env.QA_TEST_READ_EVENTS,JSON.stringify({full:true})+'\\n');
       return readFile.call(this,file,...args);
     };
@@ -78,6 +83,76 @@ test('home category summaries use newer full-run checks and category-specific co
     {suite:'api',runId:'full-new',status:'failed',counts:{passed:1,failed:1,skipped:0,blocked:0}},
     {suite:'load',runId:'full-new',status:'blocked',counts:{passed:0,failed:0,skipped:0,blocked:1}},
   ])
+})
+
+function saveFixtureRun(f,run) {
+  mkdirSync(join(f.dir,run.runId),{recursive:true})
+  writeFileSync(join(f.dir,run.runId,'run.json'),JSON.stringify(run))
+}
+
+async function eventuallyCategoryResults(f,headers,predicate) {
+  let results
+  for(let attempt=0;attempt<40;attempt++){
+    results=await categoryResults(f,headers)
+    if(predicate(results))return results
+    await new Promise(resolve=>setTimeout(resolve,50))
+  }
+  assert.fail(`category change was not observed: ${JSON.stringify(results)}`)
+}
+
+async function categoryResults(f,headers) {
+  const response=await fetch(`${f.base}/api/status`,{headers})
+  assert.equal(response.status,200)
+  return (await response.json()).categoryResults
+}
+
+test('category summaries include matching execution failures without blaming other combined steps',async t=>{
+  const f=await dashboardServer(t),headers={cookie:await f.session()}
+  for(const [failure,want] of [[{timedOut:true},'timeout'],[{errors:['runner stopped']},'infra-failed'],[{exitCode:2},'infra-failed']]) {
+    for(const withTests of [true,false]) {
+      const run={runId:'combined',suite:'full',env:'local-docker',finishedAt:'2026-10-23T10:00:00Z',status:want,
+        steps:[{name:'web',fromSuite:'regression',exitCode:0},{name:'api',fromSuite:'api',...failure}],
+        tests:[{step:'web',status:'passed'},...(withTests?[{step:'api',status:'passed'}]:[])]}
+      saveFixtureRun(f,run)
+      writeFileSync(join(f.dir,'index.json'),JSON.stringify([run]))
+      const results=await categoryResults(f,headers)
+      assert.equal(results.find(r=>r.suite==='regression')?.status,'passed')
+      const api=results.find(r=>r.suite==='api')
+      assert.equal(api?.runId,'combined')
+      assert.equal(api.status,want)
+      assert.deepEqual(api.counts,{passed:withTests?1:0,failed:0,blocked:0,skipped:0})
+    }
+  }
+})
+
+test('category polling caches absent categories and refreshes additions and changed run records',async t=>{
+  const f=await dashboardServer(t),headers={cookie:await f.session()}
+  const runs=Array.from({length:40},(_,i)=>({runId:`web-${i}`,suite:'regression',env:'local-docker',status:'passed',
+    finishedAt:new Date(Date.UTC(2026,9,23,0,i)).toISOString(),steps:[{name:'web',fromSuite:'regression'}],tests:[{step:'web',status:'passed'}]}))
+  runs.forEach(run=>saveFixtureRun(f,run))
+  writeFileSync(join(f.dir,'index.json'),JSON.stringify(runs))
+  assert.deepEqual((await categoryResults(f,headers)).map(r=>r.suite),['regression'])
+  writeFileSync(f.events,'')
+  for(let i=0;i<4;i++)await categoryResults(f,headers)
+  const events=readFileSync(f.events,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse)
+  assert.equal(events.filter(e=>e.runRead).length,0,'unchanged polling must not reread history for absent categories')
+  assert.ok(events.filter(e=>e.runStat).length<=12,'polling metadata checks must be bounded independently of history size')
+
+  const api={...runs[0],runId:'new-api',suite:'api',finishedAt:'2026-10-24T00:00:00Z',steps:[{name:'api',fromSuite:'api'}],tests:[{step:'api',status:'passed'}]}
+  saveFixtureRun(f,api)
+  writeFileSync(join(f.dir,'index.json'),JSON.stringify([...runs,api]))
+  assert.equal((await categoryResults(f,headers)).find(r=>r.suite==='api')?.runId,'new-api')
+  // A run record can be repaired independently of the compact index, including atomic replacement.
+  const repaired={...runs[0],steps:[{name:'load',fromSuite:'load',timedOut:true}],tests:[]}
+  const file=join(f.dir,repaired.runId,'run.json')
+  writeFileSync(`${file}.tmp`,JSON.stringify(repaired))
+  renameSync(`${file}.tmp`,file)
+  await eventuallyCategoryResults(f,headers,results=>results.find(r=>r.suite==='load')?.status==='timeout')
+  // Excluded corrected records must reveal the previous eligible category result.
+  saveFixtureRun(f,{...api,reportOnly:true})
+  await eventuallyCategoryResults(f,headers,results=>!results.some(r=>r.suite==='api'))
+  saveFixtureRun(f,{...repaired,seededDefect:'latency'})
+  await eventuallyCategoryResults(f,headers,results=>!results.some(r=>r.suite==='load'))
 })
 
 test('private evidence requires a session that cannot be obtained from the public page',async t=>{

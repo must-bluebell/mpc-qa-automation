@@ -88,6 +88,57 @@ test('last passing run is selected by recorded results and missing evidence is e
   assert.match(await answerQuestion('show report missing-run',deps([run('new')])),/no .*recorded|no .*evidence/i)
 })
 
+test('last passing run rejects nonpassing overall outcomes even when every recorded check passed',async()=>{
+  const good=run('last-complete','passed');good.tests=[{key:'pass',status:'passed'}]
+  for(const status of ['timeout','blocked','infra-failed','crashed','failed','cancelled']) {
+    const incomplete={...good,runId:'incomplete',status}
+    for(const question of ['last passing run','when did API tests last pass?']) {
+      const answer=await answerQuestion(question,deps([good,incomplete]))
+      assert.match(answer,/Source: last-complete/)
+      assert.doesNotMatch(answer,/Source: incomplete/)
+    }
+  }
+})
+
+test('a last passing suite subset requires complete successful steps and reports its scope',async()=>{
+  const combined={...run('combined','timeout'),suite:'full',
+    steps:[{name:'api-step',adapter:'playwright',project:'api',fromSuite:'api',exitCode:0,errors:[]},
+      {name:'web-step',adapter:'playwright',project:'chromium',fromSuite:'regression',timedOut:true}],
+    tests:[{key:'api-ok',step:'api-step',project:'api',status:'passed'}]}
+  const answer=await answerQuestion('when did API tests last pass?',deps([combined]))
+  assert.match(answer,/Source: combined/)
+  assert.match(answer,/api only/i)
+  assert.match(answer,/overall combined-run status/)
+  for(const change of [{timedOut:true},{exitCode:1},{errors:['runner failed']}]) {
+    const broken=structuredClone(combined);Object.assign(broken.steps[0],change)
+    assert.match(await answerQuestion('when did API tests last pass?',deps([broken])),/No matching/)
+  }
+  assert.match(await answerQuestion('last passing run',deps([combined])),/No matching/)
+})
+
+test('partial UAT execution and unattributed checks cannot qualify as a passing combined subset',async()=>{
+  const partial={...run('partial','timeout'),suite:'full',
+    steps:[{name:'uat-step',adapter:'playwright',project:'uat',fromSuite:'uat',exitCode:0}],
+    tests:[{key:'uat-ok',step:'uat-step',project:'uat',status:'passed'}]}
+  assert.match(await answerQuestion('when did UAT tests last pass?',deps([partial])),/No matching/)
+  const complete=structuredClone(partial)
+  complete.steps.push({name:'scenario-step',adapter:'webmpc-scenarios',fromSuite:'uat',exitCode:0})
+  assert.match(await answerQuestion('when did UAT tests last pass?',deps([complete])),/No matching/)
+  complete.tests.push({key:'scenario-ok',step:'scenario-step',status:'passed'})
+  assert.match(await answerQuestion('when did UAT tests last pass?',deps([complete])),/Source: partial/)
+  const unattributed={...partial,tests:[{key:'api-ok',project:'api',status:'passed'}]}
+  assert.match(await answerQuestion('when did API tests last pass?',deps([unattributed])),/No matching/)
+})
+
+test('smoke checks cannot stand in for a complete passing API suite',async()=>{
+  const smoke={...run('partial-api','passed'),suite:'critical-smoke',
+    steps:[{name:'smoke-api',adapter:'playwright',project:'api',fromSuite:'api-smoke',grep:'@smoke',exitCode:0}],
+    tests:[{key:'api-ok',step:'smoke-api',project:'api',status:'passed'}]}
+  assert.match(await answerQuestion('when did API tests last pass?',deps([smoke])),/No matching/)
+  smoke.steps[0].fromSuite='api'
+  assert.match(await answerQuestion('when did API tests last pass?',deps([smoke])),/No matching/)
+})
+
 test('running work, seeded defects and previews never become the last passing production evidence',async()=>{
   const good=run('good','passed');good.tests=[{key:'pass',status:'passed'}]
   const seeded={...good,runId:'seeded',seededDefect:'fault'}, preview={...good,runId:'preview',reportOnly:true}

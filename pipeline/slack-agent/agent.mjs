@@ -76,14 +76,15 @@ export function createAgent({store=new AgentStore(),settings=agentSettings,post,
       if(!cfg.enabled)return
       store.locked(()=>store.expirePending(now()))
       // Retry explicit 429 rejections only. Sending/uncertain records require manual reconciliation.
-      for(const r of store.list().filter(r=>r.type==='reply'&&r.status==='pending'
+      for(const r of store.listActive().filter(r=>r.type==='reply'&&r.status==='pending'
         &&(r.identity?authorize(r.identity,cfg):r.payload?.channel===cfg.channel&&conversationAllowed(r.payload.channel,cfg))))
         await store.deliver(r.key,r.payload,post,now(),r.identity)
       const state=jobs()
-      for(const r of store.list().filter(r=>r.type==='rerun'&&['scheduled','rejected','expired'].includes(r.status))) {
+      for(const r of store.listActive().filter(r=>r.type==='rerun'&&['scheduled','rejected','expired'].includes(r.status))) {
         if(!authorize(r,cfg))continue
         if(r.status!=='scheduled') {
           await reply(`end:${r.id}`,r,`Rerun request ${r.id} ${r.status}; no new test execution will start. Request a new rerun after checking permissions and configuration.`)
+          store.locked(()=>store.write({...store.get(r.id),notifiedAt:new Date(now()).toISOString()}))
           continue
         }
         const run=read(r.runId),job=state.jobs.find(j=>j.runId===r.runId)

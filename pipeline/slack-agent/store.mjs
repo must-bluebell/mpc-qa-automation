@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync, renameSync, existsSync, unlinkSync, openSync, closeSync, fsyncSync } from 'node:fs'
 import { join } from 'node:path'
 import { acquireLock } from '../lib/lock.mjs'
 import { RUNS_DIR } from '../lib/env.mjs'
@@ -10,7 +10,7 @@ const iso = now => new Date(now).toISOString()
 const same = (a,b) => ['team','channel','user','thread'].every(k => a[k] === b[k])
 const dated = value => typeof value === 'string' && Number.isFinite(Date.parse(value))
 function validRecord(r,id) {
-  if(!r||r.id!==id)return false
+  if(!r||r.id!==id||(r.retainedAt!==undefined&&!dated(r.retainedAt))||(r.notifiedAt!==undefined&&!dated(r.notifiedAt)))return false
   if(r.type==='event')return ['handling','handled'].includes(r.status)&&dated(r.at)
   if(r.type==='reply')return (!r.identity||(r.identity.channel===r.payload?.channel&&r.identity.thread===r.payload?.thread_ts))
     &&['sending','sent','pending','uncertain'].includes(r.status)&&typeof r.key==='string'
@@ -25,11 +25,25 @@ function validRecord(r,id) {
   if(['scheduled','completed'].includes(r.status)&&r.runId!==`slack-${id}`)return false
   return true
 }
+// Terminal claims remain deduplicated for 30 days after their last transition.
+// Pending rate-limit retries and unfinished reruns have no retention deadline.
+export const TERMINAL_RETENTION_MS = 30 * 86400000
+const active = r => r.type==='reply' ? r.status==='pending'
+  : r.type==='rerun' && (!['completed','cancelled'].includes(r.status)
+    && (!['expired','rejected'].includes(r.status)||!r.notifiedAt))
+const protectedRecord = r => r.type==='reply' ? r.status==='pending'
+  : r.type==='rerun' && ['pending','queued','scheduled'].includes(r.status)
+const unreadable = () => new Error('Slack agent state is unreadable; operator repair is required.')
 export class AgentStore {
-  constructor(directory = join(RUNS_DIR,'slack-agent')) { this.directory = directory; mkdirSync(directory,{recursive:true,mode:0o700}) }
+  constructor(directory = join(RUNS_DIR,'slack-agent'),{now=Date.now}={}) {
+    this.directory=directory; this.now=now; this.inLock=false
+    mkdirSync(directory,{recursive:true,mode:0o700})
+  }
   locked(work) {
+    if(this.inLock)return work()
     const lock = acquireLock(`agent-state-${process.pid}`,'state',{directory:this.directory})
-    try { return work() } finally { lock.release() }
+    this.inLock=true
+    try { return work() } finally { this.inLock=false;this.index=null;lock.release() }
   }
   get(id) {
     if (!/^[a-f0-9]{32}$/.test(id)) throw new Error('Invalid request identity.')
@@ -40,17 +54,94 @@ export class AgentStore {
     }
     catch(error) { if(error.code === 'ENOENT') return null; throw new Error('Slack agent record is unreadable; operator repair is required.') }
   }
-  write(record) {
-    if (!/^[a-f0-9]{32}$/.test(record.id)) throw new Error('Invalid request identity.')
-    const temp=join(this.directory,`${record.id}.${randomUUID()}.tmp`)
-    writeFileSync(temp,JSON.stringify(record,null,2),{mode:0o600})
-    renameSync(temp,join(this.directory,`${record.id}.json`))
-    return record
+  atomic(name,value) {
+    const temp=join(this.directory,`${name}.${randomUUID()}.tmp`)
+    const fd=openSync(temp,'wx',0o600)
+    try {writeFileSync(fd,JSON.stringify(value,null,2));fsyncSync(fd)} finally {closeSync(fd)}
+    renameSync(temp,join(this.directory,name))
+    const directoryFd=openSync(this.directory,'r')
+    try {fsyncSync(directoryFd)} finally {closeSync(directoryFd)}
   }
+  // A dirty marker is written before a record mutation. A crash between record and
+  // index renames forces a complete, validated rebuild under the shared state lock.
+  loadIndex() {
+    if(this.index)return this.index
+    const path=join(this.directory,'active-index.json')
+    if(!existsSync(path)||existsSync(join(this.directory,'active-index.dirty'))) {
+      const records=this.list()
+      this.index={version:1,ids:records.filter(active).map(r=>r.id),nextRetentionAt:this.now()}
+      this.atomic('active-index.json',this.index)
+      if(existsSync(join(this.directory,'active-index.dirty')))unlinkSync(join(this.directory,'active-index.dirty'))
+    } else {
+      try {
+        this.index=JSON.parse(readFileSync(path,'utf8'))
+        if(this.index.version!==1||!Array.isArray(this.index.ids)
+          ||this.index.ids.some(id=>!/^[a-f0-9]{32}$/.test(id))
+          ||new Set(this.index.ids).size!==this.index.ids.length||!Number.isFinite(this.index.nextRetentionAt))throw unreadable()
+      } catch {this.index=null;throw unreadable()}
+    }
+    return this.index
+  }
+  write(record) {
+    return this.locked(()=>{
+      if(!validRecord(record,record.id)||!/^[a-f0-9]{32}$/.test(record.id))throw unreadable()
+      const index=this.loadIndex()
+      // Use the transition time, not the request time: long-running jobs must
+      // retain completion dedupe for the full horizon after they finish.
+      record={...record,...(!protectedRecord(record)?{retainedAt:record.retainedAt||iso(this.now())}:{})}
+      this.atomic('active-index.dirty',{id:record.id})
+      this.atomic(`${record.id}.json`,record)
+      index.ids=index.ids.filter(id=>id!==record.id)
+      if(active(record))index.ids.push(record.id)
+      this.atomic('active-index.json',index)
+      unlinkSync(join(this.directory,'active-index.dirty'))
+      return record
+    })
+  }
+  // Explicit historical inspection only; never used by normal scheduler/poll reads.
   list() { return readdirSync(this.directory).filter(f=>/^[a-f0-9]{32}\.json$/.test(f)).map(f=>this.get(f.slice(0,-5))) }
+  listActive() {
+    return this.locked(()=>this.loadIndex().ids.map(id=>{
+      const r=this.get(id)
+      if(!r||!active(r))throw unreadable()
+      return r
+    }))
+  }
+  maintain() {
+    return this.locked(()=>{
+      const index=this.loadIndex(),now=this.now()
+      if(now<index.nextRetentionAt)return
+      // At most once per day, validate the entire set before removing anything.
+      // Legacy records start their horizon at migration, preserving old claims.
+      const records=this.list()
+      for(const r of records) {
+        if(protectedRecord(r))continue
+        if(!r.retainedAt) {this.write({...r,retainedAt:iso(now)});continue}
+        if(!dated(r.retainedAt))throw unreadable()
+      }
+      this.atomic('active-index.dirty',{retention:true})
+      for(const r of records) {
+        if(protectedRecord(r)||!r.retainedAt||now-Date.parse(r.retainedAt)<TERMINAL_RETENTION_MS)continue
+        // A crash after sending an end reply but before completing its request
+        // must not let retention remove that reply's dedupe prematurely.
+        if(r.type==='reply'&&r.key.startsWith('end:')) {
+          const request=this.get(r.key.slice(4))
+          if(request&&active(request))continue
+        }
+        unlinkSync(join(this.directory,`${r.id}.json`))
+        index.ids=index.ids.filter(id=>id!==r.id)
+      }
+      index.nextRetentionAt=now+86400000
+      this.atomic('active-index.json',index)
+      unlinkSync(join(this.directory,'active-index.dirty'))
+    })
+  }
   expirePending(now) {
-    for(const r of this.list().filter(r=>r.type==='rerun'&&r.status==='pending'&&now>=Date.parse(r.expiresAt)))
-      this.write({...r,status:'expired',audit:[...r.audit,{action:'expired',at:iso(now)}]})
+    return this.locked(()=>{
+      this.maintain()
+      for(const r of this.listActive().filter(r=>r.type==='rerun'&&r.status==='pending'&&now>=Date.parse(r.expiresAt)))
+        this.write({...r,status:'expired',audit:[...r.audit,{action:'expired',at:iso(now)}]})
+    })
   }
   propose(eventId, identity, suite, env, settings, now=Date.now()) {
     if(!authorize(identity,settings,true)) throw new Error('You are not authorized to request reruns.')
@@ -60,7 +151,7 @@ export class AgentStore {
       this.expirePending(now)
       const id=digest(`request:${identity.team}:${eventId}`), prior=this.get(id)
       if(prior) { if(!same(prior,identity)||prior.suite!==suite||prior.env!==env) throw new Error('Request does not match.'); return prior }
-      if(this.list().filter(r=>r.type==='rerun'&&r.user===identity.user&&['pending','queued','scheduled'].includes(r.status)).length>=3)
+      if(this.listActive().filter(r=>r.type==='rerun'&&r.user===identity.user&&['pending','queued','scheduled'].includes(r.status)).length>=3)
         throw new Error('Three rerun requests are already outstanding; wait for completion or cancel a pending request.')
       return this.write({id,type:'rerun',...identity,suite,env,status:'pending',createdAt:iso(now),expiresAt:iso(now+300000),audit:[{action:'requested',user:identity.user,at:iso(now)}]})
     })
@@ -109,7 +200,7 @@ export class AgentStore {
 export function consumeRequests(state,{store=new AgentStore(),settings=agentSettings(),now=Date.now(),persist}={}) {
   return store.locked(()=>{
     store.expirePending(now)
-    for(const r of store.list().filter(r=>r.type==='rerun'&&r.status==='queued')) {
+    for(const r of store.listActive().filter(r=>r.type==='rerun'&&r.status==='queued')) {
       const id=`slack-${r.id}`,prior=state.jobs.find(j=>j.id===id)
       if(prior) {
         persist(state)
