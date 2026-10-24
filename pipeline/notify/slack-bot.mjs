@@ -137,14 +137,13 @@ function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
 /** Every check, grouped by category; a reason shared by all of a category's failures is printed once. Split to stay readable in Slack. */
 function renderCases(groups) {
   const result=[]
-  for(const [status,label] of [['failed','Failed cases'],['blocked','Blocked cases'],['skipped','Skipped cases'],['passed','Passed cases']]) {
-    const sections=[]
-    for(const [category,checks] of groups) {
+  for(const [category,checks] of groups) {
+    for(const [status,label] of [['failed','Failed cases'],['blocked','Blocked cases'],['skipped','Skipped cases'],['passed','Passed cases']]) {
       const selected=checks.filter(t=>t.status===status)
       if(!selected.length)continue
-      sections.push(`*${category}* — ${selected.length} ${status}`,...selected.map(t=>`${CHECK_ICONS[t.status]} ${t.name}${t.critical?' *(critical)*':''}${(t.reason??t.detail)?`\n      ↳ ${t.reason??t.detail}`:''}`),'')
+      const sections=[`*${category}* — ${selected.length} ${status}`,...selected.map(t=>`${CHECK_ICONS[t.status]} ${t.name}${t.critical?' *(critical)*':''}${(t.reason??t.detail)?`\n      ↳ ${t.reason??t.detail}`:''}`)]
+      result.push(...splitThreadText(`*${label}*`,sections.join('\n')))
     }
-    if(sections.length)result.push(...splitThreadText(`*${label}*`,sections.join('\n')))
   }
   return result
 }

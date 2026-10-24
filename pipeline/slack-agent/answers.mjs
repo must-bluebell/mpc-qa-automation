@@ -3,22 +3,72 @@ import { readLock } from '../lib/lock.mjs'
 import { config } from '../lib/env.mjs'
 import { publicSummary, safeText, dashboardRunUrl } from '../lib/safe-output.mjs'
 import { explainEvidence } from './explain.mjs'
+import { answerPullRequest } from './pr-evidence.mjs'
 
 export const plain = value => safeText(value).replace(/[<>&`]/g,'').slice(0,2800)
-const help = 'Ask about the latest API/UAT/load run, failures, last pass, evidence, or testing schedule. To request a rerun: “rerun api” (also smoke, regression, uat, load, full). A rerun requires authorization and confirmation.'
+const help = 'Ask about my testing capabilities, reporting repository, latest test results, failed cases, last passing run, evidence, testing schedules, or the last tested/merged PR. For example: “what can you do?”, “how did the tests go?”, or “who merged the code?”. To request a rerun: “rerun api” (also smoke, regression, uat, load, full). A rerun requires authorization and confirmation.'
+const capabilities = `I am MPC QA Agent. My role is testing:
+1. Request reruns of browser, API, regression, UAT, and load tests.
+2. Show the latest results: passed, failed, skipped, and blocked checks.
+3. Report failures and share recorded test evidence.
+4. Find the last passing test run.
+5. Show testing schedules and scheduler status.
+6. Show the last tested PR and its QA check results.
+7. Show the last merged PR, who merged it, and recorded merge details.
+
+Test reruns require authorization and confirmation. Ask “show the latest report” for results or “rerun api” to request a test run.`
+function repositoryScope(environment) {
+  const repository=environment.QA_SLACK_PR_REPOSITORY
+  return /^[\w.-]+\/[\w.-]+$/.test(repository||'')
+    ? `Configured QA/PR reporting repository: ${repository}. This is my configured reporting scope; access to other repositories is not verified.`
+    : 'A QA/PR reporting repository is not configured. Repository permissions outside this reporting scope are not verified.'
+}
+// Normalize wording only for read-only questions. Execution commands keep their exact grammar.
+function questionWords(text) {
+  return text.normalize('NFKC').replace(/<@[A-Z0-9]+(?:\|[^>]*)?>/gi,' ')
+    .toLowerCase().replace(/[‘’]/g,"'").replace(/\bwhat's\b/g,'what is')
+    .replace(/\b(?:capabilties|capaabilties|capablities)\b/g,'capabilities')
+    .replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ')
+}
 export function parseRequest(value) {
   const text=String(value||'').replace(/^\s*<@[A-Z0-9]+>\s*/, '').trim().slice(0,1200)
   const command=text.match(/^(?:please )?rerun (smoke|api|regression|uat|load|full)(?: (?:on|in) ([\w-]+))?[.!?]?$/i)
   if(command) return {kind:'rerun',suite:command[1].toLowerCase(),env:command[2]?.toLowerCase()||'local-docker'}
   if(/\b(?:rerun|execute|run again)\b/i.test(text)) return {kind:'invalid-rerun'}
-  const suite=/\bapi\b/i.test(text)?'api':/\buat\b/i.test(text)?'uat':/\bload\b/i.test(text)?'load':/\b(?:web|browser|regression)\b/i.test(text)?'regression':/\bnightly\b/i.test(text)?'nightly-regression':null
-  const match=text.match(/\b(?:report|run|evidence)(?: for)? ([A-Za-z0-9][\w-]{0,99})[?.!]?$/i)
-  const runId=match&&!['latest','last','api','uat','load','full','regression','smoke','nightly'].includes(match[1].toLowerCase())?match[1]:null
-  const kind=/\bscheduler\b/i.test(text)?'scheduler':/\bschedul(?:e|es|ed|ing)\b/i.test(text)?'schedule'
-    :/\bpass(?:ed)?\b/i.test(text)&&/\b(?:when|last|latest)\b/i.test(text)?'last-pass'
-    :/\b(?:fail(?:ed|ures?)?|broken)\b/i.test(text)?'failures'
-    :/\b(?:evidence|report|trace|screenshot)\b/i.test(text)?'evidence'
-    :/\b(?:latest|last|status)\b/i.test(text)?'latest':/^(?:help|hi|hello)[!?.]?$/i.test(text)?'help':'explain'
+  const q=questionWords(text),has=pattern=>pattern.test(q)
+  const simple=kind=>({kind,suite:null,runId:null,text})
+  if(has(/\b(?:capabilities|capability|capable|abilities)\b/)
+    ||has(/\b(?:your|agent(?: s)?) (?:role|skills|purpose|functions)\b/)
+    ||has(/\bwhat (?:are you|you are) able to do\b/)
+    ||has(/\b(?:introduce yourself|tell me about yourself|who are you|how can you help|what (?:is|s) your purpose)\b/)
+    ||has(/\bwhat (?:can|could|does|do|will) (?:you|(?:the )?(?:mpc )?(?:qa )?agent) (?:do|test|check|support|help with)\b/)
+    ||has(/\bwhat you (?:can|could|will) (?:do|test|check)\b/)
+    ||has(/\b(?:which|what) tests (?:do|can) you (?:support|run|test)\b/))return simple('capabilities')
+  if(has(/\b(?:repos?|repositories|repository)\b/)
+    &&(has(/\b(?:access|permissions?|connected|scope)\b/)
+      ||has(/\b(?:which|what)\b.*\b(?:test|testing|check|support)\b/)))return simple('repositories')
+  if(has(/\b(?:pr|pull request)\b/)
+    ||(has(/\b(?:who|how)\b/)&&has(/\b(?:merged?|landed|integrated)\b/)&&has(/\bcode\b/))) {
+    if(has(/\b(?:merged?|landed|integrated)\b/))return simple('pr-merged')
+    if(has(/\b(?:test(?:ed|ing)?|check(?:ed)?|verified|validated|fail(?:ed|ures?)?|last|latest|recently)\b/))return simple('pr-tested')
+  }
+  const suite=has(/\b(?:api|endpoints?)\b/)?'api':has(/\b(?:uat|acceptance)\b/)?'uat'
+    :has(/\b(?:load|performance|stress)\b/)?'load':has(/\bnightly\b/)?'nightly-regression'
+    :has(/\b(?:web|browser|regression|ui|e2e)\b|\bend to end\b/)?'regression'
+    :has(/\bsmoke\b/)?'smoke':has(/\bfull\b/)?'full':null
+  const match=text.replace(/\s+(?:please|thanks|thank you)[.!?]?$/i,'').match(/\b(?:report|run|evidence)(?: for)? ([A-Za-z0-9][\w-]{0,99})[?.!]?$/i)
+  const runId=match&&!['latest','last','api','uat','load','full','regression','smoke','nightly','please','details','summary','now','results','result','status','outcome','updates'].includes(match[1].toLowerCase())?match[1]:null
+  const qaContext=has(/\b(?:qa|tests?|testing|checks?|runs?|results?|failures?|errors?|pattern|trend|performance)\b/)
+  const kind=has(/\bscheduler\b|\bis scheduling (?:active|running|enabled)\b/)?'scheduler'
+    :has(/\b(?:pass|passed|passing|green|successful)\b/)&&has(/\b(?:when|last|latest|previous|most recent)\b/)?'last-pass'
+    :has(/\b(?:schedule|schedules|scheduled|scheduling|timetable|cron)\b/)
+      ||(has(/\b(?:when|what time)\b/)&&has(/\b(?:next|run|start|happen)\b/)&&qaContext)?'schedule'
+    :has(/\b(?:fail|failed|failing|failure|failures|broken|unsuccessful)\b/)?'failures'
+    :has(/\b(?:evidence|reports?|traces?|screenshots?)\b/)?'evidence'
+    :has(/\b(?:explain|analyze|analyse|why)\b|\broot cause\b/)&&qaContext?'explain'
+    :has(/\b(?:results?|outcomes?|updates?|summary|status)\b/)
+      ||(has(/\b(?:latest|last|recent)\b/)&&qaContext)
+      ||has(/\bhow did (?:the )?(?:qa |api |uat |load |browser |ui )?(?:tests?|testing|checks?) go\b/)?'latest':'help'
   return {kind,suite,runId,text}
 }
 export function reportLink(id, environment=process.env) {
@@ -36,8 +86,11 @@ function suiteTests(run,suite) {
 }
 export async function answerQuestion(question, options={}) {
   const {index=readIndex,read=readRun,scheduler=()=>readLock('scheduler'),schedules=config.schedules,environment=process.env,
-    ai=false,explain=explainEvidence}=options
+    ai=false,explain=explainEvidence,prEvidence=answerPullRequest}=options
   const parsed=parseRequest(question)
+  if(parsed.kind==='capabilities') return `${capabilities}\n\n${repositoryScope(environment)}`
+  if(parsed.kind==='repositories') return repositoryScope(environment)
+  if(parsed.kind.startsWith('pr-'))return prEvidence(parsed.kind.slice(3),{repository:environment.QA_SLACK_PR_REPOSITORY})
   if(['help','invalid-rerun','rerun'].includes(parsed.kind)) return help
   if(parsed.kind==='scheduler') {
     const lock=scheduler()

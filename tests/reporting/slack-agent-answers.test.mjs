@@ -10,6 +10,58 @@ const run = (id,status='failed') => ({runId:id,suite:'api',env:'local-docker',st
 const deps = runs => ({index:()=>runs.map(r=>({runId:r.runId})),read:id=>runs.find(r=>r.runId===id),
   scheduler:()=>({pid:123,stale:false}),schedules:()=>({timezone:'Asia/Seoul',schedules:[{id:'nightly',suite:'api',cron:'0 1 * * *',enabled:true}]}),environment:{}})
 
+test('capability questions describe testing only without requiring evidence or AI',async()=>{
+  for(const question of ['what can you do?', '<@UAPP> what are your capabilities?', 'tell me your capabilities', 'what are you capable of?']) {
+    const answer=await answerQuestion(question,{...deps([]),ai:true,
+      index:()=>{throw new Error('Capabilities must not need run history')},
+      explain:()=>{throw new Error('Capabilities must not need AI')}})
+    assert.match(answer,/browser, API, regression, UAT, and load tests/)
+    assert.match(answer,/passed, failed, skipped, and blocked/i)
+    assert.match(answer,/evidence/i)
+    assert.match(answer,/schedule/i)
+    assert.match(answer,/last tested PR/i)
+    assert.match(answer,/last merged PR/i)
+    assert.match(answer,/who merged/i)
+    assert.doesNotMatch(answer,/build features|edit code|review changes|manage branches|commits|pull requests|coding workflow|integrations/i)
+    assert.match(answer,/confirmation/i)
+  }
+})
+
+test('PR reporting questions use read-only PR evidence instead of unrelated local runs',async()=>{
+  for(const [question,kind] of [
+    ['show the last tested PR','tested'],['failed cases in the last tested PR','tested'],
+    ['last merged PR name','merged'],['who merged the code?','merged'],['how was the code merged?','merged'],
+  ]) {
+    assert.equal(parseRequest(question).kind,`pr-${kind}`)
+    const answer=await answerQuestion(question,{...deps([]),environment:{QA_SLACK_PR_REPOSITORY:'team/qa'},
+      prEvidence:async(actual,options)=>{
+        assert.equal(actual,kind)
+        assert.equal(options.repository,'team/qa')
+        return 'Recorded PR evidence'
+      },index:()=>{throw new Error('PR reporting must not borrow local run results')}})
+    assert.equal(answer,'Recorded PR evidence')
+  }
+})
+
+test('greetings with inline mentions and indirect capability or repository questions bypass AI evidence',async()=>{
+  for(const question of [
+    'Hello <@U0C8B0PU4FQ> can you tell me what you are capable of and which repos you have access to?',
+    'Can you tell me what you are capable of?',
+    'Which repos do you have access to?',
+    'What repositories can you access?',
+  ]) {
+    const answer=await answerQuestion(question,{ai:true,environment:{QA_SLACK_PR_REPOSITORY:'globalmpc/mpc-automation'},
+      index:()=>{throw new Error('Self-description must not read test history')},
+      explain:()=>{throw new Error('Self-description must not use AI explanations')}})
+    assert.match(answer,/globalmpc\/mpc-automation/)
+    assert.match(answer,/configured.*reporting/i)
+    assert.doesNotMatch(answer,/Advisory|Source:|U0C8B0PU4FQ|push permission|76 repositories/i)
+    if(question.includes('capable'))assert.match(answer,/My role is testing/)
+  }
+  const missing=await answerQuestion('which repos can you access?',{environment:{},index:()=>{throw new Error('No history')}})
+  assert.match(missing,/not configured/i)
+})
+
 test('questions and commands are routed without executing arbitrary text',()=>{
   assert.deepEqual(parseRequest('<@UAPP> rerun api'),{kind:'rerun',suite:'api',env:'local-docker'})
   assert.deepEqual(parseRequest('rerun load on production'),{kind:'rerun',suite:'load',env:'production'})

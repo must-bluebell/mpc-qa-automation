@@ -21,8 +21,6 @@ __pycache__/
 .env.*
 !.env.example
 
-# Interviewer-only material belongs in a restricted store outside this repository.
-hiring-quest/*CONFIDENTIAL*
 ci-slack-report.json
 
 # Private signing keys and credential bundles stay outside version control.

@@ -3,6 +3,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path'
 import { ROOT, config } from '../lib/env.mjs'
 import { runProcess } from '../lib/proc.mjs'
 import { stackPortEnv } from './local-stack.mjs'
+import { prepareWebRuntime } from './web-runtime.mjs'
 
 /**
  * Runs WEB MPC's own local scenario suite (test/scenario/local) unchanged against the isolated stack.
@@ -38,6 +39,8 @@ export async function runWebmpcStep(step, ctx) {
   if (!existsSync(join(webmpc, 'playwright.local.config.ts'))) {
     return { tests: [], errors: [`WEB MPC checkout not found at ${webmpc}`], infra: 'WEB MPC checkout missing' }
   }
+  if(ctx.echo)console.log('Preparing isolated web runtime for application scenarios; database and chains preserved.')
+  await prepareWebRuntime(ctx.env,{purpose:'scenarios',timeoutMs:Math.min(240_000,ctx.remainingMs())})
   const json = join(ctx.stepDir, 'results.json')
   const args = ['exec', 'playwright', 'test', '--config=playwright.local.config.ts', '--reporter=list,json,html', `--output=${join(ctx.stepDir, 'test-results')}`]
   if (step.project) args.push(`--project=${step.project}`)

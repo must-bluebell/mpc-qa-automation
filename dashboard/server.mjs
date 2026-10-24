@@ -17,6 +17,7 @@ import { sendBotTest } from '../pipeline/notify/slack-bot.mjs'
 import { slackStatus } from './slack-settings.mjs'
 import { expandSuite, guard } from '../pipeline/orchestrator.mjs'
 import { outputRedactor } from '../pipeline/lib/output-redactor.mjs'
+import { REPORT_CATEGORIES } from '../pipeline/lib/safe-output.mjs'
 
 /**
  * Local QA dashboard: browse run history and start suites without opening the WEB MPC project.
@@ -45,7 +46,7 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webm': 'video/webm',
   '.zip': 'application/zip', '.svg': 'image/svg+xml',
 }
-const TEXT = new Set(['.json', '.md', '.log', '.txt', '.html', '.mjs', '.js', '.ts'])
+const TEXT = new Set(['.json', '.md', '.log', '.txt', '.html', '.mjs', '.js', '.ts', '.svg', '.css'])
 
 const BASE_HEADERS = {
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
@@ -104,27 +105,55 @@ function busy() {
   return live ? { runId: live.runId, startedAt: live.startedAt } : null
 }
 
+function latestCategoryResults() {
+  const latest = new Map()
+  const entries = readIndex().filter(r => r.env === 'local-docker' && r.finishedAt && !r.seededDefect && !r.reportOnly && !['running', 'skipped-overlap'].includes(r.status))
+    .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))
+  for (const entry of entries) {
+    const run = readRun(entry.runId)
+    if (!run || run.reportOnly || run.seededDefect) continue
+    for (const { suite } of REPORT_CATEGORIES) {
+      if (latest.has(suite)) continue
+      const tests = (run.tests ?? []).filter(t => {
+        const step = run.steps?.find(s => s.name === t.step)
+        const source = step?.fromSuite ?? run.suite
+        return source === suite || (suite === 'api' && (t.project ?? step?.project) === 'api')
+          || (suite === 'regression' && (t.project ?? step?.project) === 'chromium')
+          || (suite === 'load' && (t.adapter ?? step?.adapter) === 'k6')
+      })
+      if (!tests.length) continue
+      const counts = Object.fromEntries(['passed', 'failed', 'skipped', 'blocked'].map(status => [status, tests.filter(t => t.status === status).length]))
+      const status = counts.failed ? 'failed' : counts.blocked ? 'blocked' : counts.passed ? 'passed' : 'skipped'
+      latest.set(suite, { suite, runId: run.runId, env: run.env, finishedAt: run.finishedAt, status, counts })
+    }
+    if (latest.size === REPORT_CATEGORIES.length) break
+  }
+  return REPORT_CATEGORIES.flatMap(({ suite }) => latest.has(suite) ? [latest.get(suite)] : [])
+}
+
 function status() {
   const suites = config.suites()
   const envs = config.environments()
   const ai = aiConfig()
   return {
     running: busy(),
-    jobs: [...jobs.values()].map(({ runId, suite, env, startedAt, exitCode }) => ({ runId, suite, env, startedAt, exitCode: exitCode ?? null })),
+    jobs: [...jobs.values()].map(({ runId, suite, env, startedAt, exitCode, notify }) => ({ runId, suite, env, startedAt, exitCode: exitCode ?? null, notify })),
     suites: Object.entries(suites).map(([name, s]) => ({ name, description: s.description, include: s.include ?? null, requiresIsolated: !!s.requiresIsolated, requiresLoad: !!s.requiresLoad })),
     environments: Object.entries(envs).map(([name, e]) => ({ name, description: e.description, isolated: !!e.isolated, allowWrites: !!e.allowWrites, allowLoad: !!e.allowLoad })),
     seededDefects: Object.entries(PROFILES).map(([name, p]) => ({ name, kind: p.kind, description: p.description })),
     slack: slackStatus(),
     ai: { provider: ai.provider, configured: ai.configured, model: ai.configured ? ai.model : null, auto: process.env.QA_AI_AUTO === '1' },
     schedules: config.schedules().schedules,
+    categoryResults: latestCategoryResults(),
   }
 }
 
-function startRun({ suite, env, seedDefect, ai }) {
+function startRun({ suite, env, seedDefect, ai, notify }) {
   const suites = config.suites()
   const envs = config.environments()
   if (typeof suite !== 'string' || !Object.hasOwn(suites, suite)) throw Object.assign(new Error('Unknown suite'), { status: 400 })
   if (typeof env !== 'string' || !Object.hasOwn(envs, env)) throw Object.assign(new Error('Unknown environment'), { status: 400 })
+  if (notify != null && typeof notify !== 'boolean') throw Object.assign(new Error('Slack alerts must be enabled or disabled'), { status: 400 })
   if (seedDefect != null && seedDefect !== '' && (typeof seedDefect !== 'string' || !Object.hasOwn(PROFILES, seedDefect))) throw Object.assign(new Error('Unknown seeded defect'), { status: 400 })
   const holder = busy()
   if (holder) throw Object.assign(new Error(`A run is already in progress (${holder.runId})`), { status: 409 })
@@ -135,12 +164,13 @@ function startRun({ suite, env, seedDefect, ai }) {
   const runId = newRunId(suite)
   const args = [join(ROOT, 'pipeline/orchestrator.mjs'), '--suite', suite, '--env', env, '--run-id', runId, '--trigger', 'dashboard']
   if (seedDefect) args.push('--seed-defect', seedDefect)
+  if (notify === false) args.push('--no-notify')
   args.push(...aiArgs(ai))
   mkdirSync(JOB_LOG_DIR, { recursive: true, mode: 0o700 })
   const logFile = join(JOB_LOG_DIR, `${runId}.log`)
   const log = createWriteStream(logFile, { mode: 0o600 })
   const child = spawn(process.execPath, args, { cwd: ROOT, env: { ...process.env, FORCE_COLOR: '0' }, stdio: ['ignore', 'pipe', 'pipe'] })
-  const job = { runId, suite, env, pid: child.pid, startedAt: new Date().toISOString(), logFile, exitCode: undefined }
+  const job = { runId, suite, env, pid: child.pid, startedAt: new Date().toISOString(), logFile, exitCode: undefined, notify: notify !== false }
   jobs.set(runId, job)
   const stdout = outputRedactor(text => log.write(text)), stderr = outputRedactor(text => log.write(text))
   child.stdout.on('data', chunk => stdout.write(chunk))
@@ -183,6 +213,7 @@ function serveArtifact(res, runId, rel) {
   let file
   try {
     const realBase = realpathSync(base)
+    if (realBase !== join(realpathSync(RUNS_DIR), runId)) return send(res, 403, { error: 'Forbidden' })
     file = realpathSync(resolve(base, decoded))
     if (!file.startsWith(realBase + sep)) return send(res, 403, { error: 'Forbidden' })
     if (!statSync(file).isFile()) return send(res, 404, { error: 'Not found' })
@@ -192,7 +223,9 @@ function serveArtifact(res, runId, rel) {
   if (ext === '.html') headers['Content-Security-Policy'] = REPORT_CSP
   else headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox"
   if (!TYPES[ext]) headers['Content-Disposition'] = 'attachment'
-  if (TEXT.has(ext) && statSync(file).size <= REDACT_LIMIT) {
+  if (TEXT.has(ext)) {
+    // Never fall back to raw streaming when a text file is too large to redact safely.
+    if (statSync(file).size > REDACT_LIMIT) return send(res, 413, { error: 'Text artifact is too large to redact safely' })
     res.writeHead(200, headers)
     return res.end(redact(readFileSync(file, 'utf8')))
   }

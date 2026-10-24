@@ -7,6 +7,7 @@ import { agentSettings, authorize, validateSettings } from '../../pipeline/slack
 import { createAgent } from '../../pipeline/slack-agent/agent.mjs'
 import { AgentStore, consumeRequests } from '../../pipeline/slack-agent/store.mjs'
 import { completeJob } from '../../pipeline/scheduler.mjs'
+import { answerQuestion } from '../../pipeline/slack-agent/answers.mjs'
 const now=Date.parse('2026-10-23T08:00:00Z')
 const env={QA_SLACK_AGENT_ENABLED:'1',QA_SLACK_TEAM_ID:'T123',SLACK_CHANNEL_ID:'C123',QA_SLACK_ALLOWED_USER_IDS:'U123',QA_SLACK_ALLOWED_CHANNEL_IDS:'*',QA_SLACK_ALLOW_DMS:'1'}
 const identity=(channel='D123')=>({team:'T123',channel,user:'U123',thread:'123.456'})
@@ -48,6 +49,26 @@ test('mentions in multiple channels and plain DMs reply only in their originatin
   assert.ok(posts.every(p=>p.thread_ts==='123.456'))
   await agent.mention(event('D123'))
   assert.equal(posts.length,3)
+})
+
+test('the same capability question gives testing and repository scope in each allowed channel and DM',async t=>{
+  const {store,settings}=fixture(t),posts=[]
+  settings.ai=true
+  const agent=createAgent({store,settings:()=>settings,now:()=>now,
+    post:async payload=>{posts.push(payload);return {ts:'123.999'}},
+    index:()=>{throw new Error('Capability question must bypass recorded runs')},
+    answer:(question,options)=>answerQuestion(question,{...options,environment:{QA_SLACK_PR_REPOSITORY:'globalmpc/mpc-automation'},
+      explain:()=>{throw new Error('Capability question must bypass AI')}})})
+  for(const channel of ['C123','C999','G123','D123'])
+    await agent.mention(event(channel,channel.startsWith('D')?'message':'app_mention',`Ev${channel}`,{
+      text:'Hello <@U0C8B0PU4FQ> can you tell me what you are capable of and which repos you have access to?'}))
+  assert.deepEqual(posts.map(p=>p.channel),['C123','C999','G123','D123'])
+  for(const post of posts){
+    assert.match(post.text,/My role is testing/)
+    assert.match(post.text,/globalmpc\/mpc-automation/)
+    assert.doesNotMatch(post.text,/Advisory|Source:|could not be processed/)
+    assert.equal(post.thread_ts,'123.456')
+  }
 })
 
 test('ordinary channel messages, bot echoes, edited messages and group DMs do not trigger replies',async t=>{

@@ -6,6 +6,7 @@ import { ROOT, config, isLoopback } from '../lib/env.mjs'
 import { appendEvent } from '../lib/run-store.mjs'
 import { runProcess } from '../lib/proc.mjs'
 import { signInFresh } from '../lib/siwe.mjs'
+import { prepareWebRuntime, warmLoadEndpoints } from './web-runtime.mjs'
 
 export class LoadGuardError extends Error {}
 
@@ -53,6 +54,8 @@ export function evaluateLoad(summary, thresholds, baseline) {
 
 export async function runK6Step(step, ctx) {
   assertLoadAllowed(ctx.env, ctx.targetUrl)
+  if(ctx.echo)console.log('Preparing isolated web runtime for steady-state load; database and chains preserved.')
+  await prepareWebRuntime(ctx.env,{timeoutMs:Math.min(240_000,ctx.remainingMs())})
   const thresholds = config.thresholds()
   const profileName = process.env.QA_LOAD_PROFILE || step.profile || 'baseline'
   const profile = { ...thresholds.profiles[profileName] }
@@ -62,16 +65,27 @@ export async function runK6Step(step, ctx) {
   // Sessions are signed in against the real app (not the chaos proxy) so seeded faults only affect measured traffic.
   const sessions = []
   for (let i = 0; i < (step.sessions ?? 10); i++) sessions.push(await signInFresh({ baseUrl: ctx.env.baseUrl, appOrigin: ctx.env.appOrigin, chainId: ctx.env.chainId }))
+  await warmLoadEndpoints(ctx.env,sessions[0],Object.keys(thresholds.endpoints))
   // Private, unpredictable temp folder (mkdtemp creates it 0700) so other local users cannot read the cookies.
   const secretDir = mkdtempSync(join(tmpdir(), 'mpc-qa-'))
   const sessionsFile = join(secretDir, 'sessions.json') // cookies stay out of the evidence folder
   writeFileSync(sessionsFile, JSON.stringify(sessions), { mode: 0o600 })
   const summaryFile = join(ctx.stepDir, 'k6-summary.json')
   try {
+    const measuredEnv = { BASE_URL: ctx.targetUrl, APP_ORIGIN: ctx.env.appOrigin, SESSIONS_FILE: sessionsFile, SUMMARY_FILE: summaryFile,
+      K6_PROFILE: JSON.stringify(profile), K6_ENDPOINTS: JSON.stringify(Object.keys(thresholds.endpoints)), K6_NO_USAGE_REPORT: 'true' }
+    const warmupFile=join(secretDir,'warmup-summary.json')
+    if(ctx.echo)console.log('Warming the same load workload for 15 seconds before the measured profile.')
+    const warmup=await runProcess('k6',['run','--quiet',scriptPath],{cwd:ROOT,timeoutMs:Math.min(60_000,ctx.remainingMs()),
+      logFile:join(ctx.stepDir,'warmup.log'),echo:ctx.echo,env:{...measuredEnv,BASE_URL:ctx.env.baseUrl,SUMMARY_FILE:warmupFile,
+        K6_PROFILE:JSON.stringify({vus:Math.min(profile.vus??5,5),duration:'15s'})}})
+    const warmSummary=existsSync(warmupFile)?JSON.parse(readFileSync(warmupFile,'utf8')):null
+    const warmChecks=warmSummary?.metrics?.checks?.values?.rate
+    if(warmup.code!==0||warmup.timedOut||!Number.isFinite(warmChecks)||warmChecks<0.99)return {tests:[],errors:['Load warmup did not complete with passing functional checks.'],infra:'load warmup failed'}
+    if(ctx.echo)console.log('Warmup complete; starting measured load with the configured profile and unchanged SLOs.')
     const result = await runProcess('k6', ['run', '--quiet', scriptPath], {
       cwd: ROOT, timeoutMs: ctx.remainingMs(), logFile: join(ctx.stepDir, 'output.log'), echo: ctx.echo,
-      env: { BASE_URL: ctx.targetUrl, APP_ORIGIN: ctx.env.appOrigin, SESSIONS_FILE: sessionsFile, SUMMARY_FILE: summaryFile,
-        K6_PROFILE: JSON.stringify(profile), K6_ENDPOINTS: JSON.stringify(Object.keys(thresholds.endpoints)), K6_NO_USAGE_REPORT: 'true' },
+      env: measuredEnv,
     })
     const base = relative(ctx.runDir, ctx.stepDir).split('\\').join('/')
     if (!existsSync(summaryFile)) {
@@ -102,7 +116,9 @@ export async function runK6Step(step, ctx) {
       baselineAction = baseline ? 'updated' : 'created'
     } else if (!baseline) baselineAction = 'none'
     return { tests, errors: result.code === 0 && !result.timedOut ? [] : [`k6 did not complete successfully (exit ${result.code})`],
-      exitCode: result.code, timedOut: result.timedOut, load: { profile: profileName, profileSpec: profile, workloadId, ...load, baselineAction, baseline }, artifacts: { log: `${base}/output.log` } }
+      exitCode: result.code, timedOut: result.timedOut, load: { profile: profileName, profileSpec: profile, workloadId, ...load, baselineAction, baseline,
+        warmup:{durationMs:warmup.durationMs,checkPassRate:warmChecks,totalRequests:warmSummary.metrics?.http_reqs?.values?.count??0} },
+      artifacts: { log: `${base}/output.log`, warmupLog:`${base}/warmup.log` } }
   } finally {
     rmSync(secretDir, { recursive: true, force: true })
     appendEvent('load-runs.jsonl', { runId: ctx.runId, env: ctx.env.name, target: ctx.targetUrl, profile: profileName })

@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { chromium, expect } from '@playwright/test'
 
 // Serve the real dashboard in a browser with controlled API responses. No Docker runs or Slack sends.
-async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, startButton = 'Run', accessToken } = {}) {
+async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, notifyChecked, jobNotify, startButton = 'Run', accessToken, runDetail, history = [], categoryResults } = {}) {
   const browser = await chromium.launch()
   t.after(() => browser.close())
   const page = await browser.newPage()
@@ -14,9 +14,10 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, star
   const fixture = { started: scheduled, complete: false, logRequests: 0, statusRequests: 0, holdLog: null }
   const status = () => ({
     running: fixture.started && !fixture.complete ? { runId } : null,
+    jobs: jobNotify === undefined ? [] : [{runId,notify:jobNotify,exitCode:fixture.complete?0:null}],
     slack: { configured: true, valid: true }, ai: { configured: true, auto: aiAuto },
     suites: [{ name: 'full' }, { name: 'regression' }],
-    environments: [{ name: 'local-docker' }], seededDefects: [],
+    environments: [{ name: 'local-docker' }], seededDefects: [], categoryResults,
   })
   await page.route('http://dashboard.test/**', async route => {
     const pathname = new URL(route.request().url()).pathname
@@ -32,14 +33,14 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, star
     else if (pathname === '/api/status') { fixture.statusRequests++; data = status() }
     else if (pathname === '/api/stack') data = { project: 'ui-test', healthy: true }
     else if (pathname === '/api/runs' && route.request().method() === 'POST') { fixture.lastStart = route.request().postDataJSON(); fixture.started = true; data = { runId } }
-    else if (pathname === '/api/runs') data = fixture.complete ? [{ runId, suite: 'regression', status: 'passed', counts: { passed: 22 } }] : []
+    else if (pathname === '/api/runs') data = fixture.complete ? [{ runId, suite: 'regression', status: 'passed', counts: { passed: 22 } }] : history
     else if (pathname === `/api/jobs/${runId}/log`) {
       fixture.logRequests++
       if (fixture.holdLog) await fixture.holdLog
       // Bound the broken completion loop so its repeated requests can be observed safely.
       await delay(10)
       data = { running: !fixture.complete, log: `${'output line\n'.repeat(100)}${fixture.complete ? 'Finished: 22 passed' : 'Still running'}` }
-    } else if (pathname === `/api/runs/${runId}`) data = {
+    } else if (pathname === `/api/runs/${runId}`) data = runDetail ?? {
       runId, suite: 'regression', status: 'running', counts: {}, steps: [], groups: [], tests: [],
     }
     else throw new Error(`Unexpected dashboard request: ${pathname}`)
@@ -48,6 +49,7 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, star
   await page.goto(`http://dashboard.test/${accessToken ? '#access='+accessToken : ''}`)
   if (!scheduled) {
     if (aiChecked !== undefined) await page.getByRole('checkbox', { name: 'AI review' }).setChecked(aiChecked)
+    if (notifyChecked !== undefined) await page.getByRole('checkbox', { name: 'Slack alerts' }).setChecked(notifyChecked)
     await page.getByRole('button', { name: startButton, exact: true }).click()
   }
   await expect(page.locator('pre.log')).toContainText('Still running')
@@ -68,6 +70,38 @@ test('completion keeps the output panel and scroll position, refreshes results, 
   assert.equal(fixture.logRequests, requestsAtCompletion, 'completed runs must not restart polling')
   assert.equal(await page.locator('pre.log').evaluate(pre => pre === window.originalLog), true, 'keep the existing output element')
   assert.equal(await page.locator('pre.log').evaluate(pre => pre.scrollTop), 80)
+})
+
+test('dashboard shows regression, API and load before system health on home and run details',async t=>{
+  const detail={runId:'ui-completion-regression',suite:'full',status:'failed',counts:{passed:2,failed:1},groups:[],
+    steps:[{name:'api',fromSuite:'api'},{name:'load',fromSuite:'load'},{name:'web',fromSuite:'regression'}],
+    tests:[{title:'API case',step:'api',status:'failed'},{title:'Load case',step:'load',status:'passed'},{title:'Regression case',step:'web',status:'passed'}],
+    health:{ok:false,stack:{healthy:false,unhealthyServices:['web'],missingServices:[],services:[{service:'web',state:'exited'}]}}}
+  const history=['load','api','regression'].map(suite=>({runId:'ui-completion-regression',suite,env:'local-docker',status:'failed',finishedAt:'2026-10-23T07:00:00Z',counts:{passed:2,failed:1}}))
+  const {page}=await dashboard(t,{scheduled:true,runDetail:detail,history})
+  await expect(page.locator('#app > section > h2')).toContainText(['Regression testing','API testing','Load testing','System health'])
+  const headings=await page.locator('#app h2').allTextContents()
+  assert.equal(headings.at(-1),'System health')
+  await page.locator('a[href="#/runs/ui-completion-regression"]').first().click()
+  await expect(page.getByRole('heading',{name:'Tests (3)',exact:true})).toBeVisible()
+  const titles=await page.locator('#test-results h3').allTextContents()
+  assert.deepEqual(titles,['Regression testing','API testing','Load testing'])
+  assert.equal((await page.locator('#app h2').allTextContents()).at(-1),'System health')
+  await expect(page.locator('#system-health')).toContainText('unhealthy')
+})
+
+test('a run without recorded health never borrows current stack health',async t=>{
+  const {page,runId}=await dashboard(t,{scheduled:true})
+  await expect(page.locator('#system-health')).toContainText('healthy')
+  await page.locator(`a[href="#/runs/${runId}"]`).first().click()
+  await expect(page.locator('#system-health')).toContainText('not recorded')
+  await expect(page.locator('#system-health')).not.toContainText('unhealthy')
+})
+
+test('empty category summaries do not fall back to executions without recorded checks',async t=>{
+  const history=[{runId:'no-checks',suite:'regression',env:'local-docker',status:'infra-failed',finishedAt:'2026-10-23T10:00:00Z',counts:{passed:0,failed:0}}]
+  const {page}=await dashboard(t,{scheduled:true,history,categoryResults:[]})
+  await expect(page.locator('#results-regression')).toContainText('No completed local run recorded.')
 })
 
 test('leaving the home screen cancels an in-flight log response', async t => {
@@ -110,6 +144,27 @@ test('both run buttons honor checked and unchecked AI review', async t => {
 test('automatic AI configuration selects review by default in the dashboard', async t => {
   const { fixture } = await dashboard(t, { aiAuto: true })
   assert.equal(fixture.lastStart.ai, true)
+})
+
+test('dashboard run buttons can explicitly suppress Slack delivery',async t=>{
+  for(const startButton of ['Run','Run everything (full)']) {
+    const {fixture}=await dashboard(t,{startButton,notifyChecked:false})
+    assert.equal(fixture.lastStart.notify,false)
+  }
+})
+
+test('Slack alerts remain unchecked when the running form is refreshed',async t=>{
+  const {page}=await dashboard(t,{notifyChecked:false})
+  await expect(page.getByRole('checkbox',{name:'Slack alerts',exact:true})).not.toBeChecked()
+})
+
+test('opening an existing silent run preserves Slack suppression after completion',async t=>{
+  const {page,fixture}=await dashboard(t,{scheduled:true,jobNotify:false})
+  await expect(page.getByRole('checkbox',{name:'Slack alerts',exact:true})).not.toBeChecked()
+  fixture.complete=true
+  await page.clock.runFor(2100)
+  await expect(page.getByRole('button',{name:'Run',exact:true})).toBeEnabled()
+  await expect(page.getByRole('checkbox',{name:'Slack alerts',exact:true})).not.toBeChecked()
 })
 
 

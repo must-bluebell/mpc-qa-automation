@@ -13,16 +13,16 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-dashboard-20261021",
+      "composeProject": "mpc-qa-recovery-20261023",
       "webmpcPath": "../WEB MPC",
       "ports": {
         "web": 3460,
         "anvil": 8605,
         "opbnbAnvil": 8606,
-        "postgres": 5490,
-        "neonProxy": 4494
+        "postgres": 5491,
+        "neonProxy": 4495
       },
-      "note": "Fresh isolated dashboard test stack; earlier snapshots and volumes preserved."
+      "note": "Fresh isolated recovery after rejected unclean chain snapshots; all earlier project volumes preserved."
     }
   },
   "web-isolated": {
@@ -39,16 +39,16 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-dashboard-20261021",
+      "composeProject": "mpc-qa-recovery-20261023",
       "webmpcPath": "../WEB MPC",
       "ports": {
         "web": 3460,
         "anvil": 8605,
         "opbnbAnvil": 8606,
-        "postgres": 5490,
-        "neonProxy": 4494
+        "postgres": 5491,
+        "neonProxy": 4495
       },
-      "note": "Fresh isolated dashboard test stack; earlier snapshots and volumes preserved."
+      "note": "Fresh isolated recovery after rejected unclean chain snapshots; all earlier project volumes preserved."
     }
   },
   "preview": {

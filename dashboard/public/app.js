@@ -3,7 +3,7 @@
 const TOKEN = document.querySelector('meta[name="qa-token"]').content
 const app = document.getElementById('app')
 const chips = document.getElementById('chips')
-let state = { status: null, stack: null, runs: [], watching: null }
+let state = { status: null, stack: null, runs: [], watching: null, notify: true }
 let pollTimer = null
 let stopPolling = () => {}
 
@@ -35,6 +35,33 @@ const badge = s => h('span', { class: `badge ${STATUS_CLASS[s] ?? ''}` }, s)
 const secs = ms => (ms == null ? '—' : ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`)
 const when = iso => (iso ? `${new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Seoul', hourCycle: 'h23' })} KST` : '—')
 const fileUrl = (runId, rel) => `/api/runs/${encodeURIComponent(runId)}/files/${rel.split('/').map(encodeURIComponent).join('/')}`
+const REPORT_CATEGORIES = [{ suite: 'regression', label: 'Regression testing' }, { suite: 'api', label: 'API testing' }, { suite: 'load', label: 'Load testing' }]
+
+function systemHealth(health, recorded = false) {
+  if (!recorded) health = state.stack
+  const stack = recorded ? health?.stack : health
+  const healthy = recorded ? health?.ok === true && stack?.healthy !== false : stack?.healthy
+  return h('section', { class: 'panel', id: 'system-health' }, h('h2', {}, 'System health'),
+    h('p', {}, recorded ? 'Health recorded with this run: ' : 'Current local stack: ',
+      badge(health ? healthy ? 'healthy' : 'unhealthy' : 'not recorded')),
+    stack?.project ? h('p', {}, `Stack: ${stack.project}`) : '',
+    stack?.services?.length ? h('ul', {}, stack.services.map(s => h('li', {}, `${s.service}: ${s.state}${s.health ? ` · ${s.health}` : ''}`))) : '',
+    stack?.missingServices?.length ? h('p', {}, `Missing services: ${stack.missingServices.join(', ')}`) : '',
+    recorded ? h('p', { class: 'hint' }, 'Recorded infrastructure health; assertion results are shown above.') :
+      h('p', { class: 'hint' }, 'Current infrastructure health; the results above are recorded executions.'))
+}
+
+function categoryResults() {
+  return REPORT_CATEGORIES.map(({ suite, label }) => {
+    const run = Array.isArray(state.status.categoryResults) ? state.status.categoryResults.find(r => r.suite === suite) : state.runs.filter(r => r.suite === suite && r.env === 'local-docker' && r.finishedAt && !r.seededDefect && !r.reportOnly && r.status !== 'skipped-overlap')
+      .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))[0]
+    const c = run?.counts
+    return h('section', { class: 'panel', id: `results-${suite}` }, h('h2', {}, label),
+      run ? h('div', {}, badge(run.status), h('p', {}, `${c?.passed ?? 0} passed · ${c?.failed ?? 0} failed · ${c?.skipped ?? 0} skipped · ${c?.blocked ?? 0} blocked`),
+        h('p', { class: 'hint' }, `Recorded execution · ${when(run.finishedAt)}`),
+        h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : h('p', { class: 'empty' }, 'No completed local run recorded.'))
+  })
+}
 
 function renderChips() {
   const s = state.status
@@ -54,7 +81,15 @@ async function refresh() {
   state.status = status
   state.runs = runs
   renderChips()
-  api('/api/stack').then(stack => { state.stack = stack; renderChips() }).catch(() => {})
+  api('/api/stack').then(stack => {
+    state.stack = stack
+    renderChips()
+    if (location.hash === '' || location.hash === '#/') document.getElementById('system-health')?.replaceWith(systemHealth())
+  }).catch(() => {})
+  if (location.hash === '' || location.hash === '#/') {
+    const panels = categoryResults()
+    REPORT_CATEGORIES.forEach(({ suite }, i) => document.getElementById(`results-${suite}`)?.replaceWith(panels[i]))
+  }
 }
 
 function runForm() {
@@ -64,6 +99,10 @@ function runForm() {
   const env = h('select', { name: 'env' }, s.environments.map(x => h('option', { value: x.name, selected: x.name === 'local-docker' }, x.name)))
   const defect = h('select', { name: 'defect' }, h('option', { value: '' }, 'none'), s.seededDefects.map(x => h('option', { value: x.name }, `${x.name} (${x.kind})`)))
   const ai = h('input', { type: 'checkbox', name: 'ai', checked: s.ai.configured && s.ai.auto })
+  const activeNotify = s.jobs?.find(j => j.runId === s.running?.runId)?.notify
+  if (typeof activeNotify === 'boolean') state.notify = activeNotify
+  const notify = h('input', { type: 'checkbox', name: 'notify', checked: state.notify,
+    onchange: e => { state.notify = e.target.checked } })
   const desc = h('p', { class: 'hint' })
   const describe = () => { desc.textContent = s.suites.find(x => x.name === suite.value)?.description ?? '' }
   suite.addEventListener('change', describe)
@@ -82,14 +121,15 @@ function runForm() {
   const running = !!s.running
   return h('section', { class: 'panel' },
     h('h2', {}, 'Run tests'),
-    h('form', { class: 'run', onsubmit: e => { e.preventDefault(); start({ suite: suite.value, env: env.value, seedDefect: defect.value || null, ai: ai.checked }) } },
+      h('form', { class: 'run', onsubmit: e => { e.preventDefault(); start({ suite: suite.value, env: env.value, seedDefect: defect.value || null, ai: ai.checked, notify: notify.checked }) } },
       h('label', {}, 'Suite', suite), h('label', {}, 'Environment', env), h('label', {}, 'Seeded defect', defect),
       h('label', { class: 'check' }, ai, 'AI review'),
+      h('label', { class: 'check' }, notify, 'Slack alerts'),
       h('button', { class: 'primary', type: 'submit', disabled: running }, running ? 'Run in progress' : 'Run')),
     desc,
     h('div', { class: 'actions' },
-      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'full', env: 'local-docker', ai: ai.checked }) }, 'Run everything (full)'),
-      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'smoke', env: 'local-docker', ai: ai.checked }) }, 'Smoke'),
+      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'full', env: 'local-docker', ai: ai.checked, notify: notify.checked }) }, 'Run everything (full)'),
+      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'smoke', env: 'local-docker', ai: ai.checked, notify: notify.checked }) }, 'Smoke'),
       h('button', { type: 'button', onclick: async () => {
         msg.className = 'msg'; msg.textContent = 'Sending Slack test…'
         try { const r = await post('/api/slack/test'); msg.className = `msg badge ${r.ok ? 'ok' : 'warn'}`; msg.textContent = r.ok ? 'Slack test delivered' : `Slack not delivered: ${r.code}` }
@@ -131,7 +171,7 @@ function liveLog() {
         // state.watching, creating an endless completion/render loop and resetting scroll.
         if (location.hash === '' || location.hash === '#/') {
           app.firstElementChild.replaceWith(runForm())
-          app.lastElementChild.replaceWith(runsTable())
+          document.getElementById('run-history')?.replaceWith(runsTable())
         }
       }
     } catch { /* job log not created yet */ }
@@ -143,8 +183,8 @@ function liveLog() {
 }
 
 function runsTable() {
-  if (!state.runs.length) return h('section', { class: 'panel' }, h('h2', {}, 'Run history'), h('p', { class: 'empty' }, 'No runs yet.'))
-  return h('section', { class: 'panel' }, h('h2', {}, 'Run history'), h('div', { class: 'tablewrap' }, h('table', {},
+  if (!state.runs.length) return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), h('p', { class: 'empty' }, 'No runs yet.'))
+  return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, ['Started', 'Suite', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration', 'Slack'].map(t => h('th', { class: ['Pass', 'Fail', 'Blocked', 'Duration'].includes(t) ? 'num' : null }, t)))),
     h('tbody', {}, state.runs.map(r => h('tr', { class: 'click', onclick: () => { location.hash = `#/runs/${r.runId}` } },
       h('td', {}, when(r.startedAt)), h('td', {}, r.suite, r.seededDefect ? ` · ${r.seededDefect}` : ''), h('td', {}, r.env), h('td', {}, badge(r.status)),
@@ -154,7 +194,7 @@ function runsTable() {
 }
 
 function renderHome() {
-  app.replaceChildren(runForm(), liveLog() ?? '', runsTable())
+  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), runsTable(), systemHealth())
 }
 
 async function renderRun(runId, anchor) {
@@ -198,12 +238,21 @@ async function renderRun(runId, anchor) {
       h('div', { class: 'err' }, g.message),
       h('ul', {}, g.tests.map(t => h('li', {}, t.title))))) : h('p', { class: 'empty' }, 'No failures.'))
 
-  const tests = h('section', { class: 'panel' }, h('h2', {}, `Tests (${run.tests.length})`), h('div', { class: 'tablewrap' }, h('table', {},
+  const categoryOf = t => {
+    const suite = run.steps.find(s => s.name === t.step)?.fromSuite
+    return REPORT_CATEGORIES.some(c => c.suite === suite) ? suite : t.adapter === 'k6' ? 'load' : t.project === 'api' ? 'api' : t.project === 'uat' || t.adapter === 'webmpc-scenarios' || suite === 'uat' ? 'uat' : t.project === 'chromium' ? 'regression' : 'other'
+  }
+  const testTable = list => h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, h('th', {}, 'Test'), h('th', {}, 'Status'), h('th', { class: 'num' }, 'Duration'), h('th', {}, 'Evidence'))),
-    h('tbody', {}, run.tests.map(t => h('tr', {},
+    h('tbody', {}, list.map(t => h('tr', {},
       h('td', {}, t.title, h('div', { class: 'hint' }, t.step)), h('td', {}, badge(t.status), t.flaky ? h('span', { class: 'badge warn' }, 'flaky') : ''),
       h('td', { class: 'num' }, secs(t.durationMs)),
-      h('td', { class: 'links' }, (t.evidence ?? []).slice(0, 4).map(e => h('a', { href: fileUrl(run.runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name)))))))))
+      h('td', { class: 'links' }, (t.evidence ?? []).slice(0, 4).map(e => h('a', { href: fileUrl(run.runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name))))))))
+  const tests = h('section', { class: 'panel', id: 'test-results' }, h('h2', {}, `Tests (${run.tests.length})`),
+    [...REPORT_CATEGORIES, { suite: 'uat', label: 'UAT scenarios' }, { suite: 'other', label: 'Other checks' }].flatMap(({ suite, label }) => {
+      const list = run.tests.filter(t => categoryOf(t) === suite)
+      return list.length ? [h('h3', {}, label), testTable(list)] : []
+    }))
 
   const extra = []
   if (run.load) {
@@ -227,7 +276,7 @@ async function renderRun(runId, anchor) {
     extra.push(h('section', { class: 'panel' }, h('h2', {}, 'Compared with previous run'),
       h('p', {}, `Previous: ${cmp.previousRunId ?? 'none'} · new ${cmp.newFailures.length} · recurring ${cmp.persisting.length} · new variants ${cmp.newVariants.length} · recovered ${cmp.recovered.length}`)))
   }
-  app.replaceChildren(overview, h('div', { class: 'grid2' }, ...extra.slice(0, 2)), failures, steps, ...extra.slice(2), tests)
+  app.replaceChildren(overview, tests, h('div', { class: 'grid2' }, ...extra.slice(0, 2)), failures, steps, ...extra.slice(2), systemHealth(run.health, true))
   if (anchor === 'failures') document.getElementById('failures')?.scrollIntoView()
 }
 

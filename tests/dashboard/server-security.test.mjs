@@ -4,7 +4,7 @@ import {spawn} from 'node:child_process'
 import {once} from 'node:events'
 import {chromium,expect} from '@playwright/test'
 import {createServer} from 'node:net'
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs'
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync,symlinkSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 
@@ -35,7 +35,7 @@ async function dashboardServer(t) {
     syncBuiltinESMExports();
   `)
   const child=spawn(process.execPath,['--import',preload,'dashboard/server.mjs'],{
-    env:{...process.env,QA_RUNS_DIR:dir,QA_DASHBOARD_PORT:String(port),QA_TEST_LOG_FILE:logFile,QA_TEST_READ_EVENTS:events},
+    env:{...process.env,OPENAI_API_KEY:'qa-security-test-secret',QA_RUNS_DIR:dir,QA_DASHBOARD_PORT:String(port),QA_TEST_LOG_FILE:logFile,QA_TEST_READ_EVENTS:events},
     stdio:['ignore','pipe','pipe'],
   })
   let output='',errors=''
@@ -56,8 +56,29 @@ async function dashboardServer(t) {
     assert.equal(response.status,200)
     return response.headers.get('set-cookie').split(';')[0]
   }
-  return {base,startupUrl,html,csrf,session,events}
+  return {base,startupUrl,html,csrf,session,events,dir}
 }
+
+test('home category summaries use newer full-run checks and category-specific counts',async t=>{
+  const f=await dashboardServer(t)
+  const full={runId:'full-new',suite:'full',env:'local-docker',status:'failed',finishedAt:'2026-10-23T10:00:00Z',
+    steps:[{name:'web',fromSuite:'regression'},{name:'api',fromSuite:'api'},{name:'load',fromSuite:'load'}],
+    tests:[{step:'web',status:'passed'},{step:'api',status:'failed'},{step:'api',status:'passed'},{step:'load',status:'blocked'}]}
+  const old={runId:'regression-old',suite:'regression',env:'local-docker',status:'passed',finishedAt:'2026-10-22T10:00:00Z',steps:[{name:'web',fromSuite:'regression'}],tests:[{step:'web',status:'passed'},{step:'web',status:'passed'}]}
+  const preview={...full,runId:'preview',reportOnly:true,finishedAt:'2026-10-23T11:00:00Z'}
+  const seeded={...full,runId:'seeded',seededDefect:'timeout',finishedAt:'2026-10-23T12:00:00Z'}
+  const noResults={...full,runId:'infra-only',status:'infra-failed',tests:[],finishedAt:'2026-10-23T13:00:00Z'}
+  const runs=[old,full,preview,seeded,noResults]
+  for(const run of runs){mkdirSync(join(f.dir,run.runId));writeFileSync(join(f.dir,run.runId,'run.json'),JSON.stringify(run))}
+  writeFileSync(join(f.dir,'index.json'),JSON.stringify(runs))
+  const response=await fetch(`${f.base}/api/status`,{headers:{cookie:await f.session()}})
+  const status=await response.json()
+  assert.deepEqual(status.categoryResults?.map(r=>({suite:r.suite,runId:r.runId,status:r.status,counts:r.counts})),[
+    {suite:'regression',runId:'full-new',status:'passed',counts:{passed:1,failed:0,skipped:0,blocked:0}},
+    {suite:'api',runId:'full-new',status:'failed',counts:{passed:1,failed:1,skipped:0,blocked:0}},
+    {suite:'load',runId:'full-new',status:'blocked',counts:{passed:0,failed:0,skipped:0,blocked:1}},
+  ])
+})
 
 test('private evidence requires a session that cannot be obtained from the public page',async t=>{
   const f=await dashboardServer(t),artifact=`${f.base}/api/runs/private-run/files/steps/trace.zip`
@@ -89,6 +110,42 @@ test('log polling reads a bounded tail instead of loading the complete log',asyn
   const events=existsSync(f.events)?readFileSync(f.events,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse):[]
   assert.equal(events.some(e=>e.full),false,'polling must not call readFileSync for the full log')
   assert.ok(events.reduce((sum,e)=>sum+(e.length??0),0)<=250000,'read at most a bounded UTF-8 tail')
+})
+
+test('oversized text artifacts cannot bypass credential redaction',async t=>{
+  const f=await dashboardServer(t),headers={cookie:await f.session()}
+  const body='x'.repeat(8*1024*1024)+'qa-security-test-secret'
+  writeFileSync(join(f.dir,'private-run','steps','large.log'),body)
+  const response=await fetch(`${f.base}/api/runs/private-run/files/steps/large.log`,{headers})
+  assert.equal(response.status,413)
+  assert.equal((await response.text()).includes('qa-security-test-secret'),false)
+})
+
+test('SVG and CSS text artifacts redact configured credentials',async t=>{
+  const f=await dashboardServer(t),headers={cookie:await f.session()}
+  for(const [name,body,want] of [
+    ['image.svg','<svg><!-- qa-security-test-secret --></svg>','<svg><!-- [REDACTED] --></svg>'],
+    ['style.css','/* qa-security-test-secret */','/* [REDACTED] */'],
+  ]) {
+    writeFileSync(join(f.dir,'private-run','steps',name),body)
+    const response=await fetch(`${f.base}/api/runs/private-run/files/steps/${name}`,{headers})
+    assert.equal(response.status,200)
+    assert.equal(await response.text(),want)
+  }
+})
+
+test('artifact paths reject symlinks to files and run directories outside the run',async t=>{
+  const f=await dashboardServer(t),headers={cookie:await f.session()}
+  const outside=mkdtempSync(join(tmpdir(),'qa-outside-run-'))
+  t.after(()=>rmSync(outside,{recursive:true,force:true}))
+  writeFileSync(join(outside,'private.txt'),'outside private data')
+  symlinkSync(outside,join(f.dir,'linked-run'),'dir')
+  symlinkSync(join(outside,'private.txt'),join(f.dir,'private-run','steps','linked.txt'))
+  for(const path of ['linked-run/files/private.txt','private-run/files/steps/linked.txt']) {
+    const response=await fetch(`${f.base}/api/runs/${path}`,{headers})
+    assert.equal(response.status,403)
+    assert.equal((await response.text()).includes('outside private data'),false)
+  }
 })
 
 
