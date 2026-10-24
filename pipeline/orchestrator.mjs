@@ -107,7 +107,7 @@ export async function runPipeline({ suite: suiteName, env: envName, trigger = 'm
         run.errors.push(`Environment health probe failed for ${env.baseUrl}: ${health.error ?? `HTTP ${health.status}`}`)
         if(run.health.stack&&!run.health.stack.healthy)run.errors.push(`Required stack services missing or unhealthy: ${[...(run.health.stack.missingServices??[]),...(run.health.stack.unhealthyServices??[])].join(', ')||'see stack status'}`)
       } else {
-        // Test data is prepared once the environment is known healthy; a failure is reported, not fatal (tests then show what is blocked).
+        // Keep collecting assertions after preparation fails; final classification must still prevent a passing run.
         run.testData = await prepareTestData(env, { log: echo ? line => console.log(line) : () => {} })
         saveRun(run)
         let targetUrl = env.baseUrl
