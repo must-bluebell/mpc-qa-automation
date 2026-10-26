@@ -128,3 +128,21 @@ test('revoked terminal notices age out while pending confirmations and scheduled
   assert.equal(store.get(pending.id).status,'pending')
   assert.equal(store.listActive().length,1)
 })
+
+test('retention preserves sending and uncertain replies across restarts until delivery is resolved',async t=>{
+  const {directory,store,advance}=fixture(t)
+  let posts=0
+  await store.deliver('ambiguous',{text:'accepted before timeout'},async()=>{posts++;throw new Error('timeout')},start)
+  const uncertain=store.list().find(r=>r.key==='ambiguous')
+  // Also cover pre-fix records with an existing terminal retention timestamp.
+  store.write({...uncertain,retainedAt:new Date(start).toISOString()})
+  const sending=store.write({id:id(99),type:'reply',key:'in-flight',payload:{text:'sending'},status:'sending',updatedAt:new Date(start).toISOString(),retainedAt:new Date(start).toISOString()})
+  const future=advance()
+  store.maintain()
+  const restarted=new AgentStore(directory,{now:()=>future})
+  assert.equal(restarted.get(sending.id)?.status,'sending')
+  assert.equal(restarted.get(uncertain.id)?.status,'uncertain')
+  assert.equal(await restarted.deliver('ambiguous',{text:'duplicate'},async()=>{posts++;return {}},future),false)
+  assert.equal(posts,1)
+  assert.deepEqual(restarted.listActive(),[])
+})

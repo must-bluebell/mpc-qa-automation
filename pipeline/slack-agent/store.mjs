@@ -26,12 +26,12 @@ function validRecord(r,id) {
   return true
 }
 // Terminal claims remain deduplicated for 30 days after their last transition.
-// Pending rate-limit retries and unfinished reruns have no retention deadline.
+// Pending retries, ambiguous reply deliveries and unfinished reruns have no retention deadline.
 export const TERMINAL_RETENTION_MS = 30 * 86400000
 const active = r => r.type==='reply' ? r.status==='pending'
   : r.type==='rerun' && (!['completed','cancelled'].includes(r.status)
     && (!['expired','rejected'].includes(r.status)||!r.notifiedAt))
-const protectedRecord = r => r.type==='reply' ? r.status==='pending'
+const protectedRecord = r => r.type==='reply' ? ['pending','sending','uncertain'].includes(r.status)
   : r.type==='rerun' && ['pending','queued','scheduled'].includes(r.status)
 const unreadable = () => new Error('Slack agent state is unreadable; operator repair is required.')
 export class AgentStore {

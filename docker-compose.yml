@@ -14,6 +14,8 @@ services:
     env_file: .env
     environment:
       QA_RUNS_DIR: runs
+      CODEX_HOME: /opt/codex-qa
+      QA_CODEX_BIN: /usr/local/bin/codex
       QA_DASHBOARD_PORT: "${QA_DASHBOARD_PORT:-4501}"
       QA_SCHEDULER_ENABLED: "${QA_SCHEDULER_ENABLED:-1}"
       MPC_WEBAPP_PATH: "${MPC_WEBAPP_PATH:?Export MPC_WEBAPP_PATH as the absolute application checkout path}"
@@ -23,6 +25,8 @@ services:
       - "${MPC_WEBAPP_PATH}:${MPC_WEBAPP_PATH}"
       - "application_dependencies:${MPC_WEBAPP_PATH}/node_modules"
       - "browser_cache:/ms-playwright"
+      # Writable so the dedicated ChatGPT session can refresh its saved credentials.
+      - "${MPC_CODEX_HOME:-${HOME}/.codex-qa}:/opt/codex-qa"
       - "${MPC_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock"
     restart: unless-stopped
     stop_grace_period: 45s

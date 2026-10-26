@@ -85,6 +85,27 @@ test('home category summaries use newer full-run checks and category-specific co
   ])
 })
 
+test('smoke provenance cannot supersede full category results, while legacy checks still match',async t=>{
+  const f=await dashboardServer(t),headers={cookie:await f.session()}
+  const full={runId:'full',suite:'full',env:'local-docker',status:'passed',finishedAt:'2026-10-23T10:00:00Z',
+    steps:[{name:'api',fromSuite:'api',project:'api'},{name:'web',fromSuite:'regression',project:'chromium'},{name:'load',fromSuite:'load',adapter:'k6'}],
+    tests:[{step:'api',status:'passed'},{step:'api',status:'passed'},{step:'web',status:'passed'},{step:'load',status:'passed'}]}
+  const smoke={...full,runId:'critical-smoke',suite:'critical-smoke',finishedAt:'2026-10-24T10:00:00Z',
+    steps:[{name:'api',fromSuite:'api-smoke',project:'api'},{name:'web',fromSuite:'smoke',project:'chromium'},{name:'load',fromSuite:'load-smoke',adapter:'k6'}],
+    tests:[{step:'api',project:'api',status:'failed'},{step:'web',project:'chromium',status:'failed'},{step:'load',adapter:'k6',status:'failed'}]}
+  const standalone={...smoke,runId:'standalone-smoke',suite:'smoke',steps:smoke.steps.map(({fromSuite,...step})=>step),finishedAt:'2026-10-25T10:00:00Z'}
+  for(const run of [full,smoke,standalone])saveFixtureRun(f,run)
+  writeFileSync(join(f.dir,'index.json'),JSON.stringify([full,smoke,standalone]))
+  assert.deepEqual((await categoryResults(f,headers)).map(r=>[r.suite,r.runId,r.counts.passed]),[
+    ['regression','full',1],['api','full',2],['load','full',1],
+  ])
+  const legacy={...full,runId:'legacy',suite:undefined,finishedAt:'2026-10-26T10:00:00Z',steps:full.steps.map(({fromSuite,...step})=>step)}
+  saveFixtureRun(f,legacy)
+  writeFileSync(join(f.dir,'index.json'),JSON.stringify([full,smoke,standalone,legacy]))
+  const results=await categoryResults(f,headers)
+  assert.deepEqual(results.map(r=>[r.suite,r.runId]),[['regression','legacy'],['api','legacy'],['load','legacy']])
+})
+
 function saveFixtureRun(f,run) {
   mkdirSync(join(f.dir,run.runId),{recursive:true})
   writeFileSync(join(f.dir,run.runId,'run.json'),JSON.stringify(run))

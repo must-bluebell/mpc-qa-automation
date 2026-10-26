@@ -1,6 +1,6 @@
 # MPC automation container
 
-This repository has its own [Dockerfile](../Dockerfile) and [Compose service](../docker-compose.yml). The image contains Node.js 22, the locked npm dependencies, Chromium for this repository's Playwright version, pnpm 10.32.1, Python 3 for external plan validation/reporting, Docker CLI 29.3.1 with Compose, and k6 2.3.0. It runs the QA dashboard and, when enabled, the Slack scheduler. It does not embed the application, its database, or either chain.
+This repository has its own [Dockerfile](../Dockerfile) and [Compose service](../docker-compose.yml). The image contains Node.js 22, the locked npm dependencies, Chromium for this repository's Playwright version, pnpm 10.32.1, Python 3 for external plan validation/reporting, Codex CLI 0.163.0, Docker CLI 29.3.1 with Compose, and k6 2.3.0. It runs the QA dashboard and, when enabled, the Slack scheduler. It does not embed the application, its database, or either chain.
 
 ## Host requirements
 
@@ -50,6 +50,15 @@ docker compose run --rm --no-deps automation npx playwright install chromium
 ```
 
 The automation `.env` supplies the QA wallet, Slack, AI and dashboard settings at runtime. The application's `docker/.env` supplies its own stack configuration. Neither file is included in the automation image. The `.dockerignore` also excludes Git history, private keys, local dependencies and all run evidence.
+
+For `QA_AI_PROVIDER=codex-cli`, first create the dedicated file-backed ChatGPT login using the [Codex setup instructions](../README.md#optional-model-review). Compose mounts `$HOME/.codex-qa` at `/opt/codex-qa` and sets the container's `CODEX_HOME` and `QA_CODEX_BIN` to its installed CLI. If your dedicated login is elsewhere, export its absolute host path before running Compose:
+
+```sh
+export MPC_CODEX_HOME="$HOME/.codex-qa"
+docker compose run --rm --no-deps automation codex -c 'cli_auth_credentials_store="file"' login status
+```
+
+The login mount is writable so session credentials can refresh. Keep it outside the checkout and use a QA-specific directory without global `AGENTS.md` files. The image includes only the CLI; credentials stay on the host. API-based AI providers do not require a Codex login.
 
 For the application's UAT scenarios, prepare its Linux dependencies and matching browser once, and repeat after its lockfile/Playwright version changes:
 

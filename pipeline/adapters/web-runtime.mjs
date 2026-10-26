@@ -11,19 +11,25 @@ export async function prepareWebRuntime(env, {purpose='load',execImpl=exec,fetch
   const permitted=purpose==='scenarios'?env.allowWrites:purpose==='load'&&env.allowLoad
   if (!env.isolated || !permitted || !isLoopback(env.baseUrl)) throw new Error('Web preparation requires an authorized isolated loopback target.')
   if (!env.stack?.verificationRuntime) return
-  const container=`${env.stack.composeProject}-web-1`,options={env:childEnv(),timeout:180_000}
-  const {stdout}=await execImpl('docker',['inspect','--format','{{json .Config.Labels}}',container],options)
+  const deadline=Date.now()+timeoutMs
+  const remaining=()=>{
+    const ms=deadline-Date.now()
+    if(ms<=0)throw new Error('Load web runtime did not become ready after restart.')
+    return ms
+  }
+  const container=`${env.stack.composeProject}-web-1`
+  const options=()=>({env:childEnv(),timeout:Math.min(180_000,remaining())})
+  const {stdout}=await execImpl('docker',['inspect','--format','{{json .Config.Labels}}',container],options())
   const labels=JSON.parse(stdout)
   if(labels['com.docker.compose.project']!==env.stack.composeProject||labels['com.docker.compose.service']!=='web')throw new Error('Load web container identity does not match the configured stack.')
-  await execImpl('docker',['restart','--timeout','90',container],options)
-  const deadline=Date.now()+timeoutMs
+  await execImpl('docker',['restart','--timeout','90',container],options())
   while(Date.now()<deadline) {
     try {
-      const response=await fetchImpl(`${env.baseUrl}/`,{redirect:'error',signal:AbortSignal.timeout(15_000)})
+      const response=await fetchImpl(`${env.baseUrl}/`,{redirect:'error',signal:AbortSignal.timeout(Math.min(15_000,remaining()))})
       await response.arrayBuffer?.()
-      if(response.ok)return
+      if(response.ok&&Date.now()<deadline)return
     }catch{/* Bootstrap and initial compilation can temporarily refuse connections. */}
-    await wait(1000)
+    if(Date.now()<deadline)await wait(Math.min(1000,remaining()))
   }
   throw new Error('Load web runtime did not become ready after restart.')
 }

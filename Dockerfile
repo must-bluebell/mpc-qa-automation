@@ -6,6 +6,7 @@ FROM grafana/k6:${K6_VERSION} AS k6
 
 FROM node:22-bookworm-slim
 ARG AUTOMATION_ROOT=/opt/mpc-automation
+ARG CODEX_VERSION=0.163.0
 ENV NODE_ENV=development \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     QA_RUNS_DIR=runs
@@ -19,6 +20,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && corepack enable \
     && corepack prepare pnpm@10.32.1 --activate
+
+# Match the subscription-backed CLI used by the trusted CI review job.
+RUN npm install --global @openai/codex@${CODEX_VERSION} \
+    && codex --version \
+    && npm cache clean --force
 
 COPY package.json package-lock.json ./
 RUN npm ci \

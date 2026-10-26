@@ -45,3 +45,58 @@ test('warmup HTTP failures abort preparation instead of becoming measured result
     fetchImpl:async()=>{calls++;return {ok:false,status:503,arrayBuffer:async()=>new ArrayBuffer(0)}}}),/503/)
   assert.equal(calls,1)
 })
+
+test('web preparation shares one deadline across Docker commands, probes and retry waits',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:1000})
+  const timeouts=[],waits=[],probeTimeouts=[]
+  const signalTimeout=AbortSignal.timeout.bind(AbortSignal)
+  t.mock.method(AbortSignal,'timeout',ms=>{probeTimeouts.push(ms);return signalTimeout(ms)})
+  let probes=0
+  await assert.rejects(prepareWebRuntime(env,{timeoutMs:5000,
+    execImpl:async(command,args,options)=>{
+      timeouts.push(options.timeout)
+      t.mock.timers.tick(args[0]==='inspect'?1000:2000)
+      return {stdout:args[0]==='inspect'?JSON.stringify({'com.docker.compose.project':'qa-test','com.docker.compose.service':'web'}):''}
+    },
+    fetchImpl:async(url,{signal})=>{
+      probes++
+      // The network probe must receive only the remaining two seconds.
+      assert.ok(signal)
+      t.mock.timers.tick(1500)
+      return {ok:false,arrayBuffer:async()=>new ArrayBuffer(0)}
+    },
+    wait:async ms=>{waits.push(ms);t.mock.timers.tick(ms)},
+  }),/did not become ready/)
+  assert.deepEqual(timeouts,[5000,4000])
+  assert.deepEqual(probeTimeouts,[2000])
+  assert.deepEqual(waits,[500])
+  assert.equal(probes,1)
+  assert.equal(Date.now(),6000)
+})
+
+test('web preparation stops when inspection consumes the deadline',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:1000})
+  const commands=[]
+  await assert.rejects(prepareWebRuntime(env,{timeoutMs:5000,
+    execImpl:async(command,args)=>{commands.push(args[0]);t.mock.timers.tick(5000);return {stdout:JSON.stringify({'com.docker.compose.project':'qa-test','com.docker.compose.service':'web'})}},
+    fetchImpl:async()=>{t.mock.timers.tick(5000);return {ok:false}},wait:async()=>{},
+  }),/did not become ready/)
+  assert.deepEqual(commands,['inspect'])
+})
+
+test('web preparation cannot report readiness after a response body exhausts the deadline',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:1000})
+  await assert.rejects(prepareWebRuntime(env,{timeoutMs:5000,
+    execImpl:async()=>({stdout:JSON.stringify({'com.docker.compose.project':'qa-test','com.docker.compose.service':'web'})}),
+    fetchImpl:async()=>({ok:true,arrayBuffer:async()=>{t.mock.timers.tick(5000)}}),
+    wait:async()=>{assert.fail('must not wait after deadline')},
+  }),/did not become ready/)
+})
+
+test('web preparation does not probe after restart exhausts the deadline',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:1000})
+  await assert.rejects(prepareWebRuntime(env,{timeoutMs:5000,
+    execImpl:async(command,args)=>{if(args[0]==='restart')t.mock.timers.tick(5000);return {stdout:JSON.stringify({'com.docker.compose.project':'qa-test','com.docker.compose.service':'web'})}},
+    fetchImpl:async()=>{assert.fail('must not probe after deadline')},
+  }),/did not become ready/)
+})

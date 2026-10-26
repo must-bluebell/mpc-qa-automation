@@ -149,7 +149,7 @@ function cachedCategoryRun(runId) {
 }
 function categoryMatches(suite, source, project, adapter) {
   // Explicit suite provenance wins over adapter/project guesses in combined runs.
-  if (REPORT_CATEGORIES.some(c => c.suite === source) || source === 'uat') return source === suite
+  if (source != null && source !== '') return source === suite
   return (suite === 'api' && project === 'api') || (suite === 'regression' && project === 'chromium')
     || (suite === 'load' && adapter === 'k6')
 }
