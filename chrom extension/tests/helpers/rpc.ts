@@ -1,6 +1,6 @@
 import type { BrowserContext } from '@playwright/test';
 import { encodeAbiParameters, keccak256, type Hex } from 'viem';
-// Pinned to the supplied dev package's MPC_TOKEN_ADDRESS.
+// Public contract address, not an API key or credential. Pinned to the supplied dev package's MPC_TOKEN_ADDRESS.
 export const TOKEN_ADDRESS = '0x22084835Ba9f17101706929283eb3Fa0c08f3d04';
 export class MockRpc {
   balance = 1000n * 10n ** 18n;
@@ -14,6 +14,10 @@ export class MockRpc {
   unexpected: string[] = [];
   rawTransactions: Hex[] = [];
   async install(context: BrowserContext) {
+    await context.routeWebSocket(/.*/, socket => {
+      this.unexpected.push(socket.url());
+      socket.close({code:1008, reason:'External WebSockets are forbidden in tests'});
+    });
     await context.route(/^https?:\/\//, async route => {
       if (new URL(route.request().url()).hostname !== 'bsc-testnet-rpc.publicnode.com') {
         this.unexpected.push(route.request().url());

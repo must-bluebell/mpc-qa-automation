@@ -259,6 +259,7 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
       expect(['sent', 'included', 'confirmed']).toContain(result.state)
       expect(submits).toBe(2) // One intentionally blocked request; one actual relay submission.
       await expect.poll(async () => {
+        // dataHash is a public transaction identifier, not the signature or a secret.
         const record = (await ui.run()).records.find(r => r.index === recordIndex && r.dataHash === signatures.at(-1)!.dataHash)
         return record?.txHash === txHash && ['included', 'confirmed'].includes(record.state)
       }, { timeout: 120_000 }).toBe(true)

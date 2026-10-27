@@ -14,6 +14,8 @@ export const test = base.extend<{ rpc: MockRpc }>({
   rpc: async ({}, use) => { await use(new MockRpc()); },
   context: async ({ rpc, headless }, use, info) => {
     const context: BrowserContext = await chromium.launchPersistentContext('', {
+      // Fail closed even during extension startup and in service workers, before routes exist.
+      proxy:{server:'http://127.0.0.1:9',bypass:'<-loopback>'},
       channel:'chromium', headless, locale:'en-US', viewport:{width:420,height:800},
       args:[`--disable-extensions-except=${extensionPath}`,`--load-extension=${extensionPath}`],
     });

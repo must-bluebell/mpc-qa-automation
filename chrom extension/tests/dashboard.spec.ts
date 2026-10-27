@@ -52,7 +52,10 @@ test('dashboard hides balances and disables send for wrong token',async({page,rp
   await expect(page.getByText('1,000',{exact:true})).not.toBeVisible();
 });
 test('dashboard reports network failure and recovers on retry',async({page,rpc})=>{
-  rpc.offline=true; await importWallet(page);
+  await importWallet(page);
+  await expect(page.getByText('1,000',{exact:true})).toBeVisible();
+  rpc.offline=true;
+  await page.reload();
   await expect(page.getByText('Balances could not be loaded.',{exact:true})).toBeVisible({timeout:25000});
   rpc.offline=false; await page.getByRole('button',{name:'Try again',exact:true}).click();
   await expect(page.getByText('1,000',{exact:true})).toBeVisible();

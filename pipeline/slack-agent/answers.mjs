@@ -82,8 +82,12 @@ export function reportLink(id, environment=process.env) {
 }
 function suiteTests(run,suite) {
   if(!suite||run.suite===suite) return run.tests||[]
-  const names=new Set((run.steps||[]).filter(s=>s.fromSuite===suite).map(s=>s.name))
-  return (run.tests||[]).filter(t=>names.has(t.step)||(suite==='api'&&t.project==='api')||(suite==='uat'&&t.project==='uat')||(suite==='load'&&t.adapter==='k6')||(suite==='regression'&&t.project==='chromium'))
+  const steps=new Map((run.steps||[]).map(s=>[s.name,s]))
+  return (run.tests||[]).filter(t=>{
+    const fromSuite=steps.get(t.step)?.fromSuite
+    if(fromSuite) return fromSuite===suite
+    return (suite==='api'&&t.project==='api')||(suite==='uat'&&t.project==='uat')||(suite==='load'&&t.adapter==='k6')||(suite==='regression'&&t.project==='chromium')
+  })
 }
 function passingEvidence(run,suite) {
   const tests=suiteTests(run,suite)

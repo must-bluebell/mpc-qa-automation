@@ -187,3 +187,16 @@ test('suite questions cannot attribute another suite failure to the requested su
   assert.match(answer,/1 passed, 0 failed/)
   assert.doesNotMatch(answer,/failed: Check|Expected UI control/)
 })
+
+for (const [suite, hint] of [['api',{project:'api'}],['uat',{project:'uat'}],['load',{adapter:'k6'}],['regression',{project:'chromium'}]]) {
+  test(`${suite} latest results respect explicit step provenance and retain legacy inference`,async()=>{
+    const older={...run('full-suite'),suite,tests:[{key:'full',status:'passed',...hint}]}
+    const newer={...run('new-smoke'),suite:'critical-smoke',steps:[{name:'smoke',fromSuite:`${suite}-smoke`}],
+      tests:[{key:'smoke',step:'smoke',status:'passed',...hint}]}
+    assert.match(await answerQuestion(`latest ${suite} results`,deps([older,newer])),/Source: full-suite/)
+    delete newer.steps[0].fromSuite
+    assert.match(await answerQuestion(`latest ${suite} results`,deps([older,newer])),/Source: new-smoke/)
+    newer.steps[0].fromSuite=suite
+    assert.match(await answerQuestion(`latest ${suite} results`,deps([older,newer])),/Source: new-smoke/)
+  })
+}
