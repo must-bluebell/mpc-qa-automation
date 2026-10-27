@@ -13,7 +13,7 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-recovery-20261023",
+      "composeProject": "mpc-qa-recovery-20261026",
       "webmpcPath": "../WEB MPC",
       "ports": {
         "web": 3460,
@@ -39,7 +39,7 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-recovery-20261023",
+      "composeProject": "mpc-qa-recovery-20261026",
       "webmpcPath": "../WEB MPC",
       "ports": {
         "web": 3460,

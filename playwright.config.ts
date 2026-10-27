@@ -60,7 +60,7 @@ export default defineConfig({
     {
       name: 'chromium',
       testDir: './tests/wallet',
-      testMatch: ['wallet-flow.spec.ts', 'wallet-errors.spec.ts', 'web-regression.spec.ts'],
+      testMatch: ['wallet-flow.spec.ts', 'wallet-errors.spec.ts', 'web-regression.spec.ts', 'quests-dig-wallet.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {

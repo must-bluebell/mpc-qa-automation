@@ -30,19 +30,19 @@ Unresolved failures are reconstructed chronologically from real results for the 
 
 A synthetic "adapter did not produce results" failure resolves after the same adapter, project/workload and test filter completes successfully with actual passing assertions. A partial smoke run cannot clear a failed full-regression adapter. Historical failure records remain available for audit.
 
-The current environment is `local-docker`, Compose project `mpc-qa-dashboard-20261021`. `web-isolated` is an alias for the same database and chains; run suites sequentially:
+The current environment is `local-docker`, Compose project `mpc-qa-recovery-20261026`. `web-isolated` is an alias for the same database and chains; run suites sequentially:
 
 | Service | Host endpoint | Container port |
 | --- | --- | --- |
 | WEB MPC (Next.js development server) | http://localhost:3460 | 3400 |
 | BSC Anvil (chain 97) | http://localhost:8605 | 8545 |
 | opBNB Anvil (chain 5611) | http://localhost:8606 | 8545 |
-| PostgreSQL 16 | localhost:5490 | 5432 |
-| Neon HTTP proxy | http://localhost:4494 | 4444 |
+| PostgreSQL 16 | localhost:5491 | 5432 |
+| Neon HTTP proxy | http://localhost:4495 | 4444 |
 
 UAT scripts inside the web container use `127.0.0.1:3400` for HTTP transport while retaining `http://localhost:3460` as the Origin and SIWE domain. Host-side browsers use port 3460. Mixing these addresses causes `ECONNREFUSED` in the scenario scripts.
 
-Both chains in `mpc-qa-web-20261015` refused restoration after an unclean shutdown. That project’s volumes, the earlier `mpc-qa-recovery-20261011-1752` volumes and all older volumes remain preserved. The active project uses fresh chains and a fresh database, and enables compiler-cache eviction to avoid Docker memory exhaustion. Use `npm run stack:status` to confirm all required services are healthy before running suites.
+Both chains in `mpc-qa-web-20261015` refused restoration after an unclean shutdown. That project’s volumes, the earlier `mpc-qa-recovery-20261011-1752` volumes and all older volumes remain preserved. The October 23 recovery also rejected both chain snapshots after an unclean shutdown on October 26. Its volumes remain preserved. The active October 26 project uses fresh chains and a fresh database, and enables compiler-cache eviction to avoid Docker memory exhaustion. Use `npm run stack:status` to confirm all required services are healthy before running suites.
 
 Load baselines are stored as `pipeline/baselines/<environment>-<profile>-<workloadId>.json`. The workload ID covers the k6 script, effective profile, measured endpoints and session count. Changing the traffic mix creates a separate baseline only after every absolute SLO and functional check passes. App changes continue to compare against the same workload baseline. Older baseline files remain available; the former 10-user traffic mix is not compared with the current 15-user mix.
 

@@ -3,6 +3,7 @@ import { join, relative } from 'node:path'
 import { ROOT } from '../lib/env.mjs'
 import { runProcess } from '../lib/proc.mjs'
 import { classifyFailure } from '../lib/classify.mjs'
+import { warmBrowserRuntime } from './web-runtime.mjs'
 
 /** Maps one regression-reporter record (utils/regression-reporter.ts) to the pipeline's test shape. */
 export function normalizeRecord(record, { adapter = 'playwright', evidenceBase }) {
@@ -23,6 +24,9 @@ export function normalizeRecord(record, { adapter = 'playwright', evidenceBase }
 }
 
 export async function runPlaywrightStep(step, ctx) {
+  if (step.project === 'chromium' && !ctx.seededDefect) {
+    await warmBrowserRuntime(ctx.env,{timeoutMs:Math.min(60_000,ctx.remainingMs())})
+  }
   const args = ['playwright', 'test', `--project=${step.project}`]
   if (step.grep) args.push('--grep', step.grep)
   if (step.grepInvert) args.push('--grep-invert', step.grepInvert)

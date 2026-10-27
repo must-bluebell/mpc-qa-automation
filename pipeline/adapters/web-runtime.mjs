@@ -6,6 +6,19 @@ import { isLoopback } from '../lib/env.mjs'
 
 const exec = promisify(execFile)
 
+/** Compile first-use telemetry before its parallel browser requests can queue the SIWE nonce. */
+export async function warmBrowserRuntime(env, {fetchImpl=fetch,timeoutMs=60_000}={}) {
+  if (!env.stack?.verificationRuntime) return
+  if (!env.isolated || !env.allowWrites || !isLoopback(env.baseUrl)) throw new Error('Browser warmup requires an authorized isolated loopback target.')
+  // Invalid input compiles the handler without recording an event or creating a session.
+  const response=await fetchImpl(`${env.baseUrl}/api/join/event`,{
+    method:'POST',headers:{origin:env.appOrigin,'content-type':'application/json'},body:'{}',
+    redirect:'error',signal:AbortSignal.timeout(timeoutMs),
+  })
+  await response.arrayBuffer()
+  if(response.status!==400)throw new Error(`Browser warmup failed: POST /api/join/event answered ${response.status}; expected invalid-input rejection (400).`)
+}
+
 /** Clear accumulated development compiler memory without replacing database or chain state. */
 export async function prepareWebRuntime(env, {purpose='load',execImpl=exec,fetchImpl=fetch,wait=delay,timeoutMs=240_000}={}) {
   const permitted=purpose==='scenarios'?env.allowWrites:purpose==='load'&&env.allowLoad

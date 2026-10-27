@@ -169,3 +169,25 @@ To check Slack delivery without a workspace, run `node scripts/slack-sink.mjs` a
 - Artifacts are served only from inside their own `runs/<id>/` folder (no `..`, dotfiles or symlink escapes). Text files are redacted again on the way out. Playwright HTML reports open in a sandboxed origin.
 - `QA_SEED_PHRASE`, API keys and the Slack webhook are passed only to the wallet Playwright step. The WEB MPC scenarios, k6 and Docker never receive them, and known secret values are redacted from every log.
 - `.env` is mode 600. `runs/`, logs, `.env.*` and `.claude/` are git-ignored. k6 session cookies live in a private `mkdtemp` folder that is deleted after the run.
+
+## Verify Quests, Digging Process, Wallet Transaction, and UI Content
+
+Run the desktop and mobile quest/content/persistence checks against Global MPC:
+
+```sh
+npm run test:quests-dig
+```
+
+The suite uses the configured `QA_SEED_PHRASE`, `WALLET_ADDRESS`, and address index. It checks both quest lists against owner-scoped API data, all quest cards and reward amounts, tab counts (including daily check-in), progress bars, unavailable claim actions, known English copy, horizontal text clipping, dig counters, and persistence after refresh. New quests are checked against their API content; `pages/quest-copy.json` pins the English titles/descriptions observed on 2026-10-26. Changes to that baseline need editorial review. Screenshots and text are attached for review of grammar, alignment, and other visual details that automated checks cannot fully establish.
+
+Enable the state-changing 17-step journey explicitly:
+
+```sh
+QA_RUN_QUEST_DIG_CART=1 npm run test:quests-dig
+```
+
+This spends all currently available digs, rejects the first wallet signature, injects one definitive relay refusal before the signature reaches the server, then approves one real cart record. It checks one update per tap, 3 Crew consumed per dig, exhausted digging, pending approval and duplicate-click protection, unchanged rewards after errors, real opBNB receipt status/contract/gas, one new persisted record, quest progress, and refresh. It disables retries. No balance funding or quest reward claims occur. The complete journey requires an empty starting cart with no outstanding Crew use, remaining digs, a cart with enough room for those digs, an available cart run, and no concurrent use of this wallet; missing dig/capacity prerequisites produce a skipped test with evidence. Do not run it concurrently with scheduled tests using the same wallet.
+
+The application requests a gasless EIP-712 `RecordFor` signature on opBNB (204); its relayer submits the transaction and pays gas. The injected test wallet signs through the existing Node bridge; this does not test a real wallet extension's confirmation UI. Domain, chain, contract, user, mining fields, challenge and expiry are checked before signing. Actual receipt and explorer evidence are attached. The injected relay refusal covers client recovery; it does not exercise a transaction mined with a reverted receipt.
+
+Meeting a quest requirement can enable **Claim**. **Completed** means its reward has been claimed, so sending the cart must update eligibility without automatically awarding unrelated quest rewards. This suite preserves that distinction. Desktop/mobile UI cases run by default; the real cart case is reported as skipped unless explicitly enabled.

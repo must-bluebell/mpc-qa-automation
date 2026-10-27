@@ -35,6 +35,7 @@
     "stack:down": "node pipeline/stack.mjs down",
     "stack:status": "node pipeline/stack.mjs status",
     "test:silicon-cart": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= CI= playwright test --project=chromium --grep 'W30 -'",
+    "test:quests-dig": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= playwright test --project=chromium tests/wallet/quests-dig-wallet.spec.ts",
     "test:daily-checkin": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= CI= playwright test --project=chromium --grep 'W31 - Claim Daily check-in'",
     "test:unity-additional": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= CI= playwright test --project=chromium --grep 'Additional Unity coverage'",
     "qa:slack-agent": "node pipeline/slack-agent/server.mjs",
