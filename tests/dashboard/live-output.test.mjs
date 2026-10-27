@@ -189,3 +189,20 @@ test('the private startup link establishes a session and removes its key from th
   assert.equal(new URL(page.url()).hash,'')
   assert.equal(fixture.started,true)
 })
+
+test('explicit smoke provenance never implies regression or API coverage', async t => {
+  const runDetail = {runId:'ui-completion-regression',suite:'smoke',status:'passed',counts:{passed:3},groups:[],
+    steps:[{name:'smoke',fromSuite:'smoke'}],tests:[
+      {title:'Smoke browser',step:'smoke',project:'chromium',status:'passed'},
+      {title:'Smoke API',step:'smoke',project:'api',status:'passed'},
+      {title:'Legacy browser',step:'legacy',project:'chromium',status:'passed'},
+    ]}
+  const {page,runId}=await dashboard(t,{scheduled:true,runDetail})
+  await page.locator(`a[href="#/runs/${runId}"]`).first().click()
+  await expect(page.locator('#test-results h3')).toHaveText(['Regression testing','Other checks'])
+  const tables=page.locator('#test-results table')
+  await expect(tables.nth(0)).toContainText('Legacy browser')
+  await expect(tables.nth(0)).not.toContainText('Smoke')
+  await expect(tables.nth(1)).toContainText('Smoke browser')
+  await expect(tables.nth(1)).toContainText('Smoke API')
+})

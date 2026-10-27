@@ -16,7 +16,7 @@ COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
 COPY --from=k6 /usr/bin/k6 /usr/local/bin/k6
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git procps \
+    && apt-get install -y --no-install-recommends ca-certificates git gh procps \
     && rm -rf /var/lib/apt/lists/* \
     && corepack enable \
     && corepack prepare pnpm@10.32.1 --activate

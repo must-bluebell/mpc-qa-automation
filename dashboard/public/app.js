@@ -240,7 +240,8 @@ async function renderRun(runId, anchor) {
 
   const categoryOf = t => {
     const suite = run.steps.find(s => s.name === t.step)?.fromSuite
-    return REPORT_CATEGORIES.some(c => c.suite === suite) ? suite : t.adapter === 'k6' ? 'load' : t.project === 'api' ? 'api' : t.project === 'uat' || t.adapter === 'webmpc-scenarios' || suite === 'uat' ? 'uat' : t.project === 'chromium' ? 'regression' : 'other'
+    if (suite != null) return [...REPORT_CATEGORIES.map(c => c.suite), 'uat'].includes(suite) ? suite : 'other'
+    return t.adapter === 'k6' ? 'load' : t.project === 'api' ? 'api' : t.project === 'uat' || t.adapter === 'webmpc-scenarios' ? 'uat' : t.project === 'chromium' ? 'regression' : 'other'
   }
   const testTable = list => h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, h('th', {}, 'Test'), h('th', {}, 'Status'), h('th', { class: 'num' }, 'Duration'), h('th', {}, 'Evidence'))),

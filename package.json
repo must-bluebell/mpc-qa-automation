@@ -44,7 +44,8 @@
     "test:extension": "npm --prefix \"chrom extension\" test",
     "test:extension:dashboard": "npm --prefix \"chrom extension\" run test:dashboard",
     "report:extension": "npm --prefix \"chrom extension\" run report",
-    "typecheck:extension": "npm --prefix \"chrom extension\" run typecheck"
+    "typecheck:extension": "npm --prefix \"chrom extension\" run typecheck",
+    "test:quests-dig:cart": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= playwright test --project=chromium tests/wallet/quests-dig-wallet.spec.ts --grep 'Steps 1\u201317'"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.132.1",

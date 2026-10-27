@@ -1,6 +1,6 @@
 # MPC automation container
 
-This repository has its own [Dockerfile](../Dockerfile) and [Compose service](../docker-compose.yml). The image contains Node.js 22, the locked npm dependencies, Chromium for this repository's Playwright version, pnpm 10.32.1, Python 3 for external plan validation/reporting, Codex CLI 0.163.0, Docker CLI 29.3.1 with Compose, and k6 2.3.0. It runs the QA dashboard and, when enabled, the Slack scheduler. It does not embed the application, its database, or either chain.
+This repository has its own [Dockerfile](../Dockerfile) and [Compose service](../docker-compose.yml). The image contains Node.js 22, the locked npm dependencies, Chromium for this repository's Playwright version, pnpm 10.32.1, GitHub CLI (`gh`, authenticated at runtime through `GH_TOKEN` in `.env`), Python 3 for external plan validation/reporting, Codex CLI 0.163.0, Docker CLI 29.3.1 with Compose, and k6 2.3.0. It runs the QA dashboard and, when enabled, the Slack scheduler. It does not embed the application, its database, or either chain.
 
 ## Host requirements
 

@@ -77,7 +77,7 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
   }
 
   test('Steps 1–17: exhaust digs, reject, recover from relay failure, approve cart, and verify receipt', async ({ page }) => {
-    test.skip(process.env.QA_RUN_QUEST_DIG_CART !== '1', 'Set QA_RUN_QUEST_DIG_CART=1 to consume real Crew and submit one cart transaction')
+    test.skip(process.env.QA_RUN_QUEST_DIG_CART !== '1' || !!process.env.QA_REPORT_DIR || process.env.QA_ALLOW_WRITES !== '1' || process.env.npm_lifecycle_event !== 'test:quests-dig:cart', 'Run npm run test:quests-dig:cart with QA_ALLOW_WRITES=1 and QA_RUN_QUEST_DIG_CART=1 outside the pipeline')
     test.setTimeout(360_000)
     expect(new URL(target().baseUrl).origin, 'Pinned RecordFor contract belongs to the Unity production deployment').toBe('https://app.globalmpc.tech')
     expect(target().chainId).toBe(56)
@@ -86,7 +86,7 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
     let preparation: Promise<Response> | undefined
     let releaseApproval: (() => void) | undefined
     let signingError: unknown
-    const signatures: Array<Record<string, unknown>> = []
+    const recordMessages: Array<Record<string, unknown>> = []
     let expectedDigs = 0
     let expectedEnergy = 0
     let expectedCreditEarned = 0
@@ -125,8 +125,8 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
           expect(message.goodsIds).toEqual([])
           expect(message.goodsMadeTo).toEqual([])
           expect(message.goodsBurnedTo).toEqual([])
-          signatures.push(message)
-          await test.info().attach(`cart-signature-${signatures.length}`, { body: Buffer.from(JSON.stringify(payload)), contentType: 'application/json' })
+          recordMessages.push(message)
+          await test.info().attach(`cart-signature-${recordMessages.length}`, { body: Buffer.from(JSON.stringify(payload)), contentType: 'application/json' })
           // Hold the approval so pending state and duplicate-click protection can be inspected.
           await new Promise<void>(resolve => { releaseApproval = resolve })
         } catch (error) { signingError = error; throw error }
@@ -152,6 +152,10 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
     expect(Number.isSafeInteger(balance.spent)).toBe(true)
     test.skip(balance.outstanding !== 0 || !await page.getByText(validationCopy.emptyCartHint, { exact: true }).isVisible(),
       'Precondition blocked: start with an empty cart and no outstanding Crew use for exact cart authorization')
+    // Pinned Unity LIMITS.cart.batch is 100; a magnet can add a second line per dig.
+    // The empty-cart precondition above excludes carried entries. Reserve worst-case room.
+    test.skip(initial.available * 2 > 100, 'Precondition blocked: all intended digs must fit in one empty cart, including magnet bonus lines')
+    test.skip(!await ui.dig.isEnabled(), 'Precondition blocked: no available cart run or digging is otherwise unavailable')
     expectedDigs = initial.available
     // RecordFor energy and credits are cumulative; authorize only the additional fresh dig cost.
     expectedEnergy = balance.spent + initial.available * 3
@@ -164,9 +168,6 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
       for (let index = 1; index <= initial.available; index++) {
         if (!await ui.dig.isEnabled()) {
           await evidence(page, 'dig-blocked-before-exhaustion')
-          const reasonId = await ui.dig.getAttribute('aria-describedby')
-          const reasonText = reasonId ? await page.locator(`[id=${JSON.stringify(reasonId)}]`).innerText() : ''
-          test.skip(/cart is full|runs are done/i.test(reasonText), 'Precondition blocked: cart capacity or cart run limit prevents one final send')
           await expect(ui.dig, 'Unexpectedly disabled before exhausting the allowance').toBeEnabled()
         }
         await ui.dig.click()
@@ -208,7 +209,7 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
       await setWalletFailure(page, 'eth_signTypedData_v4', 'rejected')
       await ui.cart.click()
       await expect(page.getByText(/(?:signature|transaction).*(?:cancelled|rejected)/i).first()).toBeVisible()
-      expect(signatures).toHaveLength(0)
+      expect(recordMessages).toHaveLength(0)
       expect(submits).toBe(0)
       await retained()
       await setWalletFailure(page, 'eth_signTypedData_v4', null)
@@ -219,16 +220,16 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
       await ui.cart.click()
       await expect.poll(() => {
         if (signingError) throw signingError
-        return signatures.length
+        return recordMessages.length
       }).toBe(expectedSignatures)
-      const request = signatures.at(-1)!
+      const request = recordMessages.at(-1)!
       expect(Number(request.energyUsed)).toBe(expectedEnergy)
       await expect(ui.cart).toBeDisabled()
       const before = submits
       const box = await ui.cart.boundingBox()
       expect(box).not.toBeNull()
       await page.mouse.dblclick(box!.x + box!.width / 2, box!.y + box!.height / 2)
-      expect(signatures).toHaveLength(expectedSignatures)
+      expect(recordMessages).toHaveLength(expectedSignatures)
       expect(submits).toBe(before)
       expect(releaseApproval).toBeDefined()
       releaseApproval!()
@@ -260,7 +261,7 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
       expect(submits).toBe(2) // One intentionally blocked request; one actual relay submission.
       await expect.poll(async () => {
         // dataHash is a public transaction identifier, not the signature or a secret.
-        const record = (await ui.run()).records.find(r => r.index === recordIndex && r.dataHash === signatures.at(-1)!.dataHash)
+        const record = (await ui.run()).records.find(r => r.index === recordIndex && r.dataHash === recordMessages.at(-1)!.dataHash)
         return record?.txHash === txHash && ['included', 'confirmed'].includes(record.state)
       }, { timeout: 120_000 }).toBe(true)
       const chain = await page.request.post(rpc, { data: { jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] } })
@@ -282,10 +283,10 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
       expect(txResponse.ok()).toBe(true)
       const tx = (await txResponse.json()).result
       expect(tx.to.toLowerCase()).toBe(contract)
-      expect(tx.from.toLowerCase()).toBe(String(signatures.at(-1)!.submitter).toLowerCase())
+      expect(tx.from.toLowerCase()).toBe(String(recordMessages.at(-1)!.submitter).toLowerCase())
       // Bind this receipt to the unique signed record, independently of the app's hash mapping.
-      expect(tx.input.toLowerCase()).toContain(String(signatures.at(-1)!.dataHash).slice(2).toLowerCase())
-      expect(tx.input.toLowerCase()).toContain(String(signatures.at(-1)!.challenge).slice(2).toLowerCase())
+      expect(tx.input.toLowerCase()).toContain(String(recordMessages.at(-1)!.dataHash).slice(2).toLowerCase())
+      expect(tx.input.toLowerCase()).toContain(String(recordMessages.at(-1)!.challenge).slice(2).toLowerCase())
       expect(tx.input.toLowerCase()).toContain(account.address.slice(2).toLowerCase())
       await test.info().attach('confirmed-cart-receipt', { body: Buffer.from(JSON.stringify({ network: 204, explorer: `https://opbnbscan.com/tx/${txHash}`, receipt })), contentType: 'application/json' })
     })
