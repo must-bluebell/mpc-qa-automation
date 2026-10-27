@@ -1,0 +1,327 @@
+{
+  "source": "/Users/mac/MPC Extension",
+  "extractedOn": "2026-10-27",
+  "count": 64,
+  "cases": [
+    {
+      "title": "dashboard displays simulated MPC and BNB balances with history navigation",
+      "file": "dashboard.spec.ts",
+      "line": 4
+    },
+    {
+      "title": "receive displays imported address, QR code and network warning",
+      "file": "dashboard.spec.ts",
+      "line": 12
+    },
+    {
+      "title": "lock rejects wrong password then unlocks with correct password",
+      "file": "dashboard.spec.ts",
+      "line": 20
+    },
+    {
+      "title": "settings persist auto-lock and language after reload",
+      "file": "dashboard.spec.ts",
+      "line": 31
+    },
+    {
+      "title": "dashboard warns when wallet has no BNB",
+      "file": "dashboard.spec.ts",
+      "line": 44
+    },
+    {
+      "title": "dashboard hides balances and disables send for wrong token",
+      "file": "dashboard.spec.ts",
+      "line": 48
+    },
+    {
+      "title": "dashboard reports network failure and recovers on retry",
+      "file": "dashboard.spec.ts",
+      "line": 54
+    },
+    {
+      "title": "en: settings text and all auto-lock choices persist",
+      "file": "languages.spec.ts",
+      "line": 62
+    },
+    {
+      "title": "en: security settings gates and cancellation use localized text",
+      "file": "languages.spec.ts",
+      "line": 90
+    },
+    {
+      "title": "en: three separate simulated 1 MPC transfers with localized text",
+      "file": "languages.spec.ts",
+      "line": 122
+    },
+    {
+      "title": "en: negative transfer inputs show localized errors and never broadcast",
+      "file": "languages.spec.ts",
+      "line": 129
+    },
+    {
+      "title": "en: failed network receipt uses localized failure text",
+      "file": "languages.spec.ts",
+      "line": 149
+    },
+    {
+      "title": "ko: settings text and all auto-lock choices persist",
+      "file": "languages.spec.ts",
+      "line": 62
+    },
+    {
+      "title": "ko: security settings gates and cancellation use localized text",
+      "file": "languages.spec.ts",
+      "line": 90
+    },
+    {
+      "title": "ko: three separate simulated 1 MPC transfers with localized text",
+      "file": "languages.spec.ts",
+      "line": 122
+    },
+    {
+      "title": "ko: negative transfer inputs show localized errors and never broadcast",
+      "file": "languages.spec.ts",
+      "line": 129
+    },
+    {
+      "title": "ko: failed network receipt uses localized failure text",
+      "file": "languages.spec.ts",
+      "line": 149
+    },
+    {
+      "title": "zh: settings text and all auto-lock choices persist",
+      "file": "languages.spec.ts",
+      "line": 62
+    },
+    {
+      "title": "zh: security settings gates and cancellation use localized text",
+      "file": "languages.spec.ts",
+      "line": 90
+    },
+    {
+      "title": "zh: three separate simulated 1 MPC transfers with localized text",
+      "file": "languages.spec.ts",
+      "line": 122
+    },
+    {
+      "title": "zh: negative transfer inputs show localized errors and never broadcast",
+      "file": "languages.spec.ts",
+      "line": 129
+    },
+    {
+      "title": "zh: failed network receipt uses localized failure text",
+      "file": "languages.spec.ts",
+      "line": 149
+    },
+    {
+      "title": "mn: settings text and all auto-lock choices persist",
+      "file": "languages.spec.ts",
+      "line": 62
+    },
+    {
+      "title": "mn: security settings gates and cancellation use localized text",
+      "file": "languages.spec.ts",
+      "line": 90
+    },
+    {
+      "title": "mn: three separate simulated 1 MPC transfers with localized text",
+      "file": "languages.spec.ts",
+      "line": 122
+    },
+    {
+      "title": "mn: negative transfer inputs show localized errors and never broadcast",
+      "file": "languages.spec.ts",
+      "line": 129
+    },
+    {
+      "title": "mn: failed network receipt uses localized failure text",
+      "file": "languages.spec.ts",
+      "line": 149
+    },
+    {
+      "title": "simulated 0.001 MPC transfer to the requested wallet is verified",
+      "file": "languages.spec.ts",
+      "line": 164
+    },
+    {
+      "title": "imports a public test wallet and opens dashboard",
+      "file": "onboarding.spec.ts",
+      "line": 4
+    },
+    {
+      "title": "import rejects invalid word count",
+      "file": "onboarding.spec.ts",
+      "line": 12
+    },
+    {
+      "title": "import rejects invalid unknown word",
+      "file": "onboarding.spec.ts",
+      "line": 12
+    },
+    {
+      "title": "import rejects invalid checksum",
+      "file": "onboarding.spec.ts",
+      "line": 12
+    },
+    {
+      "title": "password rejects short input",
+      "file": "onboarding.spec.ts",
+      "line": 23
+    },
+    {
+      "title": "password rejects numeric input",
+      "file": "onboarding.spec.ts",
+      "line": 23
+    },
+    {
+      "title": "password rejects repetitive input",
+      "file": "onboarding.spec.ts",
+      "line": 23
+    },
+    {
+      "title": "password rejects long input",
+      "file": "onboarding.spec.ts",
+      "line": 23
+    },
+    {
+      "title": "password confirmation must match and passwords are masked",
+      "file": "onboarding.spec.ts",
+      "line": 28
+    },
+    {
+      "title": "creates a new wallet after verifying backup words",
+      "file": "onboarding.spec.ts",
+      "line": 36
+    },
+    {
+      "title": "installed extension has only storage permission and no web injection",
+      "file": "permissions.spec.ts",
+      "line": 2
+    },
+    {
+      "title": "password change requires old password and invalidates it",
+      "file": "security.spec.ts",
+      "line": 4
+    },
+    {
+      "title": "phrase reveal requires password and hides words after release",
+      "file": "security.spec.ts",
+      "line": 21
+    },
+    {
+      "title": "removal requires backup acknowledgement and exact typed confirmation",
+      "file": "security.spec.ts",
+      "line": 37
+    },
+    {
+      "title": "five wrong passwords trigger lockout that survives reload",
+      "file": "security.spec.ts",
+      "line": 49
+    },
+    {
+      "title": "simulated transfer sends exactly 0.01 MPC once",
+      "file": "send-boundaries.spec.ts",
+      "line": 11
+    },
+    {
+      "title": "simulated transfer sends exactly smallest MPC unit once",
+      "file": "send-boundaries.spec.ts",
+      "line": 11
+    },
+    {
+      "title": "simulated transfer sends exactly entire available balance once",
+      "file": "send-boundaries.spec.ts",
+      "line": 11
+    },
+    {
+      "title": "one smallest unit above balance is rejected without rounding",
+      "file": "send-boundaries.spec.ts",
+      "line": 41
+    },
+    {
+      "title": "missing recipient disables review even with a valid amount",
+      "file": "send-boundaries.spec.ts",
+      "line": 49
+    },
+    {
+      "title": "review requires a password before send is enabled",
+      "file": "send-boundaries.spec.ts",
+      "line": 56
+    },
+    {
+      "title": "closing review before confirmation never broadcasts",
+      "file": "send-boundaries.spec.ts",
+      "line": 65
+    },
+    {
+      "title": "send rejects malformed address",
+      "file": "send.spec.ts",
+      "line": 13
+    },
+    {
+      "title": "send rejects zero address",
+      "file": "send.spec.ts",
+      "line": 13
+    },
+    {
+      "title": "send rejects self transfer",
+      "file": "send.spec.ts",
+      "line": 13
+    },
+    {
+      "title": "send rejects zero amount",
+      "file": "send.spec.ts",
+      "line": 13
+    },
+    {
+      "title": "send rejects negative amount",
+      "file": "send.spec.ts",
+      "line": 13
+    },
+    {
+      "title": "send rejects excess precision",
+      "file": "send.spec.ts",
+      "line": 13
+    },
+    {
+      "title": "send rejects insufficient token balance",
+      "file": "send.spec.ts",
+      "line": 13
+    },
+    {
+      "title": "send requires both fields and Max uses available balance",
+      "file": "send.spec.ts",
+      "line": 20
+    },
+    {
+      "title": "simulated transfer receipt 0x1: validates signed recipient amount and chain",
+      "file": "send.spec.ts",
+      "line": 28
+    },
+    {
+      "title": "simulated transfer receipt 0x0: validates signed recipient amount and chain",
+      "file": "send.spec.ts",
+      "line": 28
+    },
+    {
+      "title": "wrong RPC chain blocks signing and broadcasting",
+      "file": "send.spec.ts",
+      "line": 49
+    },
+    {
+      "title": "high gas price blocks review without broadcasting",
+      "file": "send.spec.ts",
+      "line": 57
+    },
+    {
+      "title": "insufficient BNB blocks signing",
+      "file": "send.spec.ts",
+      "line": 64
+    },
+    {
+      "title": "wrong transfer password cannot broadcast",
+      "file": "send.spec.ts",
+      "line": 72
+    }
+  ]
+}

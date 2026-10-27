@@ -40,7 +40,11 @@
     "test:unity-additional": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= CI= playwright test --project=chromium --grep 'Additional Unity coverage'",
     "qa:slack-agent": "node pipeline/slack-agent/server.mjs",
     "qa:slack-agent:check": "node pipeline/slack-agent/server.mjs --check-config",
-    "qa:slack-agent:status": "node pipeline/slack-agent/server.mjs --status"
+    "qa:slack-agent:status": "node pipeline/slack-agent/server.mjs --status",
+    "test:extension": "npm --prefix \"chrom extension\" test",
+    "test:extension:dashboard": "npm --prefix \"chrom extension\" run test:dashboard",
+    "report:extension": "npm --prefix \"chrom extension\" run report",
+    "typecheck:extension": "npm --prefix \"chrom extension\" run typecheck"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.132.1",

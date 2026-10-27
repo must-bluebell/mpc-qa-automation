@@ -191,3 +191,16 @@ This spends all currently available digs, rejects the first wallet signature, in
 The application requests a gasless EIP-712 `RecordFor` signature on opBNB (204); its relayer submits the transaction and pays gas. The injected test wallet signs through the existing Node bridge; this does not test a real wallet extension's confirmation UI. Domain, chain, contract, user, mining fields, challenge and expiry are checked before signing. Actual receipt and explorer evidence are attached. The injected relay refusal covers client recovery; it does not exercise a transaction mined with a reverted receipt.
 
 Meeting a quest requirement can enable **Claim**. **Completed** means its reward has been claimed, so sending the cart must update eligibility without automatically awarding unrelated quest rewards. This suite preserves that distinction. Desktop/mobile UI cases run by default; the real cart case is reported as skipped unless explicitly enabled.
+
+## MPC Chrome extension tests
+
+The existing packaged-extension suite is copied into [`chrom extension`](chrom%20extension/README.md), with independent pinned dependencies and Playwright configuration. The source suite contains **64 tests**, not 65; no missing case has been invented.
+
+```sh
+npm ci --prefix "chrom extension"
+cd "chrom extension" && npx playwright install chromium && cd ..
+npm run test:extension
+npm run report:extension -- --port 9323
+```
+
+`npm run test:extension:dashboard` runs the wallet dashboard subset. `npm run typecheck:extension` checks the extension tests. The full extension run includes that subset and saves its HTML/JSON reports inside `chrom extension`. These commands do not invoke the QA orchestrator, scheduler, or Slack integrations. All extension RPC traffic is simulated; no live transfers occur. The existing QA dashboard is separate from the extension HTML report.
