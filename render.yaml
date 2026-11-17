@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: mpc-automation
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    healthCheckPath: /healthz
+    disk:
+      name: qa-runs
+      mountPath: /opt/mpc-automation/runs
+      sizeGB: 10
+    envVars:
+      - { key: QA_DASHBOARD_HOST, value: 0.0.0.0 }
+      - { key: QA_SCHEDULER_ENABLED, value: "1" }
+      - { key: QA_SLACK_AGENT_ENABLED, value: "0" }
+      - { key: QA_EXTERNAL_REPOSITORIES, value: "0" }
+      - { key: QA_RUNS_DIR, value: runs }
+      - { key: QA_DASHBOARD_ACCESS_TOKEN, generateValue: true }
+      - { key: BASE_URL, sync: false }
+      - { key: QA_CHAIN_ID, sync: false }
+      - { key: QA_ENVIRONMENT, sync: false }
+      - { key: QA_SEED_PHRASE, sync: false }
+      - { key: WALLET_ADDRESS, sync: false }
+      - { key: WALLET_ADDRESS_INDEX, sync: false }
+      - { key: SLACK_BOT_TOKEN, sync: false }
+      - { key: SLACK_CHANNEL_ID, sync: false }
+      - { key: SLACK_ALERT_WEBHOOK_URL, sync: false }
+      - { key: QA_DASHBOARD_URL, sync: false }

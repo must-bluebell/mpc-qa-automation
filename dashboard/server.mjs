@@ -29,13 +29,22 @@ import { REPORT_CATEGORIES } from '../pipeline/lib/safe-output.mjs'
  * text artifacts are re-redacted on the way out; nothing secret is ever returned, only "configured" flags.
  */
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), 'public')
-const HOST = '127.0.0.1'
-const PORT = Number(process.env.QA_DASHBOARD_PORT || 4500)
-const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`])
-const ALLOWED_ORIGINS = new Set([...ALLOWED_HOSTS].map(h => `http://${h}`))
+// Hosted mode (e.g. Render): set QA_DASHBOARD_HOST=0.0.0.0 and the platform's public hostname. Default stays loopback-only.
+const HOST = process.env.QA_DASHBOARD_HOST || '127.0.0.1'
+const PORT = Number(process.env.QA_DASHBOARD_PORT || process.env.PORT || 4500)
+const PUBLIC_HOST = (process.env.QA_DASHBOARD_PUBLIC_HOST || process.env.RENDER_EXTERNAL_HOSTNAME || '').trim().toLowerCase()
+if (PUBLIC_HOST && !/^[a-z0-9.-]+$/.test(PUBLIC_HOST)) throw new Error('QA_DASHBOARD_PUBLIC_HOST must be a bare hostname')
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, ...(PUBLIC_HOST ? [PUBLIC_HOST] : [])])
+const ALLOWED_ORIGINS = new Set([
+  ...[`127.0.0.1:${PORT}`, `localhost:${PORT}`].map(h => `http://${h}`),
+  ...(PUBLIC_HOST ? [`https://${PUBLIC_HOST}`] : []),
+])
 const TOKEN = randomBytes(32).toString('hex')
 // Independent of the public page's CSRF token: only the launching user's terminal receives this key.
-const ACCESS_TOKEN = randomBytes(32).toString('hex')
+// A fixed token (min 32 chars) survives redeploys when hosted; otherwise a fresh one is generated per start.
+const FIXED_ACCESS_TOKEN = process.env.QA_DASHBOARD_ACCESS_TOKEN || ''
+if (FIXED_ACCESS_TOKEN && FIXED_ACCESS_TOKEN.length < 32) throw new Error('QA_DASHBOARD_ACCESS_TOKEN must be at least 32 characters')
+const ACCESS_TOKEN = FIXED_ACCESS_TOKEN || randomBytes(32).toString('hex')
 const SESSION_COOKIE = `mpc_qa_session_${PORT}`
 const JOB_LOG_DIR = join(RUNS_DIR, '.dashboard')
 const MAX_BODY = 4_096
@@ -300,6 +309,8 @@ function serveStatic(res, path) {
 }
 
 async function route(req, res) {
+  // Platform health probe: no Host check (probes use internal hosts), reveals nothing.
+  if (req.method === 'GET' && req.url === '/healthz') return send(res, 200, { ok: true })
   // DNS-rebinding defence: a page on another domain that resolves to 127.0.0.1 still sends its own Host.
   if (!ALLOWED_HOSTS.has(req.headers.host ?? '')) return send(res, 421, { error: 'Unexpected Host header' })
   const url = new URL(req.url, `http://${req.headers.host}`)
@@ -315,7 +326,7 @@ async function route(req, res) {
   if (req.method === 'POST' && path === '/api/session') {
     const body = await readBody(req)
     if (!accessOk(body?.access)) return send(res, 403, { error: 'Invalid private dashboard link' })
-    return send(res, 200, { ok: true }, { 'Set-Cookie': `${SESSION_COOKIE}=${ACCESS_TOKEN}; HttpOnly; SameSite=Strict; Path=/api/` })
+    return send(res, 200, { ok: true }, { 'Set-Cookie': `${SESSION_COOKIE}=${ACCESS_TOKEN}; HttpOnly; SameSite=Strict; Path=/api/${PUBLIC_HOST ? '; Secure' : ''}` })
   }
   if (path.startsWith('/api/') && !sessionOk(req)) {
     return send(res, 403, { error: 'Open the private dashboard link printed by npm run dashboard.' })
@@ -359,4 +370,6 @@ const server = http.createServer((req, res) => {
 })
 server.requestTimeout = 30_000
 server.headersTimeout = 15_000
-server.listen(PORT, HOST, () => console.log(`MPC QA dashboard: http://${HOST}:${PORT}/#access=${ACCESS_TOKEN}  (private link; loopback only)`))
+server.listen(PORT, HOST, () => console.log(PUBLIC_HOST
+  ? `MPC QA dashboard listening on ${HOST}:${PORT}; open https://${PUBLIC_HOST}/#access=<QA_DASHBOARD_ACCESS_TOKEN>`
+  : `MPC QA dashboard: http://${HOST}:${PORT}/#access=${ACCESS_TOKEN}  (private link; loopback only)`))
