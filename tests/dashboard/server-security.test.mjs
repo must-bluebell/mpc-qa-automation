@@ -278,3 +278,16 @@ test('preflight failures remain visible for every requested category', async t =
     ['regression','infra-failed','preflight'],['api','infra-failed','preflight']])
   assert.match(results[0].errors.join(' '), /health probe failed/)
 })
+
+test('run records provide results when the dashboard job log is absent', async t => {
+  const f = await dashboardServer(t), headers = {cookie: await f.session()}
+  saveFixtureRun(f, {runId:'scheduled-result',status:'failed',counts:{passed:3,failed:1},errors:['runner failed'],steps:[],tests:[]})
+  const response = await fetch(`${f.base}/api/jobs/scheduled-result/log`, {headers})
+  assert.equal(response.status,200)
+  const result = await response.json()
+  assert.equal(result.running,false)
+  assert.match(result.log,/3 passed/)
+  assert.match(result.log,/1 failed/)
+  assert.match(result.log,/runner failed/)
+  assert.equal((await fetch(`${f.base}/api/jobs/missing-run/log`, {headers})).status,404)
+})

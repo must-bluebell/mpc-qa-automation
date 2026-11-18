@@ -234,3 +234,17 @@ test('completion preserves output and retries a failed results refresh', async t
   await page.clock.runFor(2100)
   await expect(page.getByRole('button', {name:'Run',exact:true})).toBeEnabled()
 })
+
+test('a lost inactive run stops polling and enables a fresh run', async t => {
+  const {page,fixture} = await dashboard(t)
+  fixture.complete = true
+  fixture.logError = 404
+  await page.clock.runFor(2100)
+  await expect(page.locator('pre.log')).toContainText('Start a new run')
+  await expect(page.getByRole('button',{name:'Run',exact:true})).toBeEnabled()
+  const requests = fixture.logRequests
+  await page.clock.runFor(6100)
+  assert.equal(fixture.logRequests,requests)
+  await page.evaluate(() => window.dispatchEvent(new HashChangeEvent('hashchange')))
+  await expect(page.locator('pre.log')).toHaveCount(0)
+})

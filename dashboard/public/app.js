@@ -25,7 +25,7 @@ const safeHref = v => (/^(#|\/(?!\/))/.test(String(v)) ? String(v) : '#')
 async function api(path, options = {}) {
   const res = await fetch(path, { ...options, headers: { ...(options.body ? { 'content-type': 'application/json', 'x-qa-token': TOKEN } : {}), ...options.headers } })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+  if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { status: res.status })
   return data
 }
 const post = (path, body = {}) => api(path, { method: 'POST', body: JSON.stringify(body) })
@@ -189,7 +189,25 @@ function liveLog() {
         }
       }
     } catch (error) {
-      if (!cancelled && !receivedLog) pre.textContent = `Output unavailable: ${error.message}. Retrying… If this service restarted or redeployed, its temporary run files may have been lost.`
+      if (cancelled || receivedLog) return
+      pre.textContent = `Output unavailable: ${error.message}. Retrying…`
+      if (error.status === 404) {
+        // A fresh status distinguishes a brief log-creation delay from a lost run.
+        // Do not keep a stale run ID selected after the service has forgotten it.
+        try {
+          await refresh()
+          if (cancelled) return
+          if (state.status.running?.runId !== id) {
+            clearInterval(pollTimer)
+            pollTimer = null
+            state.watching = null
+            pre.textContent = 'This run is no longer available on the server. Start a new run to collect fresh results.'
+            head.replaceChildren(document.createTextNode(id))
+            app.firstElementChild.replaceWith(runForm())
+            document.getElementById('run-history')?.replaceWith(runsTable())
+          }
+        } catch { /* Keep retrying until server status can be confirmed. */ }
+      }
     }
     finally { pending = false }
   }
