@@ -254,14 +254,10 @@ function startRun({ suite, env, seedDefect, ai, notify }) {
   const job = { runId, suite, env, pid: child.pid, startedAt: new Date().toISOString(), logFile, exitCode: undefined, notify: notify !== false }
   jobs.set(runId, job)
   const stdout = outputRedactor(text => log.write(text)), stderr = outputRedactor(text => log.write(text))
-  // Hosted (free Render plan): no shell and no persistent disk, so mirror the redacted run output to the service log.
-  const mirror = isHosted()
-  const mirrorOut = mirror ? outputRedactor(text => process.stdout.write(text)) : null
-  const mirrorErr = mirror ? outputRedactor(text => process.stderr.write(text)) : null
-  child.stdout.on('data', chunk => { stdout.write(chunk); mirrorOut?.write(chunk) })
-  child.stderr.on('data', chunk => { stderr.write(chunk); mirrorErr?.write(chunk) })
+  child.stdout.on('data', chunk => stdout.write(chunk))
+  child.stderr.on('data', chunk => stderr.write(chunk))
   child.on('error', error => { log.write(redact(`\n${error.message}\n`)); job.exitCode = -1 })
-  child.on('close', code => { stdout.end(); stderr.end(); mirrorOut?.end(); mirrorErr?.end(); job.exitCode = code ?? -1; log.end() })
+  child.on('close', code => { stdout.end(); stderr.end(); job.exitCode = code ?? -1; log.end() })
   return { runId }
 }
 
