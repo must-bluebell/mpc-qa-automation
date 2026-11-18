@@ -50,6 +50,12 @@ test('Docker words in assertion messages do not hide product failures', () => {
   }
 })
 
+test('missing wallet configuration is an infrastructure failure, not a product defect', () => {
+  for (const error of ['A configured signing wallet is required expect(received).toBeTruthy() Received: undefined', 'WALLET_ADDRESS must contain a valid Ethereum address (set it in .env locally, or in the Render environment when hosted).']) {
+    assert.equal(classifyFailure({ status: 'failed', errors: [error] }).kind, 'infrastructure', error)
+  }
+})
+
 test('specific Docker availability errors remain infrastructure failures', () => {
   for (const error of ['Cannot connect to the Docker daemon', 'docker: command not found', 'Error response from daemon: No such container: qa-web', 'container qa-web is unhealthy']) {
     assert.equal(classifyFailure({ status: 'failed', errors: [error] }).kind, 'infrastructure', error)

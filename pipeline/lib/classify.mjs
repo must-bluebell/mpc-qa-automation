@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
  * app reports as such). Everything else that fails an explicit assertion is a product failure.
  */
 const INFRA_PATTERNS = [
-  [/Wallet address index must be an integer|QA_SEED_PHRASE is not set|WALLET_ADDRESS must contain a valid|Could not derive the configured wallet|recovery phrase at index .* does not derive/i, 'wallet test configuration invalid'],
+  [/Wallet address index must be an integer|QA_SEED_PHRASE is not set|A configured signing wallet is required|WALLET_ADDRESS must contain a valid|Could not derive the configured wallet|recovery phrase at index .* does not derive/i, 'wallet test configuration invalid'],
   [/ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|socket hang up|net::ERR_(CONNECTION|NAME|INTERNET|ADDRESS)/i, 'target unreachable'],
   [/browserType\.launch|Executable doesn't exist|Target page, context or browser has been closed|Browser closed/i, 'browser could not start'],
   [/\b(store_unavailable|preflight_unavailable|nonce_store_unavailable|signer_failed|relayer_unfunded)\b/, 'dependency outage reported by app'],
