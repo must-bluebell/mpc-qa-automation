@@ -280,7 +280,7 @@
     "sourceAvailable": true,
     "path": "/api/admin/join-policy",
     "wallet": false,
-    "originCheck": true,
+    "originCheck": false,
     "baseline": {
       "status": 401,
       "error": "not_admin"
