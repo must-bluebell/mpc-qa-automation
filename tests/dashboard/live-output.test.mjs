@@ -17,7 +17,7 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
     jobs: jobNotify === undefined ? [] : [{runId,notify:jobNotify,exitCode:fixture.complete?0:null}],
     slack: { configured: true, valid: true }, ai: { configured: true, auto: aiAuto },
     suites: [{ name: 'full' }, { name: 'regression' }],
-    environments: [{ name: 'local-docker' }], seededDefects: [], categoryResults,
+    environments: [{ name: 'local-docker' }], seededDefects: [{name:'upstream-connection-timeout',kind:'infrastructure'}], categoryResults,
   })
   await page.route('http://dashboard.test/**', async route => {
     const pathname = new URL(route.request().url()).pathname
@@ -30,12 +30,13 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
     }
     let data
     if (pathname === '/api/session') { fixture.sessionRequest = route.request().postDataJSON(); data = {ok:true} }
-    else if (pathname === '/api/status') { fixture.statusRequests++; data = status() }
+    else if (pathname === '/api/status') { fixture.statusRequests++; if (fixture.statusError) return route.fulfill({status:503,json:{error:'Temporary status failure'}}); data = status() }
     else if (pathname === '/api/stack') data = { project: 'ui-test', healthy: true }
     else if (pathname === '/api/runs' && route.request().method() === 'POST') { fixture.lastStart = route.request().postDataJSON(); fixture.started = true; data = { runId } }
     else if (pathname === '/api/runs') data = fixture.complete ? [{ runId, suite: 'regression', status: 'passed', counts: { passed: 22 } }] : history
     else if (pathname === `/api/jobs/${runId}/log`) {
       fixture.logRequests++
+      if (fixture.logError) return route.fulfill({ status: fixture.logError, json: { error: 'No log for this run' } })
       if (fixture.holdLog) await fixture.holdLog
       // Bound the broken completion loop so its repeated requests can be observed safely.
       await delay(10)
@@ -205,4 +206,31 @@ test('explicit smoke provenance never implies regression or API coverage', async
   await expect(tables.nth(0)).not.toContainText('Smoke')
   await expect(tables.nth(1)).toContainText('Smoke browser')
   await expect(tables.nth(1)).toContainText('Smoke API')
+})
+
+ test('missing job logs show an actionable error instead of silently waiting', async t => {
+  const { page, fixture } = await dashboard(t)
+  fixture.logError = 404
+  await page.clock.runFor(2100)
+  await expect(page.locator('pre.log')).toContainText('No log for this run')
+  fixture.logError = null
+  await page.clock.runFor(2100)
+  await expect(page.locator('pre.log')).toContainText('Still running')
+})
+
+test('run form controls fit within their grid cells', async t => {
+  const { page } = await dashboard(t)
+  const bounds = await page.locator('select[name="defect"]').evaluate(el => ({ right: el.getBoundingClientRect().right, parentRight: el.parentElement.getBoundingClientRect().right }))
+  assert.ok(bounds.right <= bounds.parentRight + 1, 'defect selector must not overlap AI review')
+})
+
+test('completion preserves output and retries a failed results refresh', async t => {
+  const {page,fixture} = await dashboard(t)
+  fixture.complete = true
+  fixture.statusError = true
+  await page.clock.runFor(2100)
+  await expect(page.locator('pre.log')).toContainText('Finished: 22 passed')
+  fixture.statusError = false
+  await page.clock.runFor(2100)
+  await expect(page.getByRole('button', {name:'Run',exact:true})).toBeEnabled()
 })

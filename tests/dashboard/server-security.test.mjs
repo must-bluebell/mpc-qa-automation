@@ -266,3 +266,15 @@ test('the real browser exchanges the startup key for a private evidence session'
   await expect(other.locator('#app')).toContainText('Open the private dashboard link')
   assert.equal(await other.evaluate(async()=> (await fetch('/api/runs/private-run/files/steps/trace.zip')).status),403)
 })
+
+test('preflight failures remain visible for every requested category', async t => {
+  const f = await dashboardServer(t), headers = {cookie: await f.session()}
+  const run = {runId:'preflight',suite:'hosted-full',env:'local-docker',status:'infra-failed',
+    finishedAt:'2026-11-18T06:00:00Z',steps:[],tests:[],errors:['Environment health probe failed']}
+  saveFixtureRun(f,run)
+  writeFileSync(join(f.dir,'index.json'),JSON.stringify([run]))
+  const results = await categoryResults(f,headers)
+  assert.deepEqual(results.map(r => [r.suite,r.status,r.runId]), [
+    ['regression','infra-failed','preflight'],['api','infra-failed','preflight']])
+  assert.match(results[0].errors.join(' '), /health probe failed/)
+})

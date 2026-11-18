@@ -66,6 +66,7 @@ function categoryResults() {
     return h('section', { class: 'panel', id: `results-${suite}` }, h('h2', {}, label),
       run ? h('div', {}, badge(run.status), h('p', {}, `${c?.passed ?? 0} passed · ${c?.failed ?? 0} failed · ${c?.skipped ?? 0} skipped · ${c?.blocked ?? 0} blocked`),
         h('p', { class: 'hint' }, `Recorded execution · ${when(run.finishedAt)}`),
+        run.errors?.length ? h('p', { class: 'hint' }, run.errors.join(' ')) : '',
         h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : h('p', { class: 'empty' }, `No completed ${state.status.hosted ? state.status.defaultEnv : 'local'} run recorded.`))
   })
 }
@@ -166,18 +167,20 @@ function liveLog() {
   const tick = async () => {
     if (cancelled || pending) return
     pending = true
+    let receivedLog = false
     try {
       const r = await api(`/api/jobs/${encodeURIComponent(id)}/log`)
       if (cancelled) return
+      receivedLog = true
       const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20
       const text = r.log || '(no output yet)'
       if (pre.textContent !== text) pre.textContent = text
       if (atBottom) pre.scrollTop = pre.scrollHeight
       if (!r.running) {
-        clearInterval(pollTimer)
-        pollTimer = null
         await refresh()
         if (cancelled) return
+        clearInterval(pollTimer)
+        pollTimer = null
         // Keep the completed output mounted. Rebuilding home here starts another poller for
         // state.watching, creating an endless completion/render loop and resetting scroll.
         if (location.hash === '' || location.hash === '#/') {
@@ -185,7 +188,9 @@ function liveLog() {
           document.getElementById('run-history')?.replaceWith(runsTable())
         }
       }
-    } catch { /* job log not created yet */ }
+    } catch (error) {
+      if (!cancelled && !receivedLog) pre.textContent = `Output unavailable: ${error.message}. Retrying… If this service restarted or redeployed, its temporary run files may have been lost.`
+    }
     finally { pending = false }
   }
   pollTimer = setInterval(tick, 2000)

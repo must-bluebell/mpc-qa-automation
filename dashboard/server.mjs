@@ -183,11 +183,17 @@ function latestCategoryResults() {
         return categoryMatches(suite, step?.fromSuite ?? run.suite, t.project ?? step?.project, t.adapter ?? step?.adapter)
       })
       const executionFailed = steps.some(s => s.timedOut || s.errors?.length || (s.exitCode != null && s.exitCode !== 0))
-      if (!tests.length && !executionFailed) continue
+      // A failed health probe or worker crash may leave no step records at all.
+      // Attribute that failure only to categories requested by the selected suite.
+      let unstartedFailure = false
+      if (!tests.length && !steps.length && run.errors?.length && ['infra-failed', 'crashed', 'timeout'].includes(run.status)) {
+        try { unstartedFailure = expandSuite(run.suite).some(step => step.fromSuite === suite) } catch { /* unknown historical suite */ }
+      }
+      if (!tests.length && !executionFailed && !unstartedFailure) continue
       const counts = Object.fromEntries(['passed', 'failed', 'skipped', 'blocked'].map(status => [status, tests.filter(t => t.status === status).length]))
-      const status = executionFailed ? runStatus({ tests, steps })
+      const status = unstartedFailure ? run.status : executionFailed ? runStatus({ tests, steps })
         : counts.failed ? 'failed' : counts.blocked ? 'blocked' : counts.passed ? 'passed' : 'skipped'
-      latest.set(suite, { suite, runId: run.runId, env: run.env, finishedAt: run.finishedAt, status, counts })
+      latest.set(suite, { suite, runId: run.runId, env: run.env, finishedAt: run.finishedAt, status, counts, ...(unstartedFailure ? { errors: run.errors } : {}) })
     }
     if (latest.size === REPORT_CATEGORIES.length) break
   }

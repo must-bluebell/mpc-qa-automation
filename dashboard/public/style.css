@@ -37,6 +37,8 @@ a:hover { text-decoration: underline; }
 .bad { background: var(--fail-bg); color: var(--fail); }
 .warn { background: var(--warn-bg); color: var(--warn); }
 form.run { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-items: end; }
+form.run > * { min-width: 0; }
+form.run select { width: 100%; min-width: 0; }
 label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
 select, button { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); }
