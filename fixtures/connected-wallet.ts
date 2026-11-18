@@ -2,15 +2,16 @@ import { expect, type Page } from '@playwright/test'
 import { openMining, usesActivities } from './mining-navigation'
 import { target } from '../config/target'
 import { stubAnalytics } from './network'
-import { injectTestWallet, type MockWallet } from './wallet'
+import { injectTestWallet, type MockWallet, type InjectWalletOptions } from './wallet'
 import { JoinSheet } from '../pages/JoinSheet'
 import { getConfiguredWallet } from '../utils/wallet-generator'
 
 /** Connect once and wait for authentication and the visible connected page. */
-export async function connectConfiguredWallet(page: Page): Promise<MockWallet> {
+export async function connectConfiguredWallet(page: Page, options: Pick<InjectWalletOptions, 'beforeSignTypedData'> & Partial<Pick<InjectWalletOptions, 'account'>> = {}): Promise<MockWallet> {
   const wallet = await injectTestWallet(page, {
-    account: getConfiguredWallet(),
+    account: options.account ?? getConfiguredWallet(),
     chainId: target().chainId,
+    ...options,
   })
   await stubAnalytics(page)
   await page.goto('/')

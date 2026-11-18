@@ -5,6 +5,29 @@ import { target } from '../config/target'
 
 export const usesActivities = () => process.env.QA_NAVIGATION === 'activities'
 
+/** Onboarding writes to the chain, so it runs only against the isolated local stack. */
+function assertLocalOnboardingAllowed(): void {
+  const hostname = new URL(target().baseUrl).hostname
+  if (!['local-docker', 'web-isolated'].includes(process.env.QA_ENVIRONMENT ?? '') || process.env.QA_ALLOW_WRITES !== '1' || !['localhost', '127.0.0.1'].includes(hostname)) {
+    throw new Error('Current mining journey requires a registered test member; local onboarding is not authorized for this target.')
+  }
+}
+
+/**
+ * A registered row is not an issued SBT: the board stays behind the Join sheet until the wallet's
+ * "Confirm participation" claim is confirmed on chain. Finish that claim here so the board can open.
+ */
+async function completePendingClaim(page: Page): Promise<void> {
+  const join = page.getByRole('dialog', { name: 'Join', exact: true })
+  const claim = join.getByRole('button', { name: 'Confirm participation', exact: true })
+  const tab = page.getByRole('tab', { name: 'My Mine', exact: true })
+  await expect(tab.or(claim)).toBeVisible({ timeout: 60_000 })
+  if (await tab.isVisible()) return
+  assertLocalOnboardingAllowed()
+  await claim.click()
+  await expect(join.getByRole('button', { name: 'Open activities', exact: true }).first()).toBeVisible({ timeout: 180_000 })
+}
+
 /** Use the current local app's real onboarding, never a mocked member/session response. */
 export async function openMining(page: Page): Promise<void> {
   if (!usesActivities()) {
@@ -16,10 +39,7 @@ export async function openMining(page: Page): Promise<void> {
   const registration = await page.request.get('/api/register/status', { maxRetries: 2 })
   expect(registration.ok(), 'Registration status must load').toBe(true)
   if (!(await registration.json()).registered) {
-    const hostname = new URL(target().baseUrl).hostname
-    if (!['local-docker', 'web-isolated'].includes(process.env.QA_ENVIRONMENT ?? '') || process.env.QA_ALLOW_WRITES !== '1' || !['localhost', '127.0.0.1'].includes(hostname)) {
-      throw new Error('Current mining journey requires a registered test member; local onboarding is not authorized for this target.')
-    }
+    assertLocalOnboardingAllowed()
     const join = page.getByRole('dialog', { name: 'Join', exact: true })
     // The local scenario app skips OTP. Social destinations are not part of wallet authentication.
     const social = /^https:\/\/(t\.me|x\.com)\//
@@ -36,6 +56,7 @@ export async function openMining(page: Page): Promise<void> {
     }
   }
   await page.goto('/?tab=mine')
+  await completePendingClaim(page)
   await expect(page.getByRole('tab', { name: 'My Mine', exact: true })).toHaveAttribute('aria-selected', 'true', { timeout: 60_000 })
   await expect(page.getByRole('tabpanel', { name: 'My Mine', exact: true })).toBeVisible()
   const status = await page.request.get('/api/register/status', { maxRetries: 2 })

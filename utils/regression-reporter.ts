@@ -1,4 +1,5 @@
-import type { Reporter, FullConfig, FullResult, Suite } from '@playwright/test/reporter'
+import type { Reporter, FullConfig, FullResult, Suite, TestCase, TestResult } from '@playwright/test/reporter'
+import { mkdirSync, writeFileSync, appendFileSync, renameSync } from 'node:fs'
 import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises'
 import { basename, join, relative, resolve } from 'node:path'
 import { formatSummary, redact, summarizeRun, type Requirement, type TestRecord } from './regression-analysis'
@@ -8,7 +9,33 @@ export default class RegressionReporter implements Reporter {
   private root = process.cwd()
   private result?: FullResult
   private errors: string[] = []
-  onBegin(config: FullConfig, suite: Suite) { this.suite = suite; this.root = config.configFile ? resolve(config.configFile, '..') : process.cwd() }
+  private checkpointDir?: string
+  private checkpointRecord(item: TestCase, result?: TestResult): TestRecord {
+    const secrets = [process.env.QA_SEED_PHRASE ?? '', process.env.OPENAI_API_KEY ?? '', process.env.ANTHROPIC_API_KEY ?? '', process.env.SLACK_ALERT_WEBHOOK_URL ?? '']
+    return { id: item.id, title: redact(item.titlePath().filter(Boolean).join(' > '), secrets),
+      status: result?.status ?? 'not-run', outcome: result ? item.outcome() : 'skipped',
+      errors: (result?.errors ?? []).map(error => redact(error.message ?? 'Test failed', secrets)),
+      annotations: [...item.annotations, ...(result?.annotations ?? [])].map(a => ({type:a.type,description:redact(a.description ?? '', secrets)})),
+      evidence: [], durationMs: item.results.reduce((sum, r) => sum + r.duration, 0),
+      retries: result?.retry ?? 0, tags: item.tags, project: item.parent.project()?.name,
+      startedAt: item.results[0]?.startTime.toISOString() }
+  }
+  onBegin(config: FullConfig, suite: Suite) {
+    this.suite = suite
+    this.root = config.configFile ? resolve(config.configFile, '..') : process.cwd()
+    // Listing is not execution and must not overwrite a previous real result.
+    if (!process.env.QA_REPORT_DIR || process.argv.includes('--list')) return
+    this.checkpointDir = resolve(process.env.QA_REPORT_DIR)
+    mkdirSync(this.checkpointDir, {recursive:true})
+    const file = join(this.checkpointDir, 'execution-inventory.json')
+    writeFileSync(file + '.tmp', JSON.stringify({records:suite.allTests().map(item => this.checkpointRecord(item))}), {mode:0o600})
+    renameSync(file + '.tmp', file)
+    writeFileSync(join(this.checkpointDir, 'execution-results.jsonl'), '', {mode:0o600})
+    console.log(`Discovered ${suite.allTests().length} cases; recording each result as it completes.`)
+  }
+  onTestEnd(item: TestCase, result: TestResult) {
+    if (this.checkpointDir) appendFileSync(join(this.checkpointDir, 'execution-results.jsonl'), JSON.stringify(this.checkpointRecord(item, result)) + '\n')
+  }
   onError(error: { message?: string }) { this.errors.push(error.message ?? 'Runner error') }
   onEnd(result: FullResult) { this.result = result }
   async onExit() {
@@ -54,7 +81,8 @@ export default class RegressionReporter implements Reporter {
     const run = summarizeRun(records, metadata, requirements, this.result.status)
     const evaluationPolicy = JSON.parse(await readFile(join(this.root, 'config/qa-evaluation.json'), 'utf8'))
     const full = { ...run, evaluation: { status: 'not-calculated', policy: evaluationPolicy }, runnerErrors: this.errors.map(error => redact(error, secrets)) }
-    await writeFile(join(output, 'regression-summary.json'), JSON.stringify(full, null, 2))
+    await writeFile(join(output, 'regression-summary.json.tmp'), JSON.stringify(full, null, 2))
+    renameSync(join(output, 'regression-summary.json.tmp'), join(output, 'regression-summary.json'))
     await writeFile(join(output, 'regression-summary.md'), formatSummary(run))
     // Only redacted text and identifiers go into the AI input, never trace/screenshot contents.
     const input = { ...full, requirements: requirements.filter(r => r.approved),

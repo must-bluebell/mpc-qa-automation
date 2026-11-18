@@ -75,12 +75,14 @@ export class JoinSheet {
   }
 
   switchChainButton(): Locator {
-    return this.sheet().getByRole('button', { name: copy.join.switchChain })
+    // Feedback can offer a second switch action. Use the primary form control.
+    return this.sheet().getByRole('button', { name: copy.join.switchChain, exact: true })
+      .and(this.sheet().locator('button:not([aria-label="Wallet request"] button)'))
   }
 
-  /** JoinFlow renders failure copy as `role="alert"`. */
+  /** Recoverable wallet requests use status; failures use alert. Exclude action labels. */
   error(): Locator {
-    return this.sheet().getByRole('alert')
+    return this.sheet().locator('p[role="alert"], [aria-label="Wallet request"] p')
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────

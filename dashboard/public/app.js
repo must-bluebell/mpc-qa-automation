@@ -280,7 +280,7 @@ async function renderRun(runId, anchor) {
   const testTable = list => h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, h('th', {}, 'Test'), h('th', {}, 'Status'), h('th', { class: 'num' }, 'Duration'), h('th', {}, 'Evidence'))),
     h('tbody', {}, list.map(t => h('tr', {},
-      h('td', {}, t.title, h('div', { class: 'hint' }, t.step)), h('td', {}, badge(t.status), t.flaky ? h('span', { class: 'badge warn' }, 'flaky') : ''),
+      h('td', {}, t.title, h('div', { class: 'hint' }, t.step), t.skipReason ? h('div', { class: 'hint' }, t.skipReason) : ''), h('td', {}, badge(t.status), t.flaky ? h('span', { class: 'badge warn' }, 'flaky') : ''),
       h('td', { class: 'num' }, secs(t.durationMs)),
       h('td', { class: 'links' }, (t.evidence ?? []).slice(0, 4).map(e => h('a', { href: fileUrl(run.runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name))))))))
   const tests = h('section', { class: 'panel', id: 'test-results' }, h('h2', {}, `Tests (${run.tests.length})`),

@@ -41,11 +41,12 @@
     "qa:slack-agent": "node pipeline/slack-agent/server.mjs",
     "qa:slack-agent:check": "node pipeline/slack-agent/server.mjs --check-config",
     "qa:slack-agent:status": "node pipeline/slack-agent/server.mjs --status",
-    "test:extension": "npm --prefix \"chrom extension\" test",
-    "test:extension:dashboard": "npm --prefix \"chrom extension\" run test:dashboard",
-    "report:extension": "npm --prefix \"chrom extension\" run report",
-    "typecheck:extension": "npm --prefix \"chrom extension\" run typecheck",
-    "test:quests-dig:cart": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= playwright test --project=chromium tests/wallet/quests-dig-wallet.spec.ts --grep 'Steps 1\u201317'"
+    "test:extension": "playwright test --project=extension",
+    "test:extension:dashboard": "playwright test --project=extension tests/extension/dashboard.spec.ts",
+    "report:extension": "playwright show-report",
+    "typecheck:extension": "tsc --noEmit -p tests/extension/tsconfig.json",
+    "test:quests-dig:cart": "BASE_URL=https://app.globalmpc.tech QA_CHAIN_ID=56 QA_CHAIN_NAME='BNB Chain' QA_ENVIRONMENT=production QA_NAVIGATION= playwright test --config=playwright.quests-dig.config.ts --retries=0",
+    "qa:inventory": "node scripts/test-inventory.mjs"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.132.1",

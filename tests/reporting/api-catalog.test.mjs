@@ -1,0 +1,54 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+const read = path => JSON.parse(readFileSync(new URL(path, import.meta.url)))
+const flatten = items => items.flatMap(item => item.item ? flatten(item.item) : [item])
+test('catalog covers every supplied method/route exactly once', () => {
+  const collection = flatten(read('../../testplans/api/unity.postman_collection.json').item)
+  const catalog = read('../../testplans/api/contracts.json')
+  assert.equal(collection.length, 171)
+  assert.equal(catalog.length, 171)
+  assert.deepEqual(catalog.map(c => `${c.method} ${c.route}`).sort(), collection.map(c => c.name).sort())
+  assert.equal(new Set(catalog.map(c => c.id)).size, 171)
+  for (const c of catalog) {
+    assert.ok(c.source)
+    assert.ok(c.baseline || c.blocked, `${c.id} must declare a contract or an explicit gap`)
+    if (c.baseline) {
+      validateExpected(c.baseline)
+      assert.ok(Number.isInteger(c.baseline.status))
+      assert.ok(c.baseline.error || c.baseline.fields || c.baseline.text !== undefined || c.baseline.contentType || c.baseline.empty || c.baseline.location, `${c.id}: body assertion missing`)
+    }
+  }
+})
+
+import { assertIsolatedTarget, validateExpected, loadApiCases } from '../../fixtures/api-case-config.mjs'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+test('sensitive API cases cannot run against a remote host or without the write flag', () => {
+  for (const url of ['https://app.globalmpc.tech', 'https://localhost.example.com', 'https://localhost@evil.example']) {
+    assert.throws(() => assertIsolatedTarget(url, '1'))
+  }
+  assert.throws(() => assertIsolatedTarget('http://localhost:3461', '0'))
+  assert.doesNotThrow(() => assertIsolatedTarget('http://localhost:3461', '1'))
+})
+test('expectations cannot silently reduce to status-only smoke checks', () => {
+  for (const invalid of [{ status: [200, 400] }, { status: 200 }, { status: 200, fields: {} }, { status: 200, text: '' }]) assert.throws(() => validateExpected(invalid))
+  validateExpected({ status: 401, error: 'not_signed_in' })
+  validateExpected({ status: 204, empty: true })
+  validateExpected({ status: 200, fields: { registered: false } })
+})
+test('fixtures reject endpoint drift, redirects to other hosts, unresolved values and non-success statuses', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'api-cases-'))
+  const path = join(dir, 'cases.json')
+  const catalog = [{ id: 'API001', route: '/api/activities/[id]/status' }]
+  const success = { auth: 'wallet', path: '/api/activities/123/status', expected: { status: 200, fields: { ok: true } } }
+  try {
+    for (const change of [{ path: '/\\evil.example/api/activities/123/status' }, { path: '/\tevil.example' }, { path: '//evil.example' }, { path: '/api/admin/admins' }, { path: '/api/activities/{{id}}/status' }, { body: { id: '{{id}}' } }, { expected: { status: 401, error: 'not_signed_in' } }]) {
+      writeFileSync(path, JSON.stringify({ API001: { success: { ...success, ...change } } }))
+      assert.throws(() => loadApiCases(path, catalog))
+    }
+    writeFileSync(path, JSON.stringify({ API001: { success } }))
+    assert.deepEqual(loadApiCases(path, catalog).API001.success, success)
+  } finally { rmSync(dir, { recursive: true }) }
+})

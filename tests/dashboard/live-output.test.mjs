@@ -248,3 +248,14 @@ test('a lost inactive run stops polling and enables a fresh run', async t => {
   await page.evaluate(() => window.dispatchEvent(new HashChangeEvent('hashchange')))
   await expect(page.locator('pre.log')).toHaveCount(0)
 })
+
+test('case results explain skipped and blocked prerequisites', async t => {
+  const runDetail={runId:'ui-completion-regression',suite:'full',status:'blocked',counts:{skipped:1,blocked:1},groups:[],steps:[{name:'modules',fromSuite:'regression'}],tests:[
+    {title:'Inbox case',step:'modules',status:'skipped',skipReason:'Requires a real test inbox'},
+    {title:'Unfinished case',step:'modules',status:'blocked',skipReason:'Runner stopped before this case completed.'},
+  ]}
+  const {page,runId}=await dashboard(t,{scheduled:true,runDetail})
+  await page.locator(`a[href="#/runs/${runId}"]`).first().click()
+  await expect(page.locator('#test-results')).toContainText('Requires a real test inbox')
+  await expect(page.locator('#test-results')).toContainText('Runner stopped before this case completed.')
+})

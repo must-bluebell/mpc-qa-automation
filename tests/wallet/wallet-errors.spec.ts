@@ -4,7 +4,7 @@ import { chainName, target } from '../../config/target'
 import { stubAnalytics } from '../../fixtures/network'
 import { capabilities } from '../../fixtures/tiers'
 import { injectTestWallet, setWalletFailure, type WalletFailure } from '../../fixtures/wallet'
-import { copy, switchCopy } from '../../pages/copy'
+import { copy, switchCopy, pendingRequestCopy, rejectedSwitchCopy, unavailableSigningWalletCopy } from '../../pages/copy'
 import { JoinSheet } from '../../pages/JoinSheet'
 import { getConfiguredWallet } from '../../utils/wallet-generator'
 
@@ -36,7 +36,7 @@ const ERROR_CASE_ORDER: WalletFailure[] = ['rejected', 'pending', 'locked', 'no_
 const errorCaseName = (start: number, action: string, failure: WalletFailure): string =>
   `W${String(start + ERROR_CASE_ORDER.indexOf(failure)).padStart(2, '0')} - ${action}: ${ERROR_CASE_NAMES[failure]}`
 
-type Cell = { failure: WalletFailure; expected: string }
+type Cell = { failure: WalletFailure; expected: string | RegExp }
 
 /**
  * Connect axis. 🔴 `no_wallet` expects the **WalletConnect** wording, not `failNoWallet`:
@@ -45,7 +45,7 @@ type Cell = { failure: WalletFailure; expected: string }
  */
 const CONNECT_CELLS: Cell[] = [
   { failure: 'rejected', expected: copy.join.failRejected },
-  { failure: 'pending', expected: copy.join.failPending },
+  { failure: 'pending', expected: pendingRequestCopy },
   { failure: 'locked', expected: copy.join.failLocked },
   { failure: 'no_wallet', expected: copy.join.failNoWalletWithWc },
   { failure: 'unknown', expected: copy.join.failUnknown },
@@ -54,16 +54,16 @@ const CONNECT_CELLS: Cell[] = [
 /** Sign axis. Both `no_wallet` and `unknown` fold into one sentence — deliberately, per the table. */
 const SIGN_CELLS: Cell[] = [
   { failure: 'rejected', expected: copy.join.signRejected },
-  { failure: 'pending', expected: copy.join.failPending },
+  { failure: 'pending', expected: pendingRequestCopy },
   { failure: 'locked', expected: copy.join.failLocked },
-  { failure: 'no_wallet', expected: copy.join.signFailed },
+  { failure: 'no_wallet', expected: unavailableSigningWalletCopy },
   { failure: 'unknown', expected: copy.join.signFailed },
 ]
 
 /** Switch axis. Two cells interpolate the chain's display name. */
 const SWITCH_CELLS: Cell[] = [
-  { failure: 'rejected', expected: switchCopy.switchRejected(CHAIN) },
-  { failure: 'pending', expected: copy.join.failPending },
+  { failure: 'rejected', expected: rejectedSwitchCopy(CHAIN) },
+  { failure: 'pending', expected: pendingRequestCopy },
   { failure: 'locked', expected: copy.join.failLocked },
   { failure: 'no_wallet', expected: switchCopy.wrongChain(CHAIN) },
   { failure: 'unknown', expected: switchCopy.wrongChain(CHAIN) },

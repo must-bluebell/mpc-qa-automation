@@ -1,0 +1,2398 @@
+[
+  {
+    "id": "API001",
+    "method": "POST",
+    "route": "/api/auth/activity",
+    "source": "src/modules/auth/server/route-handlers/auth/activity.ts",
+    "sourceAvailable": false,
+    "path": "/api/auth/activity",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API002",
+    "method": "POST",
+    "route": "/api/auth/logout",
+    "source": "src/modules/auth/server/route-handlers/auth/logout.ts",
+    "sourceAvailable": true,
+    "path": "/api/auth/logout",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 200,
+      "fields": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "id": "API003",
+    "method": "POST",
+    "route": "/api/auth/nonce",
+    "source": "src/modules/auth/server/route-handlers/auth/nonce.ts",
+    "sourceAvailable": true,
+    "path": "/api/auth/nonce",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 200,
+      "types": {
+        "nonce": "string"
+      },
+      "fields": {}
+    }
+  },
+  {
+    "id": "API004",
+    "method": "GET",
+    "route": "/api/auth/session",
+    "source": "src/modules/auth/server/route-handlers/auth/session.ts",
+    "sourceAvailable": true,
+    "path": "/api/auth/session",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 200,
+      "fields": {
+        "address": null
+      }
+    }
+  },
+  {
+    "id": "API005",
+    "method": "POST",
+    "route": "/api/auth/verify",
+    "source": "src/modules/auth/server/route-handlers/auth/verify.ts",
+    "sourceAvailable": true,
+    "path": "/api/auth/verify",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "nonce_missing"
+    }
+  },
+  {
+    "id": "API006",
+    "method": "POST",
+    "route": "/api/activities/[id]/cancel",
+    "source": "src/modules/activity/server/route-handlers/activities/cancel.ts",
+    "sourceAvailable": true,
+    "path": "/api/activities/qa-invalid-id/cancel",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API007",
+    "method": "POST",
+    "route": "/api/activities/[id]/dismiss",
+    "source": "src/modules/activity/server/route-handlers/activities/dismiss.ts",
+    "sourceAvailable": true,
+    "path": "/api/activities/qa-invalid-id/dismiss",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API008",
+    "method": "POST",
+    "route": "/api/activities/[id]/seen",
+    "source": "src/modules/activity/server/route-handlers/activities/seen.ts",
+    "sourceAvailable": true,
+    "path": "/api/activities/qa-invalid-id/seen",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API009",
+    "method": "GET",
+    "route": "/api/activities/[id]/status",
+    "source": "src/modules/activity/server/route-handlers/activities/status.ts",
+    "sourceAvailable": true,
+    "path": "/api/activities/qa-invalid-id/status",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API010",
+    "method": "GET",
+    "route": "/api/activities/history",
+    "source": "src/modules/activity/server/route-handlers/activities/history.ts",
+    "sourceAvailable": false,
+    "path": "/api/activities/history",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API011",
+    "method": "GET",
+    "route": "/api/activities",
+    "source": "src/modules/activity/server/route-handlers/activities.ts",
+    "sourceAvailable": true,
+    "path": "/api/activities",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API012",
+    "method": "PATCH",
+    "route": "/api/admin/admins/[id]",
+    "source": "src/modules/admin/server/route-handlers/admin/admins/[id].ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/admins/qa-invalid-id",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API013",
+    "method": "DELETE",
+    "route": "/api/admin/admins/[id]",
+    "source": "src/modules/admin/server/route-handlers/admin/admins/[id].ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/admins/qa-invalid-id",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API014",
+    "method": "GET",
+    "route": "/api/admin/admins",
+    "source": "src/modules/admin/server/route-handlers/admin/admins.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/admins",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API015",
+    "method": "POST",
+    "route": "/api/admin/admins",
+    "source": "src/modules/admin/server/route-handlers/admin/admins.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/admins",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API016",
+    "method": "GET",
+    "route": "/api/admin/ambassadors",
+    "source": "src/modules/admin/server/route-handlers/admin/ambassadors.ts",
+    "sourceAvailable": false,
+    "path": "/api/admin/ambassadors",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API017",
+    "method": "POST",
+    "route": "/api/admin/ambassadors",
+    "source": "src/modules/admin/server/route-handlers/admin/ambassadors.ts",
+    "sourceAvailable": false,
+    "path": "/api/admin/ambassadors",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API018",
+    "method": "POST",
+    "route": "/api/admin/change-password",
+    "source": "src/modules/admin/server/route-handlers/admin/change-password.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/change-password",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API019",
+    "method": "POST",
+    "route": "/api/admin/checkin/reconcile",
+    "source": "src/modules/admin/server/route-handlers/admin/checkin/reconcile.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/checkin/reconcile",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API020",
+    "method": "GET",
+    "route": "/api/admin/join-policy",
+    "source": "src/modules/admin/server/route-handlers/admin/join-policy.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/join-policy",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API021",
+    "method": "PATCH",
+    "route": "/api/admin/join-policy",
+    "source": "src/modules/admin/server/route-handlers/admin/join-policy.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/join-policy",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API022",
+    "method": "GET",
+    "route": "/api/admin/ledger/export",
+    "source": "src/modules/admin/server/route-handlers/admin/ledger/export.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/ledger/export",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API023",
+    "method": "POST",
+    "route": "/api/admin/login",
+    "source": "src/modules/admin/server/route-handlers/admin/login.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/login",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "bad_credentials"
+    }
+  },
+  {
+    "id": "API024",
+    "method": "POST",
+    "route": "/api/admin/logout",
+    "source": "src/modules/admin/server/route-handlers/admin/logout.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/logout",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 200,
+      "fields": {
+        "ok": true
+      }
+    }
+  },
+  {
+    "id": "API025",
+    "method": "GET",
+    "route": "/api/admin/page/[...path]",
+    "source": "src/modules/admin/server/static/route.tsx",
+    "sourceAvailable": false,
+    "path": "/api/admin/page/qa-invalid-id",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API026",
+    "method": "DELETE",
+    "route": "/api/admin/quest-hosts/[host]",
+    "source": "src/modules/admin/server/route-handlers/admin/quest-hosts/[host].ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quest-hosts/qa-invalid-id",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API027",
+    "method": "POST",
+    "route": "/api/admin/quest-hosts",
+    "source": "src/modules/admin/server/route-handlers/admin/quest-hosts.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quest-hosts",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API028",
+    "method": "POST",
+    "route": "/api/admin/quest/reconcile",
+    "source": "src/modules/admin/server/route-handlers/admin/quest/reconcile.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quest/reconcile",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API029",
+    "method": "GET",
+    "route": "/api/admin/quests/[key]/edits",
+    "source": "src/modules/admin/server/route-handlers/admin/quests/[key]/edits.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quests/qa-invalid-id/edits",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API030",
+    "method": "PATCH",
+    "route": "/api/admin/quests/[key]",
+    "source": "src/modules/admin/server/route-handlers/admin/quests/[key].ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quests/qa-invalid-id",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API031",
+    "method": "POST",
+    "route": "/api/admin/quests/batch",
+    "source": "src/modules/admin/server/route-handlers/admin/quests/batch.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quests/batch",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API032",
+    "method": "GET",
+    "route": "/api/admin/quests",
+    "source": "src/modules/admin/server/route-handlers/admin/quests.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quests",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API033",
+    "method": "POST",
+    "route": "/api/admin/quests",
+    "source": "src/modules/admin/server/route-handlers/admin/quests.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quests",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API034",
+    "method": "POST",
+    "route": "/api/admin/quiz/batches",
+    "source": "src/modules/admin/server/route-handlers/admin/quiz/batches.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quiz/batches",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API035",
+    "method": "POST",
+    "route": "/api/admin/quiz/items/[id]",
+    "source": "src/modules/admin/server/route-handlers/admin/quiz/items/[id].ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quiz/items/qa-invalid-id",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API036",
+    "method": "POST",
+    "route": "/api/admin/quiz/items/bulk",
+    "source": "src/modules/admin/server/route-handlers/admin/quiz/items/bulk.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quiz/items/bulk",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API037",
+    "method": "POST",
+    "route": "/api/admin/quiz/items",
+    "source": "src/modules/admin/server/route-handlers/admin/quiz/items.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quiz/items",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API038",
+    "method": "POST",
+    "route": "/api/admin/quiz/translations",
+    "source": "src/modules/admin/server/route-handlers/admin/quiz/translations.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/quiz/translations",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API039",
+    "method": "GET",
+    "route": "/api/admin/referral-performance/export",
+    "source": "src/modules/admin/server/route-handlers/admin/referral-performance-export.ts",
+    "sourceAvailable": false,
+    "path": "/api/admin/referral-performance/export",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API040",
+    "method": "PATCH",
+    "route": "/api/admin/roles/[id]",
+    "source": "src/modules/admin/server/route-handlers/admin/roles/[id].ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/roles/qa-invalid-id",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API041",
+    "method": "GET",
+    "route": "/api/admin/roles",
+    "source": "src/modules/admin/server/route-handlers/admin/roles.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/roles",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API042",
+    "method": "POST",
+    "route": "/api/admin/roles",
+    "source": "src/modules/admin/server/route-handlers/admin/roles.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/roles",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API043",
+    "method": "POST",
+    "route": "/api/admin/telegram/unlink",
+    "source": "src/modules/admin/server/route-handlers/admin/telegram/unlink.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/telegram/unlink",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API044",
+    "method": "POST",
+    "route": "/api/admin/votes/lifecycle",
+    "source": "src/modules/admin/server/route-handlers/admin/votes-lifecycle.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/votes/lifecycle",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API045",
+    "method": "POST",
+    "route": "/api/admin/votes",
+    "source": "src/modules/admin/server/route-handlers/admin/votes.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/votes",
+    "wallet": false,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API046",
+    "method": "GET",
+    "route": "/api/admin/website-analytics",
+    "source": "src/modules/admin/server/route-handlers/admin/website-analytics.ts",
+    "sourceAvailable": true,
+    "path": "/api/admin/website-analytics",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_admin"
+    }
+  },
+  {
+    "id": "API047",
+    "method": "GET",
+    "route": "/api/ambassador/badges/[id]",
+    "source": "src/app/api/ambassador/badges/[id]/route.ts",
+    "sourceAvailable": false,
+    "path": "/api/ambassador/badges/qa-invalid-id",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API048",
+    "method": "GET",
+    "route": "/api/ambassador/metadata/[id]",
+    "source": "src/app/api/ambassador/metadata/[id]/route.ts",
+    "sourceAvailable": false,
+    "path": "/api/ambassador/metadata/qa-invalid-id",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API049",
+    "method": "GET",
+    "route": "/api/ambassador",
+    "source": "src/modules/ambassador/server/routes.ts",
+    "sourceAvailable": false,
+    "path": "/api/ambassador",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API050",
+    "method": "POST",
+    "route": "/api/ambassador",
+    "source": "src/modules/ambassador/server/routes.ts",
+    "sourceAvailable": false,
+    "path": "/api/ambassador",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API051",
+    "method": "GET",
+    "route": "/api/checkin/participation-rewards",
+    "source": "src/modules/checkin/server/route-handlers/participation-rewards.ts",
+    "sourceAvailable": false,
+    "path": "/api/checkin/participation-rewards",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API052",
+    "method": "POST",
+    "route": "/api/checkin/participation-rewards",
+    "source": "src/modules/checkin/server/route-handlers/participation-rewards.ts",
+    "sourceAvailable": false,
+    "path": "/api/checkin/participation-rewards",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API053",
+    "method": "GET",
+    "route": "/api/checkin-reminder",
+    "source": "src/modules/checkin/server/route-handlers/reminder-preference.ts",
+    "sourceAvailable": false,
+    "path": "/api/checkin-reminder",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "empty": true
+    }
+  },
+  {
+    "id": "API054",
+    "method": "POST",
+    "route": "/api/checkin-reminder",
+    "source": "src/modules/checkin/server/route-handlers/reminder-preference.ts",
+    "sourceAvailable": false,
+    "path": "/api/checkin-reminder",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "empty": true
+    }
+  },
+  {
+    "id": "API055",
+    "method": "GET",
+    "route": "/api/checkin-reminder/unsubscribe",
+    "source": "src/modules/checkin/server/route-handlers/reminder-unsubscribe.ts",
+    "sourceAvailable": false,
+    "path": "/api/checkin-reminder/unsubscribe",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API056",
+    "method": "POST",
+    "route": "/api/checkin-reminder/unsubscribe",
+    "source": "src/modules/checkin/server/route-handlers/reminder-unsubscribe.ts",
+    "sourceAvailable": false,
+    "path": "/api/checkin-reminder/unsubscribe",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API057",
+    "method": "POST",
+    "route": "/api/claim/permit",
+    "source": "src/modules/waitlist/server/route-handlers/claim/permit.ts",
+    "sourceAvailable": true,
+    "path": "/api/claim/permit",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API058",
+    "method": "POST",
+    "route": "/api/claim/result",
+    "source": "src/modules/waitlist/server/route-handlers/claim/result.ts",
+    "sourceAvailable": true,
+    "path": "/api/claim/result",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API059",
+    "method": "POST",
+    "route": "/api/claim/sent",
+    "source": "src/modules/waitlist/server/route-handlers/claim/sent.ts",
+    "sourceAvailable": true,
+    "path": "/api/claim/sent",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API060",
+    "method": "GET",
+    "route": "/api/cron/api-latency-cleanup",
+    "source": "src/platform/observability/server/cleanup.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/api-latency-cleanup",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "empty": true
+    }
+  },
+  {
+    "id": "API061",
+    "method": "GET",
+    "route": "/api/cron/audience-retention",
+    "source": "src/platform/website-analytics/server/retention.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/audience-retention",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "empty": true
+    }
+  },
+  {
+    "id": "API062",
+    "method": "GET",
+    "route": "/api/cron/chain-index",
+    "source": "src/platform/chain/route-handlers/cron/chain-index.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/chain-index",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API063",
+    "method": "GET",
+    "route": "/api/cron/checkin-reconcile",
+    "source": "src/modules/checkin/server/route-handlers/cron/checkin-reconcile.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/checkin-reconcile",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API064",
+    "method": "GET",
+    "route": "/api/cron/checkin-reminders-continue",
+    "source": "src/modules/checkin/server/route-handlers/cron/checkin-reminders.ts",
+    "sourceAvailable": false,
+    "path": "/api/cron/checkin-reminders-continue",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "empty": true
+    }
+  },
+  {
+    "id": "API065",
+    "method": "GET",
+    "route": "/api/cron/checkin-reminders",
+    "source": "src/modules/checkin/server/route-handlers/cron/checkin-reminders.ts",
+    "sourceAvailable": false,
+    "path": "/api/cron/checkin-reminders",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "empty": true
+    }
+  },
+  {
+    "id": "API066",
+    "method": "GET",
+    "route": "/api/cron/energy-reconcile",
+    "source": "src/modules/energy/server/route-handlers/cron/energy-reconcile.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/energy-reconcile",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API067",
+    "method": "GET",
+    "route": "/api/cron/funnel-failures",
+    "source": "src/modules/waitlist/server/route-handlers/cron/funnel-failures.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/funnel-failures",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API068",
+    "method": "GET",
+    "route": "/api/cron/megafuel-funding",
+    "source": "src/platform/chain/route-handlers/cron/megafuel-funding.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/megafuel-funding",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API069",
+    "method": "GET",
+    "route": "/api/cron/mymine-calendar",
+    "source": "src/modules/my-mine/server/route-handlers/cron/calendar.ts",
+    "sourceAvailable": false,
+    "path": "/api/cron/mymine-calendar",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API070",
+    "method": "GET",
+    "route": "/api/cron/mymine-ranks",
+    "source": "src/modules/my-mine/server/route-handlers/cron/ranks.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/mymine-ranks",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API071",
+    "method": "GET",
+    "route": "/api/cron/participation-rewards",
+    "source": "src/modules/checkin/server/route-handlers/cron/participation-rewards.ts",
+    "sourceAvailable": false,
+    "path": "/api/cron/participation-rewards",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API072",
+    "method": "GET",
+    "route": "/api/cron/quest-reconcile",
+    "source": "src/modules/quests/server/route-handlers/cron/quest-reconcile.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/quest-reconcile",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API073",
+    "method": "GET",
+    "route": "/api/cron/relay-sweep",
+    "source": "src/modules/relay/server/route-handlers/cron/relay-sweep.ts",
+    "sourceAvailable": true,
+    "path": "/api/cron/relay-sweep",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  {
+    "id": "API074",
+    "method": "GET",
+    "route": "/api/cron/user-inactivity",
+    "source": "src/modules/auth/server/user-inactivity.ts",
+    "sourceAvailable": false,
+    "path": "/api/cron/user-inactivity",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "empty": true
+    }
+  },
+  {
+    "id": "API075",
+    "method": "POST",
+    "route": "/api/dev/rpc/[chain]",
+    "source": "src/platform/chain/route-handlers/local-rpc.ts",
+    "sourceAvailable": false,
+    "path": "/api/dev/rpc/qa-invalid-id",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API076",
+    "method": "OPTIONS",
+    "route": "/api/dev/rpc/[chain]",
+    "source": "src/platform/chain/route-handlers/local-rpc.ts",
+    "sourceAvailable": false,
+    "path": "/api/dev/rpc/qa-invalid-id",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API077",
+    "method": "POST",
+    "route": "/api/dev/top-up",
+    "source": "src/modules/my-mine/server/route-handlers/dev-top-up.ts",
+    "sourceAvailable": false,
+    "path": "/api/dev/top-up",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API078",
+    "method": "GET",
+    "route": "/dev/sign-in",
+    "source": "src/app/dev/sign-in/route.ts",
+    "sourceAvailable": false,
+    "path": "/dev/sign-in",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API079",
+    "method": "POST",
+    "route": "/api/energy/bridge/deposit/abandon",
+    "source": "src/modules/energy/server/route-handlers/energy/bridge/deposit/abandon.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/bridge/deposit/abandon",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API080",
+    "method": "POST",
+    "route": "/api/energy/bridge/deposit/prepare",
+    "source": "src/modules/energy/server/route-handlers/energy/bridge/deposit/prepare.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/bridge/deposit/prepare",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API081",
+    "method": "POST",
+    "route": "/api/energy/bridge/deposit/register",
+    "source": "src/modules/energy/server/route-handlers/energy/bridge/deposit/register.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/bridge/deposit/register",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API082",
+    "method": "GET",
+    "route": "/api/energy/bridge/deposit/status",
+    "source": "src/modules/energy/server/route-handlers/energy/bridge/deposit/status.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/bridge/deposit/status",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API083",
+    "method": "POST",
+    "route": "/api/energy/bridge/deposit/submit",
+    "source": "src/modules/energy/server/route-handlers/energy/bridge/deposit/submit.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/bridge/deposit/submit",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API084",
+    "method": "GET",
+    "route": "/api/energy/compensation",
+    "source": "src/modules/energy/server/route-handlers/energy/compensation.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/compensation",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API085",
+    "method": "POST",
+    "route": "/api/energy/compensation",
+    "source": "src/modules/energy/server/route-handlers/energy/compensation.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/compensation",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API086",
+    "method": "GET",
+    "route": "/api/energy/deposits/[transferId]",
+    "source": "src/modules/energy/server/route-handlers/energy/deposits/[transferId].ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/deposits/qa-invalid-id",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API087",
+    "method": "GET",
+    "route": "/api/energy/deposits",
+    "source": "src/modules/energy/server/route-handlers/energy/deposits.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/deposits",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API088",
+    "method": "GET",
+    "route": "/api/energy/history",
+    "source": "src/modules/energy/server/route-handlers/energy/history.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/history",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API089",
+    "method": "GET",
+    "route": "/api/energy/portfolio",
+    "source": "src/modules/energy/server/route-handlers/energy/portfolio.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy/portfolio",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API090",
+    "method": "GET",
+    "route": "/api/energy",
+    "source": "src/modules/energy/server/route-handlers/energy.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API091",
+    "method": "POST",
+    "route": "/api/energy",
+    "source": "src/modules/energy/server/route-handlers/energy.ts",
+    "sourceAvailable": true,
+    "path": "/api/energy",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API092",
+    "method": "GET",
+    "route": "/api/home",
+    "source": "src/modules/waitlist/server/route-handlers/home.ts",
+    "sourceAvailable": true,
+    "path": "/api/home",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 200,
+      "fields": {
+        "address": null,
+        "member": false,
+        "energy": null,
+        "mineHeld": null,
+        "mineRun": null
+      }
+    }
+  },
+  {
+    "id": "API093",
+    "method": "POST",
+    "route": "/api/join/event",
+    "source": "src/modules/waitlist/server/route-handlers/join/event.ts",
+    "sourceAvailable": true,
+    "path": "/api/join/event",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 400,
+      "error": "bad_run_id"
+    }
+  },
+  {
+    "id": "API094",
+    "method": "GET",
+    "route": "/api/join/social-complete",
+    "source": "src/modules/waitlist/server/route-handlers/join/social-complete.ts",
+    "sourceAvailable": true,
+    "path": "/api/join/social-complete",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API095",
+    "method": "POST",
+    "route": "/api/join/social-complete",
+    "source": "src/modules/waitlist/server/route-handlers/join/social-complete.ts",
+    "sourceAvailable": true,
+    "path": "/api/join/social-complete",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API096",
+    "method": "GET",
+    "route": "/api/join/x-open",
+    "source": "src/modules/waitlist/server/route-handlers/join/x-open.ts",
+    "sourceAvailable": true,
+    "path": "/api/join/x-open",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API097",
+    "method": "POST",
+    "route": "/api/join/x-open",
+    "source": "src/modules/waitlist/server/route-handlers/join/x-open.ts",
+    "sourceAvailable": true,
+    "path": "/api/join/x-open",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API098",
+    "method": "GET",
+    "route": "/my-mine/access",
+    "source": "src/modules/my-mine/server/route-handlers/access.ts",
+    "sourceAvailable": false,
+    "path": "/my-mine/access",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API099",
+    "method": "POST",
+    "route": "/my-mine/attend",
+    "source": "src/modules/my-mine/server/route-handlers/attend.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/attend",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API100",
+    "method": "GET",
+    "route": "/my-mine/chain",
+    "source": "src/modules/my-mine/server/route-handlers/chain.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/chain",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API101",
+    "method": "GET",
+    "route": "/my-mine/claim",
+    "source": "src/modules/my-mine/server/route-handlers/claim.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/claim",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API102",
+    "method": "POST",
+    "route": "/my-mine/claim",
+    "source": "src/modules/my-mine/server/route-handlers/claim.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/claim",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API103",
+    "method": "POST",
+    "route": "/my-mine/claim/self",
+    "source": "src/modules/my-mine/server/route-handlers/claim/self.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/claim/self",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API104",
+    "method": "POST",
+    "route": "/my-mine/claim/submit",
+    "source": "src/modules/my-mine/server/route-handlers/claim/submit.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/claim/submit",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API105",
+    "method": "GET",
+    "route": "/my-mine/daily-limits",
+    "source": "src/modules/my-mine/server/route-handlers/daily-limits.ts",
+    "sourceAvailable": false,
+    "path": "/my-mine/daily-limits",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API106",
+    "method": "POST",
+    "route": "/my-mine/draw",
+    "source": "src/modules/my-mine/server/route-handlers/draw.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/draw",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API107",
+    "method": "GET",
+    "route": "/my-mine/energy",
+    "source": "src/modules/my-mine/server/route-handlers/energy.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/energy",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API108",
+    "method": "POST",
+    "route": "/my-mine/energy",
+    "source": "src/modules/my-mine/server/route-handlers/energy.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/energy",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API109",
+    "method": "GET",
+    "route": "/my-mine/goods",
+    "source": "src/modules/my-mine/server/route-handlers/goods.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/goods",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API110",
+    "method": "POST",
+    "route": "/my-mine/jv/claim",
+    "source": "src/modules/my-mine/server/route-handlers/jv/claim.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/jv/claim",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API111",
+    "method": "POST",
+    "route": "/my-mine/jv/claim/self/register",
+    "source": "src/modules/my-mine/server/route-handlers/jv/claim/self/register.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/jv/claim/self/register",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API112",
+    "method": "POST",
+    "route": "/my-mine/jv/claim/self",
+    "source": "src/modules/my-mine/server/route-handlers/jv/claim/self.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/jv/claim/self",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API113",
+    "method": "POST",
+    "route": "/my-mine/jv/claim/submit",
+    "source": "src/modules/my-mine/server/route-handlers/jv/claim/submit.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/jv/claim/submit",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API114",
+    "method": "GET",
+    "route": "/my-mine/jv",
+    "source": "src/modules/my-mine/server/route-handlers/jv.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/jv",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API115",
+    "method": "POST",
+    "route": "/my-mine/jv/settle",
+    "source": "src/modules/my-mine/server/route-handlers/jv/settle.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/jv/settle",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API116",
+    "method": "GET",
+    "route": "/my-mine/progression",
+    "source": "src/modules/my-mine/server/route-handlers/progression.ts",
+    "sourceAvailable": false,
+    "path": "/my-mine/progression",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API117",
+    "method": "POST",
+    "route": "/my-mine/progression",
+    "source": "src/modules/my-mine/server/route-handlers/progression.ts",
+    "sourceAvailable": false,
+    "path": "/my-mine/progression",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API118",
+    "method": "GET",
+    "route": "/my-mine/ranks",
+    "source": "src/modules/my-mine/server/route-handlers/ranks.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/ranks",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API119",
+    "method": "POST",
+    "route": "/my-mine/ready",
+    "source": "src/modules/my-mine/server/route-handlers/ready.ts",
+    "sourceAvailable": false,
+    "path": "/my-mine/ready",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API120",
+    "method": "POST",
+    "route": "/my-mine/record",
+    "source": "src/modules/my-mine/server/route-handlers/record.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/record",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API121",
+    "method": "POST",
+    "route": "/my-mine/record/self/register",
+    "source": "src/modules/my-mine/server/route-handlers/record/self/register.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/record/self/register",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API122",
+    "method": "POST",
+    "route": "/my-mine/record/self",
+    "source": "src/modules/my-mine/server/route-handlers/record/self.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/record/self",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API123",
+    "method": "POST",
+    "route": "/my-mine/record/submit",
+    "source": "src/modules/my-mine/server/route-handlers/record/submit.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/record/submit",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API124",
+    "method": "GET",
+    "route": "/my-mine/run",
+    "source": "src/modules/my-mine/server/route-handlers/run.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/run",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API125",
+    "method": "POST",
+    "route": "/my-mine/run",
+    "source": "src/modules/my-mine/server/route-handlers/run.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/run",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API126",
+    "method": "GET",
+    "route": "/my-mine/sponsor",
+    "source": "src/modules/my-mine/server/route-handlers/sponsor.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/sponsor",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API127",
+    "method": "POST",
+    "route": "/my-mine/state-run",
+    "source": "src/modules/my-mine/server/route-handlers/state-run.ts",
+    "sourceAvailable": true,
+    "path": "/my-mine/state-run",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 400,
+      "error": "bad_run_body"
+    },
+    "body": {
+      "script": []
+    }
+  },
+  {
+    "id": "API128",
+    "method": "GET",
+    "route": "/api/notifications",
+    "source": "src/modules/notifications/server/route-handlers/notifications.ts",
+    "sourceAvailable": true,
+    "path": "/api/notifications",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API129",
+    "method": "PATCH",
+    "route": "/api/notifications",
+    "source": "src/modules/notifications/server/route-handlers/notifications.ts",
+    "sourceAvailable": true,
+    "path": "/api/notifications",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API130",
+    "method": "GET",
+    "route": "/api/onboarding/introduction",
+    "source": "src/modules/unity/server/route-handlers/introduction.ts",
+    "sourceAvailable": false,
+    "path": "/api/onboarding/introduction",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API131",
+    "method": "POST",
+    "route": "/api/onboarding/introduction",
+    "source": "src/modules/unity/server/route-handlers/introduction.ts",
+    "sourceAvailable": false,
+    "path": "/api/onboarding/introduction",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API132",
+    "method": "POST",
+    "route": "/api/product/event",
+    "source": "src/modules/my-mine/server/route-handlers/product-event.ts",
+    "sourceAvailable": false,
+    "path": "/api/product/event",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 400,
+      "error": "bad_step"
+    }
+  },
+  {
+    "id": "API133",
+    "method": "POST",
+    "route": "/api/quest/link-open",
+    "source": "src/modules/quests/server/route-handlers/quest/link-open.ts",
+    "sourceAvailable": true,
+    "path": "/api/quest/link-open",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API134",
+    "method": "POST",
+    "route": "/api/quest/result",
+    "source": "src/modules/quests/server/route-handlers/quest/result.ts",
+    "sourceAvailable": true,
+    "path": "/api/quest/result",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API135",
+    "method": "POST",
+    "route": "/api/quest/seen",
+    "source": "src/modules/quests/server/route-handlers/quest/seen.ts",
+    "sourceAvailable": false,
+    "path": "/api/quest/seen",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API136",
+    "method": "POST",
+    "route": "/api/quest/sent",
+    "source": "src/modules/quests/server/route-handlers/quest/sent.ts",
+    "sourceAvailable": true,
+    "path": "/api/quest/sent",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API137",
+    "method": "POST",
+    "route": "/api/quest/voucher",
+    "source": "src/modules/quests/server/route-handlers/quest/voucher.ts",
+    "sourceAvailable": true,
+    "path": "/api/quest/voucher",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API138",
+    "method": "GET",
+    "route": "/api/quests",
+    "source": "src/modules/quests/server/route-handlers/quests.ts",
+    "sourceAvailable": true,
+    "path": "/api/quests",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 200,
+      "types": {
+        "quests": "array"
+      },
+      "fields": {}
+    }
+  },
+  {
+    "id": "API139",
+    "method": "POST",
+    "route": "/api/quiz/answer",
+    "source": "src/modules/checkin/server/route-handlers/quiz/answer.ts",
+    "sourceAvailable": true,
+    "path": "/api/quiz/answer",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API140",
+    "method": "POST",
+    "route": "/api/quiz/checkin/result",
+    "source": "src/modules/checkin/server/route-handlers/quiz/checkin/result.ts",
+    "sourceAvailable": true,
+    "path": "/api/quiz/checkin/result",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API141",
+    "method": "POST",
+    "route": "/api/quiz/checkin/sent",
+    "source": "src/modules/checkin/server/route-handlers/quiz/checkin/sent.ts",
+    "sourceAvailable": true,
+    "path": "/api/quiz/checkin/sent",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API142",
+    "method": "GET",
+    "route": "/api/quiz/today",
+    "source": "src/modules/checkin/server/route-handlers/quiz/today.ts",
+    "sourceAvailable": true,
+    "path": "/api/quiz/today",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API143",
+    "method": "POST",
+    "route": "/api/quiz/voucher",
+    "source": "src/modules/checkin/server/route-handlers/quiz/voucher.ts",
+    "sourceAvailable": true,
+    "path": "/api/quiz/voucher",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 409,
+      "error": "client_outdated"
+    }
+  },
+  {
+    "id": "API144",
+    "method": "POST",
+    "route": "/api/register/send-code",
+    "source": "src/modules/waitlist/server/route-handlers/register/send-code.ts",
+    "sourceAvailable": true,
+    "path": "/api/register/send-code",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API145",
+    "method": "POST",
+    "route": "/api/register/skip-otp",
+    "source": "src/modules/waitlist/server/route-handlers/register/skip-otp.ts",
+    "sourceAvailable": true,
+    "path": "/api/register/skip-otp",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": null,
+    "blocked": "Join policy runs before authentication. Configure baseline 401/not_signed_in when skipEmailOtp=true, otherwise 403/otp_required."
+  },
+  {
+    "id": "API146",
+    "method": "GET",
+    "route": "/api/register/status",
+    "source": "src/modules/waitlist/server/route-handlers/register/status.ts",
+    "sourceAvailable": true,
+    "path": "/api/register/status",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 200,
+      "fields": {
+        "registered": false
+      },
+      "types": {
+        "skipEmailOtp": "boolean"
+      }
+    }
+  },
+  {
+    "id": "API147",
+    "method": "POST",
+    "route": "/api/register/verify-code",
+    "source": "src/modules/waitlist/server/route-handlers/register/verify-code.ts",
+    "sourceAvailable": true,
+    "path": "/api/register/verify-code",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API148",
+    "method": "POST",
+    "route": "/api/relay/challenge",
+    "source": "src/modules/relay/server/route-handlers/relay/challenge.ts",
+    "sourceAvailable": true,
+    "path": "/api/relay/challenge",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API149",
+    "method": "GET",
+    "route": "/api/relay/status",
+    "source": "src/modules/relay/server/route-handlers/relay/status.ts",
+    "sourceAvailable": true,
+    "path": "/api/relay/status",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API150",
+    "method": "POST",
+    "route": "/api/relay/submit",
+    "source": "src/modules/relay/server/route-handlers/relay/submit.ts",
+    "sourceAvailable": true,
+    "path": "/api/relay/submit",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API151",
+    "method": "POST",
+    "route": "/reward-credit/claim",
+    "source": "src/modules/reward-credit/server/route-handlers/claim.ts",
+    "sourceAvailable": false,
+    "path": "/reward-credit/claim",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API152",
+    "method": "POST",
+    "route": "/reward-credit/self/register",
+    "source": "src/modules/reward-credit/server/route-handlers/register.ts",
+    "sourceAvailable": false,
+    "path": "/reward-credit/self/register",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API153",
+    "method": "POST",
+    "route": "/reward-credit/status",
+    "source": "src/modules/reward-credit/server/route-handlers/status.ts",
+    "sourceAvailable": false,
+    "path": "/reward-credit/status",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API154",
+    "method": "POST",
+    "route": "/reward-credit/submit",
+    "source": "src/modules/reward-credit/server/route-handlers/submit.ts",
+    "sourceAvailable": false,
+    "path": "/reward-credit/submit",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API155",
+    "method": "GET",
+    "route": "/api/sbt/[tokenId]",
+    "source": "src/modules/waitlist/server/route-handlers/sbt/[tokenId].ts",
+    "sourceAvailable": true,
+    "path": "/api/sbt/qa-invalid-id",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 400,
+      "error": "invalid token id"
+    }
+  },
+  {
+    "id": "API156",
+    "method": "GET",
+    "route": "/.well-known/security.txt",
+    "source": "src/modules/waitlist/server/route-handlers/.well-known/security.txt.ts",
+    "sourceAvailable": true,
+    "path": "/.well-known/security.txt",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 200,
+      "text": "Contact:",
+      "contentType": "text/plain"
+    }
+  },
+  {
+    "id": "API157",
+    "method": "POST",
+    "route": "/api/support/telegram/webhook",
+    "source": "src/modules/support/server/route-handlers/telegram-webhook.ts",
+    "sourceAvailable": true,
+    "path": "/api/support/telegram/webhook",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API158",
+    "method": "GET",
+    "route": "/api/telegram/auth/callback",
+    "source": "src/modules/quests/server/route-handlers/telegram/auth-callback.ts",
+    "sourceAvailable": true,
+    "path": "/api/telegram/auth/callback",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 303,
+      "location": "?telegram=invalid"
+    }
+  },
+  {
+    "id": "API159",
+    "method": "POST",
+    "route": "/api/telegram/auth/start",
+    "source": "src/modules/quests/server/route-handlers/telegram/auth-start.ts",
+    "sourceAvailable": true,
+    "path": "/api/telegram/auth/start",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": null,
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+  },
+  {
+    "id": "API160",
+    "method": "GET",
+    "route": "/api/telegram/status",
+    "source": "src/modules/quests/server/route-handlers/telegram/status.ts",
+    "sourceAvailable": true,
+    "path": "/api/telegram/status",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API161",
+    "method": "POST",
+    "route": "/api/telegram/verify",
+    "source": "src/modules/quests/server/route-handlers/telegram/verify.ts",
+    "sourceAvailable": true,
+    "path": "/api/telegram/verify",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API162",
+    "method": "POST",
+    "route": "/api/telemetry/latency",
+    "source": "src/platform/observability/server/ingest.ts",
+    "sourceAvailable": true,
+    "path": "/api/telemetry/latency",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 204,
+      "empty": true
+    },
+    "body": {
+      "samples": []
+    }
+  },
+  {
+    "id": "API163",
+    "method": "POST",
+    "route": "/api/telemetry/website",
+    "source": "src/platform/website-analytics/server/ingest.ts",
+    "sourceAvailable": true,
+    "path": "/api/telemetry/website",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 204,
+      "empty": true
+    },
+    "headers": {
+      "sec-gpc": "1"
+    }
+  },
+  {
+    "id": "API164",
+    "method": "POST",
+    "route": "/api/vote/activity",
+    "source": "src/modules/vote/server/route-handlers/activity.ts",
+    "sourceAvailable": true,
+    "path": "/api/vote/activity",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API165",
+    "method": "GET",
+    "route": "/api/vote/metadata/[id]",
+    "source": "src/app/api/vote/metadata/[id]/route.ts",
+    "sourceAvailable": true,
+    "path": "/api/vote/metadata/qa-invalid-id",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 400,
+      "error": "bad_proposal_id"
+    }
+  },
+  {
+    "id": "API166",
+    "method": "GET",
+    "route": "/api/vote/proposals",
+    "source": "src/modules/vote/server/route-handlers/proposals.ts",
+    "sourceAvailable": true,
+    "path": "/api/vote/proposals",
+    "wallet": false,
+    "originCheck": false,
+    "baseline": {
+      "status": 200,
+      "fields": {},
+      "types": {
+        "proposals": "array|null"
+      }
+    }
+  },
+  {
+    "id": "API167",
+    "method": "POST",
+    "route": "/api/vote/relay/prepare",
+    "source": "src/modules/vote/server/route-handlers/prepare.ts",
+    "sourceAvailable": true,
+    "path": "/api/vote/relay/prepare",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API168",
+    "method": "POST",
+    "route": "/api/vote/relay/submit",
+    "source": "src/modules/vote/server/route-handlers/submit.ts",
+    "sourceAvailable": true,
+    "path": "/api/vote/relay/submit",
+    "wallet": true,
+    "originCheck": true,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API169",
+    "method": "POST",
+    "route": "/api/word/guess",
+    "source": "src/modules/daily-word/server/route-handlers/word/guess.ts",
+    "sourceAvailable": false,
+    "path": "/api/word/guess",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API170",
+    "method": "GET",
+    "route": "/api/word/outstanding",
+    "source": "src/modules/daily-word/server/route-handlers/word/outstanding.ts",
+    "sourceAvailable": false,
+    "path": "/api/word/outstanding",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  },
+  {
+    "id": "API171",
+    "method": "GET",
+    "route": "/api/word/today",
+    "source": "src/modules/daily-word/server/route-handlers/word/today.ts",
+    "sourceAvailable": false,
+    "path": "/api/word/today",
+    "wallet": true,
+    "originCheck": false,
+    "baseline": {
+      "status": 401,
+      "error": "not_signed_in"
+    }
+  }
+]

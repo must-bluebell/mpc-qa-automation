@@ -81,3 +81,14 @@ export const switchCopy = {
 /** The accessible name of the address chip: `aria-label={`${t.copyAddress} ${value}`}` (Address.tsx). */
 export const addressChipName = (address: string): string =>
   `${copy.ui.copyAddress} ${address.toLowerCase()}`
+
+/** Both deployed wallet-feedback revisions give the same pending-request recovery instruction. */
+export const pendingRequestCopy = /^(?:Your wallet already has a pending request\. Check that window\.|A request is already waiting in your wallet\. Approve or reject it there to continue\.)$/
+
+/** Legacy Join flow and shared wallet-feedback wording, with the exact required chain. */
+export function rejectedSwitchCopy(chain: string): RegExp {
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`^(?:${escape(switchCopy.switchRejected(chain))}|${escape(`The network switch was cancelled in your wallet. This action needs ${chain}.`)})$`)
+}
+
+export const unavailableSigningWalletCopy = /^(?:Could not sign in\. Please try again\.|Your wallet extension stopped responding\. Refresh the page and try again\.)$/

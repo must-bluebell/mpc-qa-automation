@@ -20,7 +20,7 @@ export type Target = {
   isTestnet: boolean
 }
 
-const DEFAULT_BASE_URL = 'https://globalmpc-webapp.vercel.app'
+const DEFAULT_BASE_URL = 'https://app.globalmpc.tech'
 const DEFAULT_CHAIN_ID = MAINNET
 
 export function target(): Target {

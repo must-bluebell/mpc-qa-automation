@@ -192,15 +192,32 @@ The application requests a gasless EIP-712 `RecordFor` signature on opBNB (204);
 
 Meeting a quest requirement can enable **Claim**. **Completed** means its reward has been claimed, so sending the cart must update eligibility without automatically awarding unrelated quest rewards. This suite preserves that distinction. Desktop/mobile UI cases run by default; the real cart case is reported as skipped unless explicitly enabled.
 
+## Expanded suite inventory
+
+The suites imported from `mustcompany/mpc-automation`, branch `add-more-automation-for-webmpc` (source commit `bdcd23b`), discover 1,064 standard Playwright cases:
+
+| Project | Discovered cases |
+|---|---:|
+| API | 653 |
+| Wallet browser regression | 60 |
+| Web modules | 283 |
+| UAT session journeys | 3 |
+| Packaged extension | 65 |
+
+Run `npm run qa:inventory` before a full run, or `npm run qa:inventory -- --suite hosted-full` for the hosted selection. The hosted selection includes 996 cases across API, wallet and web modules. Full isolated runs additionally include UAT, extension, local application scenarios and k6. The application scenarios and load workload are separate from the Playwright case count. Dedicated production transaction tests remain outside the standard suite.
+
+Discovery is not execution. The module suite includes 113 cases explicitly marked manual. Expanded API writes require an isolated loopback target; many success contracts also need `QA_API_CASES_FILE`, seeded IDs, or an isolated admin storage-state file. Preserve these prerequisites: production runs cannot execute the isolated mutation cases. Run details show each skipped/blocked reason. UAT has three implemented session journeys; the hundreds of API/module cases are not relabelled as UAT.
+
+Pipeline runs save `execution-inventory.json` before tests start and append each completed result to `execution-results.jsonl`. If a runner is killed, its completed results survive and uncompleted cases are reported as blocked. This avoids collapsing an interrupted suite into a single synthetic test.
+
 ## MPC Chrome extension tests
 
-The existing packaged-extension suite is copied into [`chrom extension`](chrom%20extension/README.md), with independent pinned dependencies and Playwright configuration. The source suite contains **64 tests**, not 65; no missing case has been invented.
+The integrated [`tests/extension`](tests/extension/README.md) project contains 65 tests. Set `EXTENSION_PATH` to an unpacked extension build with a manifest key, then run:
 
 ```sh
-npm ci --prefix "chrom extension"
-cd "chrom extension" && npx playwright install chromium && cd ..
 npm run test:extension
-npm run report:extension -- --port 9323
+npm run test:extension:dashboard
+npm run typecheck:extension
 ```
 
-`npm run test:extension:dashboard` runs the wallet dashboard subset. `npm run typecheck:extension` checks the extension tests. The full extension run includes that subset and saves its HTML/JSON reports inside `chrom extension`. These commands do not invoke the QA orchestrator, scheduler, or Slack integrations. All extension RPC traffic is simulated; no live transfers occur. The existing QA dashboard is separate from the extension HTML report.
+These checks use simulated RPC traffic; no live transfers occur. They require a local extension artifact and are included in the isolated full suite, not the hosted suite. The older standalone copy in `chrom extension` remains available but is not counted twice.

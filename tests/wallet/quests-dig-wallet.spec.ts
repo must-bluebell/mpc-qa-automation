@@ -7,6 +7,7 @@ import { usesActivities, openMining } from '../../fixtures/mining-navigation'
 import { JoinSheet } from '../../pages/JoinSheet'
 import { validationCopy } from '../../pages/validation-copy'
 import { getConfiguredWallet } from '../../utils/wallet-generator'
+import { cartPreflight } from '../../fixtures/cart-preflight'
 import { target } from '../../config/target'
 
 const contract = '0x80ca104d4dc59d42862b801792abb1909f5a7e5d'
@@ -76,8 +77,12 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
     })
   }
 
-  test('Steps 1–17: exhaust digs, reject, recover from relay failure, approve cart, and verify receipt', async ({ page }) => {
-    test.skip(process.env.QA_RUN_QUEST_DIG_CART !== '1' || !!process.env.QA_REPORT_DIR || process.env.QA_ALLOW_WRITES !== '1' || process.env.npm_lifecycle_event !== 'test:quests-dig:cart', 'Run npm run test:quests-dig:cart with QA_ALLOW_WRITES=1 and QA_RUN_QUEST_DIG_CART=1 outside the pipeline')
+  test('Steps 1–17: exhaust digs, reject, recover from relay failure, approve cart, and verify receipt', { tag: '@production-cart' }, async ({ page }) => {
+    test.skip(test.info().project.name !== 'quests-dig-cart', 'Use the dedicated production cart configuration')
+    expect(process.env.QA_RUN_QUEST_DIG_CART).toBe('1')
+    expect(process.env.QA_ALLOW_WRITES).toBe('1')
+    expect(process.env.QA_AUTHORIZE_PRODUCTION_QUEST_DIG_CART).toBe('1')
+    test.skip(process.env.QA_RUN_QUEST_DIG_CART !== '1' || process.env.QA_AUTHORIZE_PRODUCTION_QUEST_DIG_CART !== '1' || !!process.env.QA_REPORT_DIR || process.env.QA_ALLOW_WRITES !== '1' || process.env.npm_lifecycle_event !== 'test:quests-dig:cart', 'Run npm run test:quests-dig:cart with QA_ALLOW_WRITES=1 QA_RUN_QUEST_DIG_CART=1 and QA_AUTHORIZE_PRODUCTION_QUEST_DIG_CART=1 outside the pipeline')
     test.setTimeout(360_000)
     expect(new URL(target().baseUrl).origin, 'Pinned RecordFor contract belongs to the Unity production deployment').toBe('https://app.globalmpc.tech')
     expect(target().chainId).toBe(56)
@@ -152,9 +157,9 @@ test.describe(suite, { tag: ['@ui', '@quests-dig-wallet'] }, () => {
     expect(Number.isSafeInteger(balance.spent)).toBe(true)
     test.skip(balance.outstanding !== 0 || !await page.getByText(validationCopy.emptyCartHint, { exact: true }).isVisible(),
       'Precondition blocked: start with an empty cart and no outstanding Crew use for exact cart authorization')
-    // Pinned Unity LIMITS.cart.batch is 100; a magnet can add a second line per dig.
-    // The empty-cart precondition above excludes carried entries. Reserve worst-case room.
-    test.skip(initial.available * 2 > 100, 'Precondition blocked: all intended digs must fit in one empty cart, including magnet bonus lines')
+    const preflight = cartPreflight(initial.available, initialRun.script)
+    test.skip(preflight !== null, `Precondition blocked: ${preflight}`)
+    test.skip(await page.getByText(validationCopy.cartRunsUsed, { exact: true }).isVisible(), 'Precondition blocked: no cart runs remain for the final send')
     test.skip(!await ui.dig.isEnabled(), 'Precondition blocked: no available cart run or digging is otherwise unavailable')
     expectedDigs = initial.available
     // RecordFor energy and credits are cumulative; authorize only the additional fresh dig cost.

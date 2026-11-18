@@ -18,6 +18,13 @@ import { runRecordedActions } from './recorded-actions'
 
 const t = target()
 
+function requireUnityWallet() {
+  test.skip(!process.env.QA_SEED_PHRASE || !process.env.WALLET_ADDRESS,
+    'Configure QA_SEED_PHRASE and WALLET_ADDRESS to run the Unity wallet journeys')
+  test.skip(Boolean(process.env.CI) && process.env.QA_ALLOW_WRITES !== '1',
+    'Unity sign-in and rewards change server state; CI requires QA_ALLOW_WRITES=1 on an isolated target')
+}
+
 /**
  * T1 — wallet connect and SIWE sign-in.
  *
@@ -176,9 +183,7 @@ test.describe('Wallet sign-in and recovery', { tag: ['@ui', '@feature-auth', '@c
 // These cases exercise the live app with an injected Trust Wallet provider and real SIWE signing.
 // They do not automate the native Trust Wallet extension's permission dialogs.
 test.describe('Unity sign-in cases', { tag: ['@ui', '@unity-signin'] }, () => {
-  test.beforeEach(async () => {
-    expect(process.env.QA_SEED_PHRASE, 'A configured signing wallet is required').toBeTruthy()
-  })
+  test.beforeEach(() => requireUnityWallet())
 
   test('Positive 1 - Sign in with Trust Wallet and access Digging', async ({ page }) => {
     const verification = page.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/verify' && r.request().method() === 'POST')
@@ -249,6 +254,7 @@ test.describe('Unity sign-in cases', { tag: ['@ui', '@unity-signin'] }, () => {
 
 // Earn the daily Crew before the cart journey consumes it when the whole file runs.
 test('W31 - Claim Daily check-in when available or verify today’s completed check-in', { tag: ['@ui', '@daily-checkin'] }, async ({ page }, testInfo) => {
+  requireUnityWallet()
   test.skip(usesActivities(), 'Unity check-in UI and pinned mainnet contracts are covered by the separate production run')
   test.setTimeout(240_000)
   let challengeResponse: Promise<import('@playwright/test').Response> | undefined
@@ -414,6 +420,7 @@ test('W31 - Claim Daily check-in when available or verify today’s completed ch
 
 
 test('W30 - Complete or verify the Silicon digging and cart journey', { tag: ['@ui', '@silicon-cart'] }, async ({ page }, testInfo) => {
+  requireUnityWallet()
   test.skip(usesActivities(), 'Unity cart UI and pinned mainnet contracts are covered by the separate production run')
   test.setTimeout(240_000)
   // Real production activity: no retries, balance funding, or mocked mining/relay responses.
@@ -672,6 +679,7 @@ test('W32 - Verify a previously confirmed Daily check-in and its Crew credit', {
 })
 
 test.describe('Additional Unity coverage', { tag: ['@ui', '@unity-additional'] }, () => {
+  test.beforeEach(() => requireUnityWallet())
   async function openQuests(page: Page) {
     const panel = page.getByRole('dialog', { name: 'Quests', exact: true })
     const trigger = page.getByRole('button', { name: /^Quests(?:\s*\d+)?$/ })

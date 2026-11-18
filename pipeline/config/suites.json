@@ -32,11 +32,15 @@
     ]
   },
   "regression": {
-    "description": "MPC browser regression: wallet recovery, board navigation, onboarding, sessions, activities, voting and access protection.",
+    "description": "MPC browser regression: wallet recovery, board navigation, onboarding, sessions, activities, voting, access protection, and the module test cases (web-modules).",
     "steps": [
       {
         "adapter": "playwright",
         "project": "chromium"
+      },
+      {
+        "adapter": "playwright",
+        "project": "web-modules"
       }
     ],
     "timeoutMs": 1800000,
@@ -80,12 +84,13 @@
     ]
   },
   "full": {
-    "description": "smoke + api + regression + uat + load in one run.",
+    "description": "API, browser regression, module checks, UAT, load and extension checks on the isolated runner.",
     "include": [
       "api",
       "regression",
       "uat",
-      "load"
+      "load",
+      "extension"
     ],
     "timeoutMs": 7200000,
     "tags": [
@@ -137,5 +142,19 @@
       "uat"
     ],
     "timeoutMs": 4800000
+  },
+  "extension": {
+    "description": "Packaged MPC wallet extension tests with simulated RPC traffic. Requires an unpacked extension build.",
+    "steps": [
+      {
+        "adapter": "playwright",
+        "project": "extension"
+      }
+    ],
+    "timeoutMs": 2700000,
+    "tags": [
+      "@extension"
+    ],
+    "requiresIsolated": true
   }
 }

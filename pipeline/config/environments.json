@@ -13,7 +13,7 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-recovery-20261026",
+      "composeProject": "mpc-qa-local-20261118",
       "webmpcPath": "../WEB MPC",
       "ports": {
         "web": 3460,
@@ -22,7 +22,7 @@
         "postgres": 5491,
         "neonProxy": 4495
       },
-      "note": "Fresh isolated recovery after rejected unclean chain snapshots; all earlier project volumes preserved."
+      "note": "Fresh isolated runtime for expanded suite verification; previous chain and database volumes preserved."
     }
   },
   "web-isolated": {
@@ -39,7 +39,7 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-recovery-20261026",
+      "composeProject": "mpc-qa-local-20261118",
       "webmpcPath": "../WEB MPC",
       "ports": {
         "web": 3460,
@@ -48,7 +48,7 @@
         "postgres": 5491,
         "neonProxy": 4495
       },
-      "note": "Fresh isolated recovery after rejected unclean chain snapshots; all earlier project volumes preserved."
+      "note": "Fresh isolated runtime for expanded suite verification; previous chain and database volumes preserved."
     }
   },
   "preview": {

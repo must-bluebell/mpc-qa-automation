@@ -23,6 +23,28 @@ export function normalizeRecord(record, { adapter = 'playwright', evidenceBase }
   }
 }
 
+/** Final reports win; checkpoints recover completed and unstarted cases after a hard kill. */
+export function readPlaywrightRecords(stepDir) {
+  const summary = join(stepDir, 'regression-summary.json')
+  if (existsSync(summary)) {
+    try { const result = JSON.parse(readFileSync(summary, 'utf8')); if (Array.isArray(result.records)) return result.records }
+    catch { /* A kill during final report writing must not discard completed checkpoints. */ }
+  }
+  const inventory = join(stepDir, 'execution-inventory.json')
+  if (!existsSync(inventory)) return []
+  const planned = JSON.parse(readFileSync(inventory, 'utf8')).records
+  const completed = new Map()
+  const journal = join(stepDir, 'execution-results.jsonl')
+  if (existsSync(journal)) {
+    for (const line of readFileSync(journal, 'utf8').split('\n').filter(Boolean)) {
+      try { const record = JSON.parse(line); completed.set(record.id, record) }
+      catch { /* A killed process may leave its final journal entry incomplete. */ }
+    }
+  }
+  return planned.map(record => completed.get(record.id) ?? {...record,
+    annotations: [...(record.annotations ?? []), {type:'blocked',description:'Runner stopped before this case completed.'}]})
+}
+
 export async function runPlaywrightStep(step, ctx) {
   if (step.project === 'chromium' && !ctx.seededDefect) {
     await warmBrowserRuntime(ctx.env,{timeoutMs:Math.min(60_000,ctx.remainingMs())})
@@ -39,9 +61,8 @@ export async function runPlaywrightStep(step, ctx) {
   }
   const result = await runProcess('npx', args, { cwd: ROOT, env, timeoutMs: ctx.remainingMs(), logFile: join(ctx.stepDir, 'output.log'), echo: ctx.echo,
     passSecrets: ['QA_SEED_PHRASE'] }) // Signing workers never inherit Slack, AI or repository credentials.
-  const summaryPath = join(ctx.stepDir, 'regression-summary.json')
   const evidenceBase = relative(ctx.runDir, ctx.stepDir).split('\\').join('/')
-  const records = existsSync(summaryPath) ? JSON.parse(readFileSync(summaryPath, 'utf8')).records : []
+  const records = readPlaywrightRecords(ctx.stepDir)
   const tests = records.map(r => normalizeRecord(r, { evidenceBase }))
   const errors = []
   if (result.timedOut) errors.push(`Step timed out after ${Math.round(result.durationMs / 1000)}s; remaining tests were not run.`)

@@ -6,6 +6,15 @@ import { createSiweMessage } from 'viem/siwe'
 import { target } from '../../config/target.ts'
 import { injectTestWallet } from '../../fixtures/wallet.ts'
 
+test.beforeEach(t => {
+  const previous = process.env.BASE_URL
+  process.env.BASE_URL = 'https://waitlist.example'
+  t.after(() => {
+    if (previous === undefined) delete process.env.BASE_URL
+    else process.env.BASE_URL = previous
+  })
+})
+
 const payload = {
   domain: { name: 'Signature guard test', version: '1', chainId: 204 },
   types: { Approval: [{ name: 'count', type: 'uint256' }] },
