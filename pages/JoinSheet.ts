@@ -89,9 +89,15 @@ export class JoinSheet {
 
   async open(expectedStep: 'Wallet' | 'Community' = 'Wallet'): Promise<void> {
     const consent = this.page.getByRole('dialog', { name: 'Audience measurement choice', exact: true })
-    const needsChoice = await consent.waitFor({ state: 'visible', timeout: 3_000 }).then(() => true, () => false)
-    if (needsChoice) await consent.getByRole('button', { name: 'Reject', exact: true }).click()
-    await this.cta().click()
+    // Consent can arrive after hydration while the CTA is becoming actionable.
+    await this.page.addLocatorHandler(consent, async () => {
+      await consent.getByRole('button', { name: 'Reject', exact: true }).click()
+    })
+    try {
+      await this.cta().click()
+    } finally {
+      await this.page.removeLocatorHandler(consent)
+    }
     await expect(this.sheet()).toBeVisible()
     await this.expectStep(expectedStep)
     const instructions = expectedStep === 'Community' ? validationCopy.communityIntro : copy.join.connectLede

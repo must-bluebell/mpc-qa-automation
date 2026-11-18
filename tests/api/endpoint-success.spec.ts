@@ -3,6 +3,7 @@ import { signIn } from '../../fixtures/api'
 import { contracts, configuredCases, contractCall, assertContract, requireIsolatedApi } from '../../fixtures/api-contracts'
 import { target } from '../../config/target'
 import type { SuccessCase } from '../../fixtures/api-case-config.mjs'
+import { isHostedReadSuccess } from '../../fixtures/api-case-config.mjs'
 
 // Deterministic successes that need no seeded IDs, funded wallets or third-party services.
 const defaults: Record<string, SuccessCase> = {
@@ -28,10 +29,11 @@ test.use({ trace: 'off' })
 
 test.describe('Unity success contracts', { tag: ['@api', '@collection-success'] }, () => {
   // A configured admin or transaction response must never appear in a Playwright trace.
-  test.beforeEach(() => requireIsolatedApi())
   for (const c of contracts) {
     test(`${c.id} ${c.method} ${c.route} — successful fixture contract`, async ({ playwright }, info) => {
       const fixture = configuredCases[c.id]?.success ?? defaults[c.id]
+      // Only reviewed built-in anonymous reads may bypass the mutation guard.
+      if (!isHostedReadSuccess(c, fixture, Boolean(configuredCases[c.id]?.success))) requireIsolatedApi()
       test.skip(!fixture, `Requires QA_API_CASES_FILE entry ${c.id}.success with seeded inputs and an exact response contract.`)
       const selected = fixture!
       const stateEnv = selected.auth === 'admin' ? 'QA_API_ADMIN_STATE_FILE' : selected.storageStateEnv

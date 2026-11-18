@@ -52,3 +52,23 @@ test('fixtures reject endpoint drift, redirects to other hosts, unresolved value
     assert.deepEqual(loadApiCases(path, catalog).API001.success, success)
   } finally { rmSync(dir, { recursive: true }) }
 })
+
+test('hosted success policy permits only reviewed anonymous reads and keeps fixture overrides isolated', async () => {
+  const { isHostedReadSuccess } = await import('../../fixtures/api-case-config.mjs')
+  assert.equal(typeof isHostedReadSuccess, 'function')
+  const contract = { id: 'API004', method: 'GET', route: '/api/auth/session' }
+  const fixture = { auth: 'anonymous', path: '/api/auth/session', expected: { status: 200, fields: { address: null } } }
+  assert.equal(isHostedReadSuccess(contract, fixture), true)
+  for (const change of [{ method: 'POST' }, { route: '/api/cron/relay-sweep' }, { id: 'API999' }]) {
+    assert.equal(isHostedReadSuccess({ ...contract, ...change }, fixture), false)
+  }
+  for (const change of [{ auth: 'wallet' }, { auth: 'admin' }, { auth: 'cron' }, { path: '/api/auth/session?refresh=1' }, { body: {} }, { headers: { cookie: 'session' } }, { storageStateEnv: 'ADMIN_STATE' }]) {
+    assert.equal(isHostedReadSuccess(contract, { ...fixture, ...change }), false)
+  }
+  assert.equal(isHostedReadSuccess(contract, fixture, true), false)
+  assert.equal(isHostedReadSuccess(contract, undefined), false)
+  const catalog = read('../../testplans/api/contracts.json')
+  for (const [id, path] of [['API092', '/api/home'], ['API138', '/api/quests'], ['API146', '/api/register/status'], ['API156', '/.well-known/security.txt'], ['API166', '/api/vote/proposals']]) {
+    assert.equal(isHostedReadSuccess(catalog.find(c => c.id === id), { ...fixture, path }), true)
+  }
+})

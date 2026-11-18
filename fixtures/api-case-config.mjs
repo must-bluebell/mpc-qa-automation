@@ -1,5 +1,19 @@
 import { readFileSync } from 'node:fs'
 
+const hostedReads = new Map([
+  ['API004', '/api/auth/session'], ['API092', '/api/home'],
+  ['API138', '/api/quests'], ['API146', '/api/register/status'],
+  ['API156', '/.well-known/security.txt'], ['API166', '/api/vote/proposals'],
+])
+
+/** GET alone is insufficient: cron and development GET endpoints can mutate state. */
+export function isHostedReadSuccess(contract, fixture, configured = false) {
+  const path = hostedReads.get(contract.id)
+  return Boolean(!configured && path && contract.method === 'GET' && contract.route === path
+    && fixture?.auth === 'anonymous' && fixture.path === path
+    && fixture.body === undefined && fixture.headers === undefined && fixture.storageStateEnv === undefined)
+}
+
 export function assertIsolatedTarget(baseUrl, allowWrites) {
   const url = new URL(baseUrl)
   if (allowWrites !== '1' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {

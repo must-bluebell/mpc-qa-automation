@@ -194,21 +194,23 @@ Meeting a quest requirement can enable **Claim**. **Completed** means its reward
 
 ## Expanded suite inventory
 
-The suites imported from `mustcompany/mpc-automation`, branch `add-more-automation-for-webmpc` (source commit `bdcd23b`), discover 1,063 standard Playwright cases:
+The suites imported from `mustcompany/mpc-automation`, branch `add-more-automation-for-webmpc` (source commit `bdcd23b`), plus the delayed-consent regression check, discover 1,064 standard Playwright cases:
 
 | Project | Discovered cases |
 |---|---:|
 | API | 652 |
-| Wallet browser regression | 60 |
+| Wallet browser regression | 61 |
 | Web modules | 283 |
 | UAT session journeys | 3 |
 | Packaged extension | 65 |
 
-Run `npm run qa:inventory` before a full run, or `npm run qa:inventory -- --suite hosted-full` for the hosted selection. The hosted selection includes 995 cases across API, wallet and web modules. Full isolated runs additionally include UAT, extension, local application scenarios and k6. The application scenarios and load workload are separate from the Playwright case count. Dedicated production transaction tests remain outside the standard suite.
+Run `npm run qa:inventory` before a full run, or `npm run qa:inventory -- --suite hosted-full` for the hosted selection. The hosted selection includes 996 cases across API, wallet and web modules. Full isolated runs additionally include UAT, extension, local application scenarios and k6. The application scenarios and load workload are separate from the Playwright case count. Dedicated production transaction tests remain outside the standard suite.
 
 One incorrect foreign-origin assertion for GET `/api/admin/join-policy` was removed: that read endpoint checks admin authentication; its PATCH counterpart still checks origin.
 
 Discovery is not execution. The module suite includes 113 cases explicitly marked manual. Expanded API writes require an isolated loopback target; many success contracts also need `QA_API_CASES_FILE`, seeded IDs, or an isolated admin storage-state file. Preserve these prerequisites: production runs cannot execute the isolated mutation cases. Run details show each skipped/blocked reason. UAT has three implemented session journeys; the hundreds of API/module cases are not relabelled as UAT.
+
+Six built-in anonymous GET success contracts (session, home, quests, registration status, security.txt, and vote proposals) can run on hosted targets. Custom success fixtures remain isolated, even for those routes; GET cron and development endpoints are not exempt from isolation.
 
 Pipeline runs save `execution-inventory.json` before tests start and append each completed result to `execution-results.jsonl`. If a runner is killed, its completed results survive and uncompleted cases are reported as blocked. This avoids collapsing an interrupted suite into a single synthetic test.
 
