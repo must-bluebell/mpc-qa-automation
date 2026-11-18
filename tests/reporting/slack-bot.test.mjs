@@ -83,6 +83,14 @@ test('Allure link appears only when the run generated a report and the base URL 
   assert.match(parents[1],/Allure: <https:\/\/reports\.example\/allure\/r2\/index\.html\|Allure report>/)
   assert.match(parents[2],/Allure: retained locally \(invalid Allure base URL\)/)
 })
+test('report summaries without a report host link to the deployed dashboard',async()=>{
+  const {calls,options}=setup()
+  options.reportBase=''
+  options.runUrl=''
+  await notifyBotRun({...run('render-link'),trigger:'dashboard',env:'production'},options)
+  assert.ok(calls[0].body.text.includes('Report: <https://qa-automation-bq3y.onrender.com/#/|QA dashboard>'))
+  assert.doesNotMatch(calls[0].body.text,/127\.0\.0\.1|localhost|Local dashboard|scheduler host/)
+})
 test('GitHub CI summaries link to the run without exposing raw artifacts',async()=>{
   const {calls,options}=setup()
   options.runUrl='https://github.com/must-bluebell/mpc-qa-automation/actions/runs/123'

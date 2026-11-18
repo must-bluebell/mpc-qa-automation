@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { acquireLock, LockBusyError } from '../lib/lock.mjs'
 import { RUNS_DIR, config } from '../lib/env.mjs'
-import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS, redactValue, dashboardRunUrl } from '../lib/safe-output.mjs'
+import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS, redactValue } from '../lib/safe-output.mjs'
 import { renderAiReview, splitThreadText } from './ai-review.mjs'
 import { formatRate } from '../lib/quality-rates.mjs'
 import { executionRecovered } from '../lib/run-status.mjs'
@@ -67,7 +67,7 @@ function reportLink(o,s) {
   const id=encodeURIComponent(s.runId), base=o.reportBase&&safeBase(o.reportBase)
   const run=githubRun(o.runUrl)
   const lines=[!o.reportBase&&run?`Report: <${run}|GitHub run and sanitized report>`
-    :!o.reportBase?`Report: <${dashboardRunUrl(s.runId)}|Local dashboard (scheduler host)>`
+    :!o.reportBase?'Report: <https://qa-automation-bq3y.onrender.com/#/|QA dashboard>'
     :base?`Report: <${base}/${id}.md|Sanitized results>`:'Report: retained locally (invalid report base URL).']
   if(o.allureBase&&s.allureReport){
     const allure=safeBase(o.allureBase)
