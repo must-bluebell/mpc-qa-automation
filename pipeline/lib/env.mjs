@@ -8,6 +8,10 @@ dotenv.config({ path: resolve(ROOT, '.env'), quiet: true })
 
 export const RUNS_DIR = resolve(ROOT, process.env.QA_RUNS_DIR || 'runs')
 
+/** Hosted deployments (e.g. Render) run against hosted environments only; see QA_HOSTED in render.yaml. */
+export const HOSTED = process.env.QA_HOSTED === '1'
+export const DEFAULT_ENV = process.env.QA_DEFAULT_ENV || (HOSTED ? 'production' : 'local-docker')
+
 export function readJson(path, fallback) {
   try { return JSON.parse(readFileSync(resolve(ROOT, path), 'utf8')) } catch (error) {
     if (fallback !== undefined) return fallback
@@ -18,7 +22,7 @@ export function readJson(path, fallback) {
 export const config = {
   environments: () => readJson('pipeline/config/environments.json'),
   suites: () => readJson('pipeline/config/suites.json'),
-  schedules: () => readJson('pipeline/config/schedules.json'),
+  schedules: () => readJson(process.env.QA_SCHEDULE_FILE || 'pipeline/config/schedules.json'),
   thresholds: () => readJson('pipeline/config/thresholds.json'),
   requirements: () => readJson('config/qa-requirements.json'),
   evaluation: () => readJson('config/qa-evaluation.json'),

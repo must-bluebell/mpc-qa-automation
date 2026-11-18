@@ -37,7 +37,14 @@ const when = iso => (iso ? `${new Date(iso).toLocaleString('en-GB', { timeZone: 
 const fileUrl = (runId, rel) => `/api/runs/${encodeURIComponent(runId)}/files/${rel.split('/').map(encodeURIComponent).join('/')}`
 const REPORT_CATEGORIES = [{ suite: 'regression', label: 'Regression testing' }, { suite: 'api', label: 'API testing' }, { suite: 'load', label: 'Load testing' }]
 
+// Load runs only on the local Docker stack, so hosted deployments do not show a load panel.
+const reportCategories = () => REPORT_CATEGORIES.filter(c => !(state.status?.hosted && c.suite === 'load'))
+
 function systemHealth(health, recorded = false) {
+  if (!recorded && state.status?.hosted === true) {
+    return h('section', { class: 'panel', id: 'system-health' }, h('h2', {}, 'Target environment'),
+      h('p', {}, `Runs target ${state.status.defaultEnv} on this hosted deployment. Local Docker is not available here.`))
+  }
   if (!recorded) health = state.stack
   const stack = recorded ? health?.stack : health
   const healthy = recorded ? health?.ok === true && stack?.healthy !== false : stack?.healthy
@@ -52,14 +59,14 @@ function systemHealth(health, recorded = false) {
 }
 
 function categoryResults() {
-  return REPORT_CATEGORIES.map(({ suite, label }) => {
-    const run = Array.isArray(state.status.categoryResults) ? state.status.categoryResults.find(r => r.suite === suite) : state.runs.filter(r => r.suite === suite && r.env === 'local-docker' && r.finishedAt && !r.seededDefect && !r.reportOnly && r.status !== 'skipped-overlap')
+  return reportCategories().map(({ suite, label }) => {
+    const run = Array.isArray(state.status.categoryResults) ? state.status.categoryResults.find(r => r.suite === suite) : state.runs.filter(r => r.suite === suite && r.env === (state.status.defaultEnv ?? 'local-docker') && r.finishedAt && !r.seededDefect && !r.reportOnly && r.status !== 'skipped-overlap')
       .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))[0]
     const c = run?.counts
     return h('section', { class: 'panel', id: `results-${suite}` }, h('h2', {}, label),
       run ? h('div', {}, badge(run.status), h('p', {}, `${c?.passed ?? 0} passed · ${c?.failed ?? 0} failed · ${c?.skipped ?? 0} skipped · ${c?.blocked ?? 0} blocked`),
         h('p', { class: 'hint' }, `Recorded execution · ${when(run.finishedAt)}`),
-        h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : h('p', { class: 'empty' }, 'No completed local run recorded.'))
+        h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : h('p', { class: 'empty' }, `No completed ${state.status.hosted ? state.status.defaultEnv : 'local'} run recorded.`))
   })
 }
 
@@ -70,7 +77,9 @@ function renderChips() {
   const stack = state.stack
   chips.append(
     s.running ? h('span', { class: 'chip warn' }, `Running ${s.running.runId}`) : h('span', { class: 'chip ok' }, 'Idle'),
-    stack ? h('span', { class: `chip ${stack.healthy ? 'ok' : 'bad'}` }, `Stack ${stack.project}: ${stack.healthy ? 'healthy' : stack.error ?? 'unhealthy'}`) : h('span', { class: 'chip' }, 'Stack …'),
+    s.stackAvailable !== false
+      ? (stack ? h('span', { class: `chip ${stack.healthy ? 'ok' : 'bad'}` }, `Stack ${stack.project}: ${stack.healthy ? 'healthy' : stack.error ?? 'unhealthy'}`) : h('span', { class: 'chip' }, 'Stack …'))
+      : h('span', { class: 'chip ok' }, `Target ${s.defaultEnv}`),
     h('span', { class: `chip ${s.slack.valid ? 'ok' : s.slack.configured ? 'bad' : 'warn'}` }, `Slack ${s.slack.valid ? 'configured' : s.slack.configured ? s.slack.reason || 'invalid configuration' : 'not configured'}`),
     h('span', { class: `chip ${s.ai.configured ? 'ok' : 'warn'}` }, `AI ${s.ai.configured ? `${s.ai.provider} · ${s.ai.model}` : 'not configured'}`),
   )
@@ -81,22 +90,22 @@ async function refresh() {
   state.status = status
   state.runs = runs
   renderChips()
-  api('/api/stack').then(stack => {
+  if (status.stackAvailable !== false) api('/api/stack').then(stack => {
     state.stack = stack
     renderChips()
     if (location.hash === '' || location.hash === '#/') document.getElementById('system-health')?.replaceWith(systemHealth())
   }).catch(() => {})
   if (location.hash === '' || location.hash === '#/') {
     const panels = categoryResults()
-    REPORT_CATEGORIES.forEach(({ suite }, i) => document.getElementById(`results-${suite}`)?.replaceWith(panels[i]))
+    reportCategories().forEach(({ suite }, i) => document.getElementById(`results-${suite}`)?.replaceWith(panels[i]))
   }
 }
 
 function runForm() {
   const s = state.status
   const msg = h('div', { class: 'msg', role: 'status' })
-  const suite = h('select', { name: 'suite' }, s.suites.map(x => h('option', { value: x.name, selected: x.name === 'full' }, x.name)))
-  const env = h('select', { name: 'env' }, s.environments.map(x => h('option', { value: x.name, selected: x.name === 'local-docker' }, x.name)))
+  const suite = h('select', { name: 'suite' }, s.suites.map(x => h('option', { value: x.name, selected: x.name === s.defaultSuite }, x.name)))
+  const env = h('select', { name: 'env' }, s.environments.map(x => h('option', { value: x.name, selected: x.name === s.defaultEnv }, x.name)))
   const defect = h('select', { name: 'defect' }, h('option', { value: '' }, 'none'), s.seededDefects.map(x => h('option', { value: x.name }, `${x.name} (${x.kind})`)))
   const ai = h('input', { type: 'checkbox', name: 'ai', checked: s.ai.configured && s.ai.auto })
   const activeNotify = s.jobs?.find(j => j.runId === s.running?.runId)?.notify
@@ -128,15 +137,17 @@ function runForm() {
       h('button', { class: 'primary', type: 'submit', disabled: running }, running ? 'Run in progress' : 'Run')),
     desc,
     h('div', { class: 'actions' },
-      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'full', env: 'local-docker', ai: ai.checked, notify: notify.checked }) }, 'Run everything (full)'),
-      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'smoke', env: 'local-docker', ai: ai.checked, notify: notify.checked }) }, 'Smoke'),
+      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: s.runAllSuite, env: env.value, ai: ai.checked, notify: notify.checked }) }, s.hosted ? 'Run everything (hosted)' : 'Run everything (full)'),
+      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'smoke', env: env.value, ai: ai.checked, notify: notify.checked }) }, 'Smoke'),
       h('button', { type: 'button', onclick: async () => {
         msg.className = 'msg'; msg.textContent = 'Sending Slack test…'
         try { const r = await post('/api/slack/test'); msg.className = `msg badge ${r.ok ? 'ok' : 'warn'}`; msg.textContent = r.ok ? 'Slack test delivered' : `Slack not delivered: ${r.code}` }
         catch (error) { msg.className = 'msg badge bad'; msg.textContent = error.message }
       } }, 'Send Slack test')),
     msg,
-    h('p', { class: 'hint' }, 'UAT and load run only against the isolated local Docker stack; the pipeline refuses them elsewhere. Runs never touch production or staging with writes.'))
+    h('p', { class: 'hint' }, s.hosted
+      ? 'Hosted deployment: runs target hosted environments only. UAT and load need the local Docker stack and are not offered here. Runs never write to production or staging.'
+      : 'UAT and load run only against the isolated local Docker stack; the pipeline refuses them elsewhere. Runs never touch production or staging with writes.'))
 }
 
 function liveLog() {

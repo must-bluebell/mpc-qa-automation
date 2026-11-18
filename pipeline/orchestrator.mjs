@@ -41,6 +41,8 @@ export function expandSuite(name, suites = config.suites(), seen = new Set()) {
 /** Policy checks before anything runs. Refusals are recorded, never silently skipped. */
 export function guard({ suiteName, env, steps, seededDefect }) {
   const refusals = []
+  // Hosted deployments (QA_HOSTED=1) have no local Docker stack, so local-docker is never a valid target there.
+  if (process.env.QA_HOSTED === '1' && env.name === 'local-docker') refusals.push('The local-docker environment is only available on a developer machine; choose a hosted environment such as staging.')
   for (const step of steps) {
     if (step.requiresIsolated && !env.isolated) refusals.push(`${step.fromSuite}: requires the isolated local stack; "${env.name}" is not isolated.`)
     if (step.requiresLoad && !(env.allowLoad && isLoopback(env.baseUrl))) refusals.push(`${step.fromSuite}: load tests are only allowed on an approved isolated loopback environment.`)

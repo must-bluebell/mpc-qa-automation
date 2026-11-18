@@ -92,6 +92,17 @@
       "@full"
     ]
   },
+  "hosted-full": {
+    "description": "Everything a hosted URL can run: API plus MPC browser regression against staging or preview. UAT and load need the local Docker stack and are not included.",
+    "include": [
+      "api",
+      "regression"
+    ],
+    "timeoutMs": 3600000,
+    "tags": [
+      "@hosted"
+    ]
+  },
   "api-smoke": {
     "steps": [
       {

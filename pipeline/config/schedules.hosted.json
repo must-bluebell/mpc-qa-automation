@@ -1,0 +1,23 @@
+{
+  "timezone": "Asia/Seoul",
+  "schedules": [
+    {
+      "id": "nightly-hosted",
+      "suite": "hosted-full",
+      "cron": "0 1 * * *",
+      "kind": "test",
+      "graceMinutes": 360,
+      "priority": 10,
+      "env": "production",
+      "enabled": true,
+      "ai": false
+    }
+  ],
+  "rotation": {
+    "id": "qa-rotation",
+    "suites": [],
+    "env": "production",
+    "gapMinutes": 30,
+    "enabled": false
+  }
+}

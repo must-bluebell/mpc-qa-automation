@@ -61,8 +61,8 @@
     "isolated": false
   },
   "staging": {
-    "description": "Staging (mainnet bundle, test contracts). Refuses same-origin writes; read-only.",
-    "baseUrl": "https://globalmpc-webapp.vercel.app",
+    "description": "Staging (mainnet bundle, test contracts). Refuses same-origin writes; read-only. URL comes from QA_STAGING_BASE_URL; the former Vercel alias redirects to production and must not be used.",
+    "baseUrlEnv": "QA_STAGING_BASE_URL",
     "chainId": 56,
     "allowWrites": false,
     "allowLoad": false,

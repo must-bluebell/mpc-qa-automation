@@ -5,7 +5,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, statSync, openSync, fstatSync, readSync, closeSync, watch } from 'node:fs'
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ROOT, RUNS_DIR, config, knownSecrets, resolveEnvironment } from '../pipeline/lib/env.mjs'
+import { DEFAULT_ENV, HOSTED, ROOT, RUNS_DIR, config, knownSecrets, resolveEnvironment } from '../pipeline/lib/env.mjs'
 import { isRunId, newRunId, readIndex, readRun, runDir } from '../pipeline/lib/run-store.mjs'
 import { runStatus } from '../pipeline/lib/run-status.mjs'
 import { readLock } from '../pipeline/lib/lock.mjs'
@@ -170,11 +170,11 @@ function latestCategoryResults() {
   const index = readIndex()
   const runIds = new Set(index.map(r => r.runId))
   for (const runId of categoryRuns.keys()) if (!runIds.has(runId)) categoryRuns.delete(runId)
-  const entries = index.filter(r => r.env === 'local-docker' && r.finishedAt && !r.seededDefect && !r.reportOnly && !['running', 'skipped-overlap'].includes(r.status))
+  const entries = index.filter(r => r.env === DEFAULT_ENV && r.finishedAt && !r.seededDefect && !r.reportOnly && !['running', 'skipped-overlap'].includes(r.status))
     .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))
   for (const entry of entries) {
     const run = cachedCategoryRun(entry.runId)
-    if (!run || run.reportOnly || run.seededDefect || run.env !== 'local-docker' || !run.finishedAt || ['running', 'skipped-overlap'].includes(run.status)) continue
+    if (!run || run.reportOnly || run.seededDefect || run.env !== DEFAULT_ENV || !run.finishedAt || ['running', 'skipped-overlap'].includes(run.status)) continue
     for (const { suite } of REPORT_CATEGORIES) {
       if (latest.has(suite)) continue
       const steps = (run.steps ?? []).filter(step => categoryMatches(suite, step.fromSuite ?? run.suite, step.project, step.adapter))
@@ -196,15 +196,25 @@ function latestCategoryResults() {
   return categoryCache
 }
 
+/** On a hosted deployment only suites without isolated-stack or load steps can run. */
+function hostedRunnable(name, suites) {
+  try { return expandSuite(name, suites).every(step => !step.requiresIsolated && !step.requiresLoad) } catch { return false }
+}
+
 function status() {
   const suites = config.suites()
   const envs = config.environments()
   const ai = aiConfig()
   return {
+    hosted: HOSTED,
+    defaultEnv: DEFAULT_ENV,
+    defaultSuite: HOSTED ? 'hosted-full' : 'full',
+    runAllSuite: HOSTED ? 'hosted-full' : 'full',
+    stackAvailable: !HOSTED,
     running: busy(),
     jobs: [...jobs.values()].map(({ runId, suite, env, startedAt, exitCode, notify }) => ({ runId, suite, env, startedAt, exitCode: exitCode ?? null, notify })),
-    suites: Object.entries(suites).map(([name, s]) => ({ name, description: s.description, include: s.include ?? null, requiresIsolated: !!s.requiresIsolated, requiresLoad: !!s.requiresLoad })),
-    environments: Object.entries(envs).map(([name, e]) => ({ name, description: e.description, isolated: !!e.isolated, allowWrites: !!e.allowWrites, allowLoad: !!e.allowLoad })),
+    suites: Object.entries(suites).filter(([name]) => !HOSTED || hostedRunnable(name, suites)).map(([name, s]) => ({ name, description: s.description, include: s.include ?? null, requiresIsolated: !!s.requiresIsolated, requiresLoad: !!s.requiresLoad })),
+    environments: Object.entries(envs).filter(([, e]) => !HOSTED || !e.isolated).map(([name, e]) => ({ name, description: e.description, isolated: !!e.isolated, allowWrites: !!e.allowWrites, allowLoad: !!e.allowLoad })),
     seededDefects: Object.entries(PROFILES).map(([name, p]) => ({ name, kind: p.kind, description: p.description })),
     slack: slackStatus(),
     ai: { provider: ai.provider, configured: ai.configured, model: ai.configured ? ai.model : null, auto: process.env.QA_AI_AUTO === '1' },
@@ -335,7 +345,10 @@ async function route(req, res) {
   if (req.method === 'GET' && !path.startsWith('/api/')) return serveStatic(res, path)
   if (req.method === 'GET' && path === '/api/status') return send(res, 200, status())
   if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().slice(-200).reverse())
-  if (req.method === 'GET' && path === '/api/stack') return send(res, 200, await stackStatus(resolveEnvironment('local-docker')))
+  if (req.method === 'GET' && path === '/api/stack') {
+    if (HOSTED) return send(res, 404, { error: 'No local Docker stack on a hosted deployment' })
+    return send(res, 200, await stackStatus(resolveEnvironment('local-docker')))
+  }
 
   let m = path.match(/^\/api\/runs\/([^/]+)$/)
   if (req.method === 'GET' && m) {
