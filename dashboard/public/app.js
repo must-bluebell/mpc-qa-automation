@@ -156,6 +156,7 @@ function liveLog() {
   const id = state.watching ?? state.status.running?.runId
   if (!id) return null
   const pre = h('pre', { class: 'log' }, 'Waiting for output…')
+  const connection = h('p', { class: 'hint', role: 'status' })
   const head = h('div', {}, h('a', { href: `#/runs/${id}` }, id))
   let cancelled = false
   let pending = false
@@ -172,6 +173,7 @@ function liveLog() {
       const r = await api(`/api/jobs/${encodeURIComponent(id)}/log`)
       if (cancelled) return
       receivedLog = true
+      connection.textContent = ''
       const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20
       const text = r.log || '(no output yet)'
       if (pre.textContent !== text) pre.textContent = text
@@ -190,6 +192,12 @@ function liveLog() {
       }
     } catch (error) {
       if (cancelled || receivedLog) return
+      if ([502, 503, 504].includes(error.status)) {
+        // A gateway outage does not invalidate output already received or prove the run failed.
+        connection.textContent = `Dashboard temporarily unavailable (HTTP ${error.status}). Reconnecting… Last received output is shown below.`
+        return
+      }
+      connection.textContent = ''
       pre.textContent = `Output unavailable: ${error.message}. Retrying…`
       if (error.status === 404) {
         // A fresh status distinguishes a brief log-creation delay from a lost run.
@@ -213,7 +221,7 @@ function liveLog() {
   }
   pollTimer = setInterval(tick, 2000)
   tick()
-  return h('section', { class: 'panel' }, h('h2', {}, 'Live output'), head, pre)
+  return h('section', { class: 'panel' }, h('h2', {}, 'Live output'), head, connection, pre)
 }
 
 function runsTable() {

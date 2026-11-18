@@ -403,7 +403,10 @@ const server = http.createServer((req, res) => {
   })
 })
 server.requestTimeout = 30_000
-server.headersTimeout = 15_000
+// Keep upstream sockets alive long enough for Render's proxy to reuse them.
+// A short Node default can race a proxy request and surface as HTTP 502.
+server.keepAliveTimeout = 120_000
+server.headersTimeout = 120_000
 server.listen(PORT, HOST, () => console.log(PUBLIC_HOST
   ? `MPC QA dashboard listening on ${HOST}:${PORT}; open https://${PUBLIC_HOST}/#access=<QA_DASHBOARD_ACCESS_TOKEN>`
   : `MPC QA dashboard: http://${HOST}:${PORT}/#access=${ACCESS_TOKEN}  (private link; loopback only)`))

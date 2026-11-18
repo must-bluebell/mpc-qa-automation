@@ -11,7 +11,7 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
   const page = await browser.newPage()
   await page.clock.install()
   const runId = 'ui-completion-regression'
-  const fixture = { started: scheduled, complete: false, logRequests: 0, statusRequests: 0, holdLog: null }
+  const fixture = { started: scheduled, complete: false, logRequests: 0, startRequests: 0, statusRequests: 0, holdLog: null }
   const status = () => ({
     running: fixture.started && !fixture.complete ? { runId } : null,
     jobs: jobNotify === undefined ? [] : [{runId,notify:jobNotify,exitCode:fixture.complete?0:null}],
@@ -32,7 +32,7 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
     if (pathname === '/api/session') { fixture.sessionRequest = route.request().postDataJSON(); data = {ok:true} }
     else if (pathname === '/api/status') { fixture.statusRequests++; if (fixture.statusError) return route.fulfill({status:503,json:{error:'Temporary status failure'}}); data = status() }
     else if (pathname === '/api/stack') data = { project: 'ui-test', healthy: true }
-    else if (pathname === '/api/runs' && route.request().method() === 'POST') { fixture.lastStart = route.request().postDataJSON(); fixture.started = true; data = { runId } }
+    else if (pathname === '/api/runs' && route.request().method() === 'POST') { fixture.startRequests++; fixture.lastStart = route.request().postDataJSON(); fixture.started = true; data = { runId } }
     else if (pathname === '/api/runs') data = fixture.complete ? [{ runId, suite: 'regression', status: 'passed', counts: { passed: 22 } }] : history
     else if (pathname === `/api/jobs/${runId}/log`) {
       fixture.logRequests++
@@ -258,4 +258,22 @@ test('case results explain skipped and blocked prerequisites', async t => {
   await page.locator(`a[href="#/runs/${runId}"]`).first().click()
   await expect(page.locator('#test-results')).toContainText('Requires a real test inbox')
   await expect(page.locator('#test-results')).toContainText('Runner stopped before this case completed.')
+})
+
+for (const status of [502, 503, 504]) test(`HTTP ${status} preserves output and recovers without starting another run`, async t => {
+  const { page, fixture } = await dashboard(t)
+  const output = await page.locator('pre.log').textContent()
+  fixture.logError = status
+  await page.clock.runFor(2100)
+  await expect(page.locator('pre.log')).toHaveText(output)
+  await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: 'Live output', exact: true }) }).getByRole('status')).toContainText(`HTTP ${status}`)
+  fixture.logError = null
+  fixture.complete = true
+  await page.clock.runFor(2100)
+  await expect(page.locator('pre.log')).toContainText('Finished: 22 passed')
+  await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: 'Live output', exact: true }) }).getByRole('status')).toBeEmpty()
+  assert.equal(fixture.startRequests, 1, 'reconnection must not start a duplicate run')
+  const requests = fixture.logRequests
+  await page.clock.runFor(6000)
+  assert.equal(fixture.logRequests, requests)
 })

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {spawn} from 'node:child_process'
 import {once} from 'node:events'
+import {Agent, get} from 'node:http'
 import {chromium,expect} from '@playwright/test'
 import {createServer} from 'node:net'
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync,symlinkSync,renameSync} from 'node:fs'
@@ -290,4 +291,23 @@ test('run records provide results when the dashboard job log is absent', async t
   assert.match(result.log,/1 failed/)
   assert.match(result.log,/runner failed/)
   assert.equal((await fetch(`${f.base}/api/jobs/missing-run/log`, {headers})).status,404)
+})
+
+// Render can reuse an upstream connection after Node's default five-second idle timeout.
+test('dashboard keeps an idle proxy connection reusable beyond the Node default', async t => {
+  const f = await dashboardServer(t)
+  const agent = new Agent({ keepAlive: true, maxSockets: 1 })
+  t.after(() => agent.destroy())
+  const request = () => new Promise((resolve, reject) => {
+    const req = get(`${f.base}/healthz`, { agent }, res => {
+      res.resume()
+      res.on('end', () => resolve({ status: res.statusCode, reused: req.reusedSocket }))
+    })
+    req.on('error', reject)
+  })
+  assert.equal((await request()).status, 200)
+  await new Promise(resolve => setTimeout(resolve, 8000))
+  const next = await request()
+  assert.equal(next.status, 200)
+  assert.equal(next.reused, true, 'server must not close the proxy connection after five seconds')
 })
