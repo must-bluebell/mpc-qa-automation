@@ -23,8 +23,8 @@ export default class RegressionReporter implements Reporter {
   onBegin(config: FullConfig, suite: Suite) {
     this.suite = suite
     this.root = config.configFile ? resolve(config.configFile, '..') : process.cwd()
-    // Listing is not execution and must not overwrite a previous real result.
-    if (!process.env.QA_REPORT_DIR || process.argv.includes('--list')) return
+    // Only the pipeline's explicit preflight listing may create a new inventory.
+    if (!process.env.QA_REPORT_DIR || (process.argv.includes('--list') && process.env.QA_DISCOVERY_ONLY !== '1')) return
     this.checkpointDir = resolve(process.env.QA_REPORT_DIR)
     mkdirSync(this.checkpointDir, {recursive:true})
     const file = join(this.checkpointDir, 'execution-inventory.json')

@@ -46,9 +46,6 @@ export function readPlaywrightRecords(stepDir) {
 }
 
 export async function runPlaywrightStep(step, ctx) {
-  if (step.project === 'chromium' && !ctx.seededDefect) {
-    await warmBrowserRuntime(ctx.env,{timeoutMs:Math.min(60_000,ctx.remainingMs())})
-  }
   const args = ['playwright', 'test', `--project=${step.project}`]
   if (step.grep) args.push('--grep', step.grep)
   if (step.grepInvert) args.push('--grep-invert', step.grepInvert)
@@ -59,9 +56,28 @@ export async function runPlaywrightStep(step, ctx) {
     QA_WEB_FIXTURE_CONTAINER: ctx.env.isolated && (ctx.env.name === 'web-isolated' || ctx.env.stack?.verificationRuntime) ? `${ctx.env.stack.composeProject}-web-1` : '',
     CI: process.env.CI ?? '', FORCE_COLOR: '0',
   }
-  const result = await runProcess('npx', args, { cwd: ROOT, env, timeoutMs: ctx.remainingMs(), logFile: join(ctx.stepDir, 'output.log'), echo: ctx.echo,
-    passSecrets: ['QA_SEED_PHRASE'] }) // Signing workers never inherit Slack, AI or repository credentials.
   const evidenceBase = relative(ctx.runDir, ctx.stepDir).split('\\').join('/')
+  // Discover with the same project and filters before network warmup or worker startup.
+  const discovery = await runProcess('npx', [...args, '--list', '--reporter=list,./utils/regression-reporter.ts'], {
+    cwd: ROOT, env: {...env, QA_DISCOVERY_ONLY:'1'}, timeoutMs: ctx.remainingMs(),
+    logFile: join(ctx.stepDir, 'discovery.log'), echo: ctx.echo,
+  })
+  let startupError = discovery.code !== 0 ? `Playwright discovery failed: ${discovery.tail.slice(-1500)}` : null
+  if (!startupError && step.project === 'chromium' && !ctx.seededDefect) {
+    try { await warmBrowserRuntime(ctx.env,{timeoutMs:Math.min(60_000,ctx.remainingMs())}) }
+    catch (error) { startupError = `Browser startup failed: ${error.message}` }
+  }
+  if (startupError) {
+    const tests = readPlaywrightRecords(ctx.stepDir).map(record => normalizeRecord({...record,
+      annotations:[...(record.annotations ?? []), {type:'blocked',description:startupError}],
+    }, {evidenceBase}))
+    // Replace the generic interruption reason with the actionable startup cause.
+    for (const item of tests) item.skipReason = startupError
+    return {tests, errors:[startupError], timedOut:discovery.timedOut, exitCode:1,
+      durationMs:discovery.durationMs, artifacts:{htmlReport:null,log:`${evidenceBase}/discovery.log`}}
+  }
+  const result = await runProcess('npx', args, { cwd: ROOT, env: {...env, QA_DISCOVERY_ONLY:'0'}, timeoutMs: ctx.remainingMs(), logFile: join(ctx.stepDir, 'output.log'), echo: ctx.echo,
+    passSecrets: ['QA_SEED_PHRASE'] }) // Signing workers never inherit Slack, AI or repository credentials.
   const records = readPlaywrightRecords(ctx.stepDir)
   const tests = records.map(r => normalizeRecord(r, { evidenceBase }))
   const errors = []

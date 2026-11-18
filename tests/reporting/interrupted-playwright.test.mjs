@@ -48,3 +48,19 @@ test('partial report recovery keeps completed cases and marks every unstarted ca
   writeFileSync(join(dir,'regression-summary.json'),'{"records":')
   assert.equal(readPlaywrightRecords(dir).length,2,'a truncated final summary must recover checkpointed cases')
 })
+
+test('browser preflight failure retains every selected case before execution starts', async t => {
+  const {runPlaywrightStep}=await import('../../pipeline/adapters/playwright.mjs')
+  const dir=mkdtempSync(join(tmpdir(),'qa-preflight-records-'))
+  t.after(()=>rmSync(dir,{recursive:true,force:true}))
+  const result=await runPlaywrightStep({project:'chromium',grep:'W25'}, {
+    env:{name:'test',baseUrl:'http://localhost:1',appOrigin:'http://localhost:1',chainId:1,chainName:'Test Chain',allowWrites:false,isolated:true,stack:{verificationRuntime:true,composeProject:'test'}},
+    targetUrl:'http://localhost:1',versions:{app:{id:'test'}},stepDir:dir,runDir:dir,
+    suite:'regression',runId:'test',echo:false,remainingMs:()=>30000,
+  })
+  assert.equal(result.tests.length,1,JSON.stringify(result.errors))
+  assert.match(result.tests[0].title,/W25/)
+  assert.equal(result.tests[0].status,'blocked')
+  assert.match(result.tests[0].skipReason,/isolated loopback/)
+  assert.equal(result.exitCode,1)
+})
