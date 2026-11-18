@@ -3,6 +3,9 @@ import { expectValidationMessage } from '../fixtures/validation-messages'
 import { expect, type Locator, type Page } from '@playwright/test'
 import { addressChipName, copy } from './copy'
 
+/** How long to wait for the analytics choice banner before deciding it is not coming. */
+const CONSENT_WINDOW_MS = 8_000
+
 /**
  * Every locator in the suite lives here. Tests describe behaviour; this file knows how to find
  * things.
@@ -87,17 +90,36 @@ export class JoinSheet {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async open(expectedStep: 'Wallet' | 'Community' = 'Wallet'): Promise<void> {
-    const consent = this.page.getByRole('dialog', { name: 'Audience measurement choice', exact: true })
-    // Consent can arrive after hydration while the CTA is becoming actionable.
-    await this.page.addLocatorHandler(consent, async () => {
-      await consent.getByRole('button', { name: 'Reject', exact: true }).click()
+  /** The analytics choice banner. Its accessible name is fixed by the app. */
+  consentDialog(): Locator {
+    return this.page.getByRole('dialog', { name: 'Audience measurement choice', exact: true })
+  }
+
+  /**
+   * Rejects analytics consent when it is shown, and confirms it has gone.
+   *
+   * The banner arrives after hydration, sometimes several seconds after the CTA is already visible,
+   * and it covers the CTA while it is up. It is handled here, explicitly and within a bounded
+   * window, rather than through `addLocatorHandler`. With the handler, every CTA click on the
+   * deployed app timed out with no further detail (hosted-full 20261118-113042-hosted-full-6af3,
+   * 23 chromium cases), and the handler's Reject click was never shown to complete.
+   */
+  async dismissConsent(): Promise<void> {
+    const consent = this.consentDialog()
+    const appeared = await consent.waitFor({ state: 'visible', timeout: CONSENT_WINDOW_MS }).then(() => true, () => false)
+    if (!appeared) return
+    const reject = consent.getByRole('button', { name: 'Reject', exact: true })
+    await reject.click({ timeout: 5_000 }).catch(async () => {
+      // A banner still in its entrance transition can refuse a pointer click. The button's own click
+      // handler is the same action, so fall back to it rather than failing the whole case.
+      await reject.evaluate((button: HTMLElement) => button.click())
     })
-    try {
-      await this.cta().click()
-    } finally {
-      await this.page.removeLocatorHandler(consent)
-    }
+    await expect(consent, 'Analytics consent should close after Reject').toBeHidden({ timeout: 10_000 })
+  }
+
+  async open(expectedStep: 'Wallet' | 'Community' = 'Wallet'): Promise<void> {
+    await this.dismissConsent()
+    await this.cta().click()
     await expect(this.sheet()).toBeVisible()
     await this.expectStep(expectedStep)
     const instructions = expectedStep === 'Community' ? validationCopy.communityIntro : copy.join.connectLede
