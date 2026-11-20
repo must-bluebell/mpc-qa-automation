@@ -103,8 +103,11 @@ export function apiErrorCode(body) {
   return typeof code === 'string' && /^[a-z][a-z0-9_-]{0,63}$/.test(code) ? code : null
 }
 
-/** Protocol 6 is declared by the supplied November 2026 Postman collection. */
-export function apiProtocolHeaders(path, headers = {}) {
+/** Collection snapshot: 6. Production client on 2026-11-20: 9 (module 281697,
+ * /_next/static/immutable/chunks/3fl7xm7pd26gx.js, consumed by module 850396).
+ * Keep the expected protocol explicit; never adapt it to a failed response.
+ */
+export function apiProtocolHeaders(path, headers = {}, environment = process.env.QA_ENVIRONMENT) {
   const routes = ['/my-mine/run', '/my-mine/draw', '/my-mine/record', '/my-mine/record/self']
-  return {...(routes.includes(path.split('?')[0]) ? {'x-mpc-run-protocol':'6'} : {}), ...headers}
+  return {...(routes.includes(path.split('?')[0]) ? {'x-mpc-run-protocol':environment === 'production' ? '9' : '6'} : {}), ...headers}
 }

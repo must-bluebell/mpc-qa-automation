@@ -14,4 +14,4 @@ export function baselineForEnvironment(contract: Contract, environment?: string,
 export function originForEnvironment(contract: Contract, environment?: string): Expected
 
 export function apiErrorCode(body: unknown): string | null
-export function apiProtocolHeaders(path: string, headers?: Record<string,string>): Record<string,string>
+export function apiProtocolHeaders(path: string, headers?: Record<string,string>, environment?: string): Record<string,string>

@@ -138,9 +138,10 @@ test('Mine API requests carry the supplied collection protocol and preserve expl
   for(const item of flatten(collection.item)) {
     const usesProtocol=item.request.header?.some(h=>h.key==='x-mpc-run-protocol')
     const path='/'+item.request.url.path.join('/')
-    if(usesProtocol)assert.deepEqual(apiProtocolHeaders(path),{'x-mpc-run-protocol':protocol})
+    if(usesProtocol)assert.deepEqual(apiProtocolHeaders(path,{},'local-docker'),{'x-mpc-run-protocol':protocol})
   }
-  assert.deepEqual(apiProtocolHeaders('/my-mine/run?record=0'),{'x-mpc-run-protocol':protocol})
+  assert.deepEqual(apiProtocolHeaders('/my-mine/run?record=0',{},'local-docker'),{'x-mpc-run-protocol':protocol})
+  assert.deepEqual(apiProtocolHeaders('/my-mine/run',{},'production'),{'x-mpc-run-protocol':'9'})
   assert.deepEqual(apiProtocolHeaders('/api/auth/verify'),{})
   assert.deepEqual(apiProtocolHeaders('/my-mine/run',{'x-mpc-run-protocol':'invalid'}),{'x-mpc-run-protocol':'invalid'})
 })

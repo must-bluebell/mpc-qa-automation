@@ -24,3 +24,7 @@ Prepared corrections:
 - Preserve short machine error codes in private API metadata and expose only HTTP mismatch numbers in public failure reasons.
 
 Tooling verification: 355 reporting tests passed, two platform-specific checks skipped; 54 dashboard tests passed; TypeScript passed. These checks do not establish deployed application success. Review found no actionable issues. Missing admin sessions, seeded success fixtures, and unavailable source contracts remain blockers; they must not become fabricated passes.
+
+The old-code API phase completed with 421 passed, 35 failed and 193 skipped (one passing case was flaky). Private evidence was preserved under ignored `runs/remote-backups/20261120-125749-hosted-full-ab92` before the user-authorized redeploy. Commit `be84cc8` was pushed; Render accepted run `20261120-131827-api-adbf`, whose fingerprint `content-95b7199f6388` matches the Docker source inputs.
+
+That run showed the collection's protocol 6 is also stale. Read-only inspection of production's shipped `/_next/static/immutable/chunks/3fl7xm7pd26gx.js` found module 850396 sends `x-mpc-run-protocol` from module 281697's `l` export, which is literal 9. The next correction pins production to 9 and retains the snapshot's 6 for other environments, preserving explicit negative-test headers. Focused catalog checks (12) and TypeScript passed; review found no actionable issues. This correction still requires deployed verification.
