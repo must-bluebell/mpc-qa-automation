@@ -1,8 +1,8 @@
 {
   "local-docker": {
-    "description": "Fresh isolated QA recovery stack; previous projects and volumes are preserved. Shares state with the other local alias; run suites sequentially.",
-    "baseUrl": "http://localhost:3420",
-    "appOrigin": "http://localhost:3420",
+    "description": "Existing isolated QA recovery stack. Shares state with the other local alias; run suites sequentially.",
+    "baseUrl": "http://localhost:3460",
+    "appOrigin": "http://localhost:3460",
     "chainId": 97,
     "chainName": "Local Anvil",
     "navigation": "activities",
@@ -13,22 +13,22 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-web-20261019",
+      "composeProject": "mpc-qa-local-20261028",
       "webmpcPath": "../WEB MPC",
       "ports": {
-        "web": 3420,
-        "anvil": 8565,
-        "opbnbAnvil": 8566,
-        "postgres": 5450,
-        "neonProxy": 4464
+        "web": 3460,
+        "anvil": 8605,
+        "opbnbAnvil": 8606,
+        "postgres": 5491,
+        "neonProxy": 4495
       },
-      "note": "Fresh isolated recovery stack after both chains in the 20261015 project refused unsafe snapshot restoration. All previous volumes are preserved."
+      "note": "Fresh isolated recovery after rejected unclean chain snapshots; all earlier project volumes preserved."
     }
   },
   "web-isolated": {
-    "description": "Fresh isolated QA recovery stack; previous projects and volumes are preserved. Shares state with the other local alias; run suites sequentially.",
-    "baseUrl": "http://localhost:3420",
-    "appOrigin": "http://localhost:3420",
+    "description": "Existing isolated QA recovery stack. Shares state with the other local alias; run suites sequentially.",
+    "baseUrl": "http://localhost:3460",
+    "appOrigin": "http://localhost:3460",
     "chainId": 97,
     "chainName": "Local Anvil",
     "navigation": "activities",
@@ -39,16 +39,16 @@
     "stack": {
       "databasePool": true,
       "verificationRuntime": true,
-      "composeProject": "mpc-qa-web-20261019",
+      "composeProject": "mpc-qa-local-20261028",
       "webmpcPath": "../WEB MPC",
       "ports": {
-        "web": 3420,
-        "anvil": 8565,
-        "opbnbAnvil": 8566,
-        "postgres": 5450,
-        "neonProxy": 4464
+        "web": 3460,
+        "anvil": 8605,
+        "opbnbAnvil": 8606,
+        "postgres": 5491,
+        "neonProxy": 4495
       },
-      "note": "Fresh isolated recovery stack after both chains in the 20261015 project refused unsafe snapshot restoration. All previous volumes are preserved."
+      "note": "Fresh isolated recovery after rejected unclean chain snapshots; all earlier project volumes preserved."
     }
   },
   "preview": {

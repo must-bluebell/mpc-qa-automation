@@ -13,7 +13,7 @@ export async function openMining(page: Page): Promise<void> {
     await expectValidationMessage(page.getByText(validationCopy.miningIntro, { exact: true }), validationCopy.miningIntro, 'digging-instructions')
     return
   }
-  const registration = await page.request.get('/api/register/status')
+  const registration = await page.request.get('/api/register/status', { maxRetries: 2 })
   expect(registration.ok(), 'Registration status must load').toBe(true)
   if (!(await registration.json()).registered) {
     const hostname = new URL(target().baseUrl).hostname
@@ -38,7 +38,7 @@ export async function openMining(page: Page): Promise<void> {
   await page.goto('/?tab=mine')
   await expect(page.getByRole('tab', { name: 'My Mine', exact: true })).toHaveAttribute('aria-selected', 'true', { timeout: 60_000 })
   await expect(page.getByRole('tabpanel', { name: 'My Mine', exact: true })).toBeVisible()
-  const status = await page.request.get('/api/register/status')
+  const status = await page.request.get('/api/register/status', { maxRetries: 2 })
   expect(status.ok()).toBe(true)
   expect((await status.json()).registered, 'Mining is reached with real completed registration').toBe(true)
 }

@@ -34,7 +34,8 @@ import {
   type Locator,
   type Page,
 } from '@playwright/test'
-import { getAddress, isAddress, type HDAccount } from 'viem'
+import { getAddress, isAddress, hexToString, type HDAccount, type TypedDataDefinition } from 'viem'
+import { createSiweMessage, parseSiweMessage, validateSiweMessage } from 'viem/siwe'
 import { mnemonicToAccount } from 'viem/accounts'
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -131,7 +132,7 @@ export function getConfiguredWallet(): HDAccount {
  * 🔴 A bare `window.ethereum` renders no wallet to click — the app only lists wallets that announced
  *    themselves over EIP-6963. So this provider announces, with a name.
  * 🔴 The signature is verified for real by `/api/auth/verify`, so signing uses the actual derived
- *    key. The key never enters the browser: signing is bridged out to Node via `page.exposeFunction`.
+ *    key. The key never enters the browser: signing is bridged out to Node via `page.exposeBinding`.
  */
 
 /** The five branches the app's `classifyWalletError` recognises. */
@@ -150,12 +151,42 @@ export type InjectWalletOptions = {
   chainId: number
   /** The name shown on the wallet row — this is `connector.name`, so it is the button's label. */
   walletName?: string
+  /** Validate the actual EIP-712 request before the Node signer approves it. */
+  beforeSignTypedData?: (payload: TypedDataDefinition) => void | Promise<void>
   failOn?: Partial<Record<FailableMethod, WalletFailure>>
 }
 
 const SIGN_BRIDGE = '__mpcQaSign'
 
-/** mipd (the EIP-6963 store wagmi uses) validates the shape of uuid and rdns. */
+function authorizeSignIn(data: unknown, address: `0x${string}`, origin: URL, chainId: number): `0x${string}` {
+  if (typeof data !== 'string' || !/^0x(?:[a-fA-F0-9]{2})+$/.test(data) || data.length > 8_192) {
+    throw new Error('sign bridge: invalid sign-in payload')
+  }
+  const text = hexToString(data as `0x${string}`)
+  const message = parseSiweMessage(text)
+  const statement = origin.hostname === 'app.globalmpc.tech' ? 'MPC Unity sign-in' : 'MPC Waitlist sign-in'
+  const issued = message.issuedAt?.getTime(), expiry = message.expirationTime?.getTime(), now = Date.now()
+  if (!validateSiweMessage({message, address, domain:origin.host, scheme:origin.protocol.slice(0,-1)})
+    || message.uri !== origin.origin || message.chainId !== chainId || message.version !== '1'
+    || message.statement !== statement || !message.nonce || !/^[a-zA-Z0-9]{8,128}$/.test(message.nonce)
+    || !Number.isFinite(issued) || !Number.isFinite(expiry) || issued! > now + 30_000 || issued! < now - 300_000
+    || expiry! <= now || expiry! <= issued! || expiry! - issued! > 301_000
+    || message.resources || message.requestId || message.notBefore) {
+    throw new Error('sign bridge: unexpected SIWE request')
+  }
+  // Rebuild only the approved fields: reject ignored suffixes or additional capabilities.
+  const expected = createSiweMessage({address,chainId,domain:origin.host,scheme:origin.protocol.slice(0,-1),
+    uri:origin.origin,version:'1',statement,nonce:message.nonce,
+    issuedAt:message.issuedAt!,expirationTime:message.expirationTime!})
+  if (text !== expected) throw new Error('sign bridge: noncanonical SIWE request')
+  return data as `0x${string}`
+}
+
+/**
+ * A stable UUIDv4 and reverse-DNS id. mipd (the EIP-6963 store wagmi uses) validates the shape of
+ * both, so these are not free-form. `crypto.randomUUID` is deliberately not used: it is
+ * secure-context only, and a fixed id also keeps the wallet row stable between runs.
+ */
 const WALLET_UUID = 'f1a3c9e2-5b7d-4c81-9e6a-2d4f8b0c1a37'
 const WALLET_RDNS = 'tech.globalmpc.qa'
 const WALLET_ICON =
@@ -173,20 +204,31 @@ export async function injectTestWallet(
 ): Promise<MockWallet> {
   const { account, chainId, walletName = 'Trust Wallet', failOn = {} } = options
   const address = account.address
+  const signingTarget = target(), signingOrigin = new URL(signingTarget.baseUrl)
 
   // The bridge: the page hands over what to sign, this process signs it with the derived key.
-  await page.exposeFunction(
+  await page.exposeBinding(
     SIGN_BRIDGE,
-    async (request: { method: string; params: unknown[] }): Promise<string> => {
+    async (source, request: { method: string; params: unknown[] }): Promise<string> => {
+      if (source.page !== page || source.frame !== page.mainFrame()
+        || new URL(source.frame.url()).origin !== signingOrigin.origin
+        || new URL(page.url()).origin !== signingOrigin.origin) throw new Error('sign bridge: unexpected caller')
+      if (!request || !Array.isArray(request.params) || request.params.length !== 2) throw new Error('sign bridge: invalid request')
       if (request.method === 'personal_sign') {
         // EIP-191 `personal_sign` params are [dataHex, address].
-        const [data] = request.params as [`0x${string}`, string]
+        const [raw, requestedAddress] = request.params
+        if (typeof requestedAddress !== 'string' || requestedAddress.toLowerCase() !== address.toLowerCase()) throw new Error('sign bridge: unexpected address')
+        const data = authorizeSignIn(raw, address, signingOrigin, signingTarget.chainId)
         return account.signMessage({ message: { raw: data } })
       }
       if (request.method === 'eth_signTypedData_v4' || request.method === 'eth_signTypedData_v3') {
         // EIP-712 params are [address, jsonPayload].
         const [, payload] = request.params as [string, string]
-        return account.signTypedData(JSON.parse(payload))
+        if (String(request.params[0]).toLowerCase() !== address.toLowerCase() || !options.beforeSignTypedData) throw new Error('sign bridge: typed signing requires explicit approval')
+        const typedData = JSON.parse(payload) as TypedDataDefinition
+        await options.beforeSignTypedData(typedData)
+        if (source.frame !== page.mainFrame() || new URL(source.frame.url()).origin !== signingOrigin.origin) throw new Error('sign bridge: caller navigated')
+        return account.signTypedData(typedData)
       }
       throw new Error(`sign bridge: unhandled method ${request.method}`)
     },
@@ -205,12 +247,20 @@ export async function injectTestWallet(
     }) => {
       let currentChainHex = cfg.chainIdHex
 
-      // Forced failures, kept mutable on `window` so a test can change them mid-flow.
+      /**
+       * Forced failures, kept mutable on `window` so a test can change them mid-flow.
+       *
+       * This is needed for paths that are only reachable *after* an earlier failure. The explicit
+       * "Switch network" button, for one, appears only once an automatic switch has already failed
+       * (`needsSwitch` ANDs `switchAttemptFailed`), so driving its failure copy means failing twice
+       * with two different reasons. See `setWalletFailure`.
+       */
       ;(window as unknown as Record<string, unknown>).__mpcQaFailOn = { ...cfg.failOn }
 
       /**
-       * Error shapes chosen to land on each branch of `classifyWalletError` (type, then EIP-1193
-       * code, then copy). Changing this wording can silently move a branch.
+       * Error shapes chosen to land on each branch of `classifyWalletError`. That function reads
+       * type, then EIP-1193 code, then copy — so codes are used where a standard defines one and
+       * message text where it does not. Changing this wording can silently move a branch.
        */
       const makeError = (kind: string): Error => {
         switch (kind) {
@@ -225,11 +275,13 @@ export async function injectTestWallet(
             return Object.assign(e, { code: -32002 })
           }
           case 'locked':
+            // No standard code exists; matched by LOCKED_TEXT /\block(ed)?\b|unlock/i.
             return new Error('The wallet is locked. Unlock it and try again.')
           case 'no_wallet':
+            // Matched by NO_WALLET_TEXT /provider not found|.../i.
             return new Error('provider not found')
           default:
-            // Must match none of the copy patterns, so it lands on the `unknown` branch.
+            // Must match none of the copy patterns, so it lands on the honest `unknown` terminus.
             return new Error('The wallet could not complete the request.')
         }
       }
@@ -287,7 +339,7 @@ export async function injectTestWallet(
               return null
 
             case 'eth_sendTransaction':
-              // Failing loudly is safer than returning a fake hash the app would poll forever.
+              // Wallet sign-in tests do not send transactions. Reject unsupported sends.
               throw makeError('unknown')
 
             default: {
@@ -306,8 +358,10 @@ export async function injectTestWallet(
       }
 
       /**
-       * EIP-6963 announcement. 🔴 The listener is what matters: this script runs before wagmi
-       * exists, so wagmi only hears the re-announce in response to `eip6963:requestProvider`.
+       * EIP-6963 announcement. 🔴 **The listener is what actually matters.** This script runs at
+       * document start, before wagmi exists, so the eager announce below reaches nobody. wagmi
+       * dispatches `eip6963:requestProvider` when it initialises, and the re-announce is what it
+       * hears. Drop the listener and the wallet list stays empty.
        */
       const detail = Object.freeze({
         info: { uuid: cfg.uuid, name: cfg.walletName, icon: cfg.icon, rdns: cfg.rdns },
@@ -319,7 +373,11 @@ export async function injectTestWallet(
       window.addEventListener('eip6963:requestProvider', announce)
       announce()
 
-      // Also exposed the classic way, like a real extension; the app dedupes on object identity.
+      /**
+       * Also exposed the classic way, on purpose. A real extension does both, and the app dedupes
+       * the two connectors **on provider object identity** — so handing over the same object here
+       * exercises that dedup path rather than dodging it. (JoinFlow.tsx:504-527)
+       */
       ;(window as unknown as Record<string, unknown>).ethereum = provider
     },
     {
@@ -338,8 +396,13 @@ export async function injectTestWallet(
 }
 
 /**
- * Change (or clear with `null`) a forced failure after the page is already running. Needed for
- * paths only reachable after an earlier failure, e.g. the explicit "Switch network" button.
+ * Change (or clear) a forced failure after the page is already running.
+ *
+ * Some of the app's failure copy sits behind an earlier failure — the explicit "Switch network"
+ * button only exists once an automatic switch has failed — so reaching it means failing twice, for
+ * two different reasons. A static `failOn` cannot express that.
+ *
+ * Pass `null` to clear, which is how a test lets the second attempt succeed.
  */
 export async function setWalletFailure(
   page: Page,

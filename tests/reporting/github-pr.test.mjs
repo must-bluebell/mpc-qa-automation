@@ -59,3 +59,17 @@ test('invalid destinations and API failures fail visibly without exposing tokens
     assert.match(error.message,/403/); assert.ok(!error.message.includes('private-token'));return true
   })
 })
+
+test('PR comment includes test counts and AI advice without changing the required gate',async()=>{
+  const mock=api([pr,{},[],{login:'qa-bot'},{}])
+  await reportPullRequest(plan,{token:'write',runUrl,phase:'complete',results:{qa:'failure','code-security':'success'},report:{
+    counts:{passed:3,failed:1,skipped:2,blocked:0},
+    ai:{status:'ok',review:{summary:'Review the recorded failure. @everyone <script>',findings:[],duplicateGroups:[],scenarios:[],modelOutputValidated:true}},
+  },...mock})
+  assert.equal(mock.calls[1].body.state,'failure')
+  const body=mock.calls.at(-1).body.body
+  assert.match(body,/3 passed.*1 failed.*2 skipped/)
+  assert.match(body,/Review the recorded failure/)
+  assert.match(body,/AI.*advisory/i)
+  assert.doesNotMatch(body,/@everyone|<script>/)
+})

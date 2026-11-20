@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
-import dotenv from 'dotenv'
+import { loadTestEnv } from './config/test-env'
 import { target } from './config/target'
 
-dotenv.config()
+loadTestEnv()
 
 const t = target()
 // Set by the pipeline orchestrator so each run keeps its own report instead of overwriting playwright-report/.
@@ -12,6 +12,8 @@ const allureResults = process.env.QA_ALLURE_RESULTS_DIR
 
 export default defineConfig({
   testDir: './tests',
+  // Real cart writes are available only through the dedicated configuration.
+  grepInvert: /@production-cart/,
   // All tests use one configured account and must not race its session.
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -60,7 +62,7 @@ export default defineConfig({
     {
       name: 'chromium',
       testDir: './tests/wallet',
-      testMatch: ['wallet-flow.spec.ts', 'wallet-errors.spec.ts', 'web-regression.spec.ts'],
+      testMatch: ['wallet-flow.spec.ts', 'wallet-errors.spec.ts', 'web-regression.spec.ts', 'quests-dig-wallet.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {

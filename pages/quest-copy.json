@@ -1,0 +1,78 @@
+{
+  "read-my-mine-is-live": {
+    "title": "Read: My Mine is live",
+    "description": "A mining game where every move lands on-chain"
+  },
+  "vote-first-ballot": {
+    "title": "Have your say",
+    "description": "Cast your first vote on an eligible proposal. Wait for on-chain finality, then return here to claim your Crew reward. Previous votes on closed proposals also count."
+  },
+  "mine-first-credit": {
+    "title": "Claim your first credits",
+    "description": "Register your ore and claim at least 1 credit in My Mine. Previously completed claims count toward this quest. Return here to claim your Crew reward."
+  },
+  "mine-ore-journey": {
+    "title": "Complete your ore's journey",
+    "description": "Mine ore, send your cart, and complete a refine in My Mine. Confirmed activities from earlier days also count. Return here to claim your Crew reward."
+  },
+  "daily-visit-website": {
+    "title": "Visit the MPC website",
+    "description": "Visit the MPC website and see what MPC is building."
+  },
+  "read-whitepaper": {
+    "title": "Read the whitepaper",
+    "description": "Take a closer look at Mining RWA"
+  },
+  "mine-certificate": {
+    "title": "Get your mine certificate",
+    "description": "Open My Mine and pass the 3-question entry exam. Complete the certificate issuance on opBNB, then return here to claim your reward in Crew. This quest checks that your My Mine Certificate has been issued on-chain."
+  },
+  "read-insights-next": {
+    "title": "Read: what comes next",
+    "description": "MPC's next chapter, in one article"
+  },
+  "mine-first-dig": {
+    "title": "Make your first dig",
+    "description": "Open My Mine, choose a seam, dig, and send your cart to record your mining activity on-chain. This quest checks the Crew spent on that recorded activity. Then return here to claim your reward in Crew on opBNB."
+  },
+  "read-insights-trust": {
+    "title": "Read: trust before code",
+    "description": "Why trust comes before code at MPC"
+  },
+  "mine-referral": {
+    "title": "Bring a partner in",
+    "description": "Open Ventures, copy your invite link, and share it with a partner. Once they pass the My Mine entry exam through your link, return to Ventures and claim your referral reward there first. This quest checks the rewards already paid to you through Ventures. Then return here to claim this quest's reward in Crew on opBNB."
+  },
+  "follow-x": {
+    "title": "Follow on X",
+    "description": "See the latest from MPC on X"
+  },
+  "daily-dig-5": {
+    "title": "Dig 5 times & send the cart",
+    "description": "Complete at least 5 digs today and send the results from your cart."
+  },
+  "daily-dig-10": {
+    "title": "Dig 10 times & send the cart",
+    "description": "Complete at least 10 digs today and send the results from your cart."
+  },
+  "daily-refine-1": {
+    "title": "Refine once",
+    "description": "Complete at least 1 confirmed refine today."
+  },
+  "daily-use-50-crew": {
+    "title": "Use 50 Crew",
+    "description": "Use at least 50 Crew in My Mine today. Only confirmed records count."
+  },
+  "daily-read-medium": {
+    "title": "Check MPC on Medium",
+    "description": "Visit the official MPC Medium page and check its published posts."
+  },
+  "follow-linkedin": {
+    "title": "Follow on LinkedIn",
+    "description": "Grow together with MPC"
+  },
+  "follow-github": {
+    "title": "Follow on GitHub",
+    "description": "Stay connected with MPC on GitHub"
+  }
+}

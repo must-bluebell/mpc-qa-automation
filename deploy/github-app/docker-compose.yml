@@ -1,0 +1,58 @@
+# Runs the GitHub App listener on a server you control, with Caddy in front for HTTPS.
+# Files this directory expects (all git-ignored, copied onto the server by hand):
+#   .env                          minimal App and wallet settings (see docs/github-app-server.md)
+#   secrets/github-app.pem        the App private key, mode 0600
+#   github-app.repositories.json  the repository policy file
+name: mpc-qa-github-app
+services:
+  listener:
+    build:
+      context: ../..
+      dockerfile: deploy/github-app/Dockerfile
+    image: mpc-qa-github-app:latest
+    # Linux host runner and scheduler must see the same PIDs and mode-0600 lock owner.
+    pid: host
+    user: "${QA_UID:?Set QA_UID to the host QA user UID}:${QA_GID:?Set QA_GID to the host QA user GID}"
+    init: true
+    restart: unless-stopped
+    # The server listens on 127.0.0.1 inside the container, so Caddy shares this network namespace.
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file: .env
+    environment:
+      NPM_CONFIG_CACHE: /app/runs/.npm
+      GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
+      GITHUB_APP_REPOSITORIES_FILE: /run/config/github-app.repositories.json
+      QA_GITHUB_PORT: "4600"
+    volumes:
+      - ./secrets/github-app.pem:/run/secrets/github-app.pem:ro
+      - ./github-app.repositories.json:/run/config/github-app.repositories.json:ro
+      - type: bind
+        source: ${QA_HOST_RUNS_DIR:?Set QA_HOST_RUNS_DIR to the host scheduler absolute runs directory}
+        target: /app/runs
+        bind:
+          create_host_path: false
+    healthcheck:
+      # Any HTTP answer (the server returns 404 for GET /) means the listener is up.
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4600/',{signal:AbortSignal.timeout(3000)}).then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    # A restart waits for the review in progress (up to the 40-minute timeout); unfinished jobs resume on startup.
+    stop_grace_period: 45m
+  caddy:
+    image: caddy:2.8-alpine
+    network_mode: service:listener
+    restart: unless-stopped
+    depends_on:
+      - listener
+    environment:
+      QA_PUBLIC_HOST: ${QA_PUBLIC_HOST:?Set QA_PUBLIC_HOST in .env, e.g. qa.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  caddy-data:
+  caddy-config:

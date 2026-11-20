@@ -3,9 +3,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, openSync, closeSync
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { consumeRequests } from './slack-agent/store.mjs'
 import { parseArgs } from 'node:util'
 import { ROOT, RUNS_DIR, config } from './lib/env.mjs'
-import { acquireLock, readLock } from './lib/lock.mjs'
+import { acquireLock, readLock, processStartTime } from './lib/lock.mjs'
 import { createRunDir, readRun, saveRun, writeJsonAtomic } from './lib/run-store.mjs'
 import { kstTime, opaqueId, publishSummary } from './lib/safe-output.mjs'
 import { aiArgs } from './ai/policy.mjs'
@@ -78,7 +79,7 @@ export function enqueueDue(state,schedules,now=new Date(),timezone='Asia/Seoul')
 /** Retire only unclaimed work; active jobs and historical evidence survive migration. */
 export function reconcileSchedules(state,spec) {
   const enabled=new Map(spec.schedules.filter(s=>s.enabled).map(s=>[s.id,s]))
-  for(const job of state.jobs.filter(j=>j.status==='queued'&&j.scheduleId!=='run-now')) {
+  for(const job of state.jobs.filter(j=>j.status==='queued'&&!['run-now','slack-agent'].includes(j.scheduleId))) {
     const schedule=enabled.get(job.scheduleId)
     const rotation=spec.rotation?.enabled&&job.scheduleId===spec.rotation.id
     if(!rotation&&(!schedule||schedule.suite!==job.suite||schedule.env!==job.env||(schedule.kind??'test')!==(job.kind??'test'))) {
@@ -87,11 +88,11 @@ export function reconcileSchedules(state,spec) {
   }
   return state
 }
-export function selectQueuedJob(state,now=new Date(),{summaryOnly=false}={}) {
+export function selectQueuedJob(state,now=new Date(),{summaryOnly=false,excludeSlack=false}={}) {
   for(const job of state.jobs.filter(j=>j.status==='queued'&&j.rotationIndex===undefined)) {
     if(now.getTime()-Date.parse(job.at)>(job.graceMinutes??60)*60_000)job.status='missed'
   }
-  return state.jobs.filter(j=>j.status==='queued'&&(!summaryOnly||j.kind==='summary'))
+  return state.jobs.filter(j=>j.status==='queued'&&(!summaryOnly||j.kind==='summary')&&(!excludeSlack||j.scheduleId!=='slack-agent'))
     .sort((a,b)=>(a.priority??30)-(b.priority??30)||Date.parse(a.at)-Date.parse(b.at))[0]
 }
 export function nextSlots(schedules,now=new Date(),timezone='Asia/Seoul') {
@@ -106,7 +107,17 @@ export function nextSlots(schedules,now=new Date(),timezone='Asia/Seoul') {
 const statePath=join(RUNS_DIR,'scheduler-state.json')
 function loadState() {return existsSync(statePath)?JSON.parse(readFileSync(statePath,'utf8')):{jobs:[]}}
 function persist(state){writeJsonAtomic(statePath,state)}
+export function consumeSlackRequests(state, options={}) {
+  return consumeRequests(state,{persist,...options})
+}
 function alive(pid){if(!Number.isInteger(pid)||pid<=0)return false;try{process.kill(pid,0);return true}catch{return false}}
+
+export function workerAlive(job,pidNamespace) {
+  if(pidNamespace&&job.pidNamespace&&pidNamespace!==job.pidNamespace)return false
+  const started=processStartTime(job.pid)
+  if(job.pidStartTime&&started&&job.pidStartTime!==started)return false
+  return alive(job.pid)
+}
 
 export async function completeJob(state,job,code,{readRunImpl=readRun,saveRunImpl=saveRun,createDirImpl=createRunDir,notify=notifyBotRun,persistImpl=persist,publishImpl=publishSummary}={}) {
   let run=readRunImpl(job.runId)
@@ -119,10 +130,19 @@ export async function completeJob(state,job,code,{readRunImpl=readRun,saveRunImp
   }
   // A durable intermediate state closes the crash window between run completion and outbox creation.
   job.status='notifying';job.exitCode=code;job.pid=null;persistImpl(state)
-  publishImpl(run)
-  const delivery=await notify(run)
-  if(!delivery.queued)return
-  job.status='finished';job.finishedAt=new Date().toISOString();persistImpl(state)
+  try {
+    publishImpl(run)
+    // DM-initiated runs return through the listener's private thread, never the reporting channel.
+    const delivery=job.scheduleId==='slack-agent'&&job.slackPrivate===true?{queued:true}:await notify(run)
+    if(!delivery.queued) {
+      job.reportError='Report publication or notification queueing failed; retry pending.'
+      persistImpl(state);return
+    }
+  }catch {
+    job.reportError='Report publication or notification queueing failed; retry pending.'
+    persistImpl(state);return
+  }
+  job.status='finished';job.finishedAt=new Date().toISOString();delete job.reportError;persistImpl(state)
 }
 
 export async function completeSummaryJob(state,job,spec,{generate=generateHealthSummary,persistImpl=persist}={}) {
@@ -159,12 +179,20 @@ export async function runScheduler({once=false,runNow=null}={}) {
     while(!stopped) {
       enqueueDue(state,spec.schedules,new Date(),spec.timezone)
       enqueueRotation(state,spec.rotation,new Date())
+      try { consumeSlackRequests(state); delete state.agentError }
+      catch { state.agentError='Slack request inbox unavailable; retry pending.' }
       state.pid=process.pid;state.heartbeatAt=new Date().toISOString();persist(state)
-      await flushBotOutbox()
+      try {
+        await flushBotOutbox()
+        delete state.deliveryError
+      }catch {
+        state.deliveryError='Slack outbox delivery failed; retry pending.'
+      }
+      persist(state)
       for(const job of state.jobs.filter(j=>j.status==='notifying'))await finish(job,job.exitCode)
       for(const job of state.jobs.filter(j=>j.status==='running'&&j.kind!=='summary')) {
         const worker=workers.get(job.id)
-        if(worker?.done||!alive(job.pid)) {
+        if(worker?.done||!workerAlive(job,lock.pidNamespace)) {
           await finish(job,worker?.code??null);workers.delete(job.id)
         }
       }
@@ -174,7 +202,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
       }
       const pipelineLock=readLock()
       const busy=state.jobs.some(j=>['running','notifying'].includes(j.status)&&j.kind!=='summary')||(pipelineLock&&!pipelineLock.stale)
-      const job=selectQueuedJob(state,new Date(),{summaryOnly:!!busy})
+      const job=selectQueuedJob(state,new Date(),{summaryOnly:!!busy,excludeSlack:!!state.agentError})
       persist(state)
       if(job) {
         if(job.kind==='summary') {
@@ -187,7 +215,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
             console.log(`${kstTime(Date.now())} starting ${job.suite}; ${job.runId}`)
             const log=openSync(join(RUNS_DIR,`${job.runId}.log`),'a',0o600)
             const child=spawn(process.execPath,[join(ROOT,'pipeline/orchestrator.mjs'),'--suite',job.suite,'--env',job.env,'--trigger','scheduled','--schedule-id',job.scheduleId,'--run-id',job.runId,'--no-notify','--quiet',...aiArgs(job.ai)],{cwd:ROOT,stdio:['ignore',log,log]})
-            closeSync(log);job.pid=child.pid;persist(state)
+            closeSync(log);job.pid=child.pid;job.pidNamespace=lock.pidNamespace;job.pidStartTime=processStartTime(child.pid);persist(state)
             const worker={done:false,code:null}
             worker.promise=new Promise(resolvePromise=>{
               const done=code=>{worker.done=true;worker.code=code;resolvePromise(code)}

@@ -116,6 +116,7 @@ async function joinWaitlist(s, account, chains) {
 
 /** The exam key is read from the app's own source (read-only) so it can never drift from what the app checks. */
 export async function examAnswers(env) {
+  if (env.externalRepositoriesAllowed === false) throw new Error('Repository scope forbids importing another repository for test data.')
   const root = resolve(ROOT, env.stack.webmpcPath)
   // App modules validate chain wiring at import time. Load them in a separate process
   // with this target's settings, without changing or caching the parent's environment.

@@ -1,0 +1,41 @@
+name: mpc-automation
+services:
+  automation:
+    image: mpc-automation:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Compose mounts made by the runner must use paths visible to the host daemon.
+        AUTOMATION_ROOT: "${MPC_AUTOMATION_PATH:?Export MPC_AUTOMATION_PATH as the absolute automation checkout path}"
+    init: true
+    network_mode: host
+    shm_size: 1gb
+    env_file: .env
+    environment:
+      QA_RUNS_DIR: runs
+      CODEX_HOME: /opt/codex-qa
+      QA_CODEX_BIN: /usr/local/bin/codex
+      QA_DASHBOARD_PORT: "${QA_DASHBOARD_PORT:-4501}"
+      QA_SCHEDULER_ENABLED: "${QA_SCHEDULER_ENABLED:-1}"
+      MPC_WEBAPP_PATH: "${MPC_WEBAPP_PATH:?Export MPC_WEBAPP_PATH as the absolute application checkout path}"
+    volumes:
+      # Keep container PIDs/locks and private evidence separate from host-run history.
+      - "./runs/container:${MPC_AUTOMATION_PATH}/runs"
+      - "${MPC_WEBAPP_PATH}:${MPC_WEBAPP_PATH}"
+      - "application_dependencies:${MPC_WEBAPP_PATH}/node_modules"
+      - "browser_cache:/ms-playwright"
+      # Writable so the dedicated ChatGPT session can refresh its saved credentials.
+      - "${MPC_CODEX_HOME:-${HOME}/.codex-qa}:/opt/codex-qa"
+      - "${MPC_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock"
+    restart: unless-stopped
+    stop_grace_period: 45s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:'+(process.env.QA_DASHBOARD_PORT||4500),{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+volumes:
+  application_dependencies:
+  browser_cache:

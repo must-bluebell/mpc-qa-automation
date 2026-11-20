@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
+import { acquireLock, LockBusyError } from '../lib/lock.mjs'
 import { RUNS_DIR, config } from '../lib/env.mjs'
 import { publicSummary, opaqueId, groupChecks, tally, CHECK_ICONS, redactValue, dashboardRunUrl } from '../lib/safe-output.mjs'
 import { renderAiReview, splitThreadText } from './ai-review.mjs'
@@ -14,26 +15,36 @@ function settings(options) {
 }
 function load(o) {
   const path=join(o.stateDir,'slack-bot-state.json')
-  if (!existsSync(path)) return {messages:[],runs:{},incidents:{}}
-  return JSON.parse(readFileSync(path,'utf8')) // corrupt state must never silently reset deduplication
+  const backup=`${path}.backup`
+  if (!existsSync(path)&&!existsSync(backup)) return {messages:[],runs:{},incidents:{}}
+  try {return JSON.parse(readFileSync(path,'utf8'))}
+  catch {
+    let state
+    try {state=JSON.parse(readFileSync(backup,'utf8'))}
+    catch {throw new Error('Slack delivery state is unreadable; restore slack-bot-state.json from a verified snapshot before retrying.')}
+    // Restore the same snapshot saved before the primary write, including delivery IDs and receipts.
+    save(o,state)
+    return state
+  }
 }
 function save(o,state) {
   const path=join(o.stateDir,'slack-bot-state.json'), tmp=`${path}.${process.pid}.tmp`
-  writeFileSync(tmp,JSON.stringify(state,null,2),{mode:0o600});renameSync(tmp,path)
+  const data=JSON.stringify(state,null,2)
+  // Both files hold the current snapshot, so recovery cannot replay a previous sent receipt.
+  writeFileSync(`${tmp}.backup`,data,{mode:0o600});renameSync(`${tmp}.backup`,`${path}.backup`)
+  writeFileSync(tmp,data,{mode:0o600});renameSync(tmp,path)
 }
 async function locked(o,work) {
   mkdirSync(o.stateDir,{recursive:true,mode:0o700})
-  const lock=join(o.stateDir,'.slack-bot.lock')
-  try { writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600}) }
+  let lock
+  try { lock=acquireLock(`slack-${process.pid}`,'.slack-bot',{directory:o.stateDir}) }
   catch(error) {
-    if(error.code!=='EEXIST') throw error
-    const pid=Number(readFileSync(lock,'utf8'))
-    try { process.kill(pid,0);return {results:[{ok:false,code:'delivery_busy'}],outbox:[]} }
-    catch(e) { if(e.code!=='ESRCH') return {results:[{ok:false,code:'delivery_busy'}],outbox:[]} }
-    rmSync(lock);return locked(o,work)
+    if(error instanceof LockBusyError)return {results:[{ok:false,code:'delivery_busy'}],outbox:[]}
+    throw error
   }
-  try {return await work(load(o))} finally {rmSync(lock,{force:true})}
+  try {return await work(load(o))} finally {lock.release()}
 }
+
 function clientId(id) {
   const h=createHash('sha256').update(id).digest('hex').slice(0,32)
   return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20)}`
@@ -126,14 +137,13 @@ function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
 /** Every check, grouped by category; a reason shared by all of a category's failures is printed once. Split to stay readable in Slack. */
 function renderCases(groups) {
   const result=[]
-  for(const [status,label] of [['failed','Failed cases'],['blocked','Blocked cases'],['skipped','Skipped cases'],['passed','Passed cases']]) {
-    const sections=[]
-    for(const [category,checks] of groups) {
+  for(const [category,checks] of groups) {
+    for(const [status,label] of [['failed','Failed cases'],['blocked','Blocked cases'],['skipped','Skipped cases'],['passed','Passed cases']]) {
       const selected=checks.filter(t=>t.status===status)
       if(!selected.length)continue
-      sections.push(`*${category}* — ${selected.length} ${status}`,...selected.map(t=>`${CHECK_ICONS[t.status]} ${t.name}${t.critical?' *(critical)*':''}${(t.reason??t.detail)?`\n      ↳ ${t.reason??t.detail}`:''}`),'')
+      const sections=[`*${category}* — ${selected.length} ${status}`,...selected.map(t=>`${CHECK_ICONS[t.status]} ${t.name}${t.critical?' *(critical)*':''}${(t.reason??t.detail)?`\n      ↳ ${t.reason??t.detail}`:''}`)]
+      result.push(...splitThreadText(`*${label}*`,sections.join('\n')))
     }
-    if(sections.length)result.push(...splitThreadText(`*${label}*`,sections.join('\n')))
   }
   return result
 }

@@ -84,116 +84,123 @@ export async function runPipeline({ suite: suiteName, env: envName, trigger = 'm
     }
     throw error
   }
-  const crashed = markCrashedRuns(id)
-  const dir = createRunDir(id)
-  const started = Date.now()
-  const timeoutMs = suites[suiteName].timeoutMs ?? 3_600_000
-  const run = {
-    schemaVersion: 1, runId: id, suite: suiteName, env: env.name, envDescription: env.description, baseUrl: env.baseUrl, trigger, scheduleId, seededDefect,
-    status: 'running', startedAt: new Date(started).toISOString(), finishedAt: null, durationMs: null, timeoutMs,
-    versions: { app: await appVersion(env), testSuite: testSuiteVersion(), pipeline: 'v1' },
-    host: { node: process.version, platform: process.platform, pid: process.pid }, lock: { tookOverFrom: lock.tookOverFrom }, recoveredCrashedRuns: crashed,
-    steps: [], tests: [], counts: { passed: 0, failed: 0, skipped: 0, blocked: 0, flaky: 0, total: 0 }, groups: [], errors: [], notifications: [], ai: { status: 'not-run' },
-  }
-  saveRun(run)
-  let proxy
   try {
-    // Health probe first: an unreachable target is an infrastructure failure, not a wall of red product tests.
-    const health = await probe(env.baseUrl)
-    run.health = { ...health, checkedAt: new Date().toISOString(), stack: env.stack ? await stackStatus(env) : null }
-    if (!health.ok || (run.health.stack && !run.health.stack.healthy)) {
-      run.status = 'infra-failed'
-      run.errors.push(`Environment health probe failed for ${env.baseUrl}: ${health.error ?? `HTTP ${health.status}`}`)
-      if(run.health.stack&&!run.health.stack.healthy)run.errors.push(`Required stack services missing or unhealthy: ${[...(run.health.stack.missingServices??[]),...(run.health.stack.unhealthyServices??[])].join(', ')||'see stack status'}`)
-    } else {
-      // Test data is prepared once the environment is known healthy; a failure is reported, not fatal (tests then show what is blocked).
-      run.testData = await prepareTestData(env, { log: echo ? line => console.log(line) : () => {} })
-      saveRun(run)
-      let targetUrl = env.baseUrl
-      if (seededDefect) {
-        proxy = await startChaosProxy({ target: env.baseUrl, profile: seededDefect })
-        targetUrl = proxy.url
-        run.seed = { profile: seededDefect, ...PROFILES[seededDefect], response: undefined, delayMs: undefined, proxy: proxy.url }
-      }
-      for (const [i, step] of steps.entries()) {
-        const name = `${String(i + 1).padStart(2, '0')}-${step.adapter}${step.project ? `-${step.project}` : ''}${step.script ? `-${step.script}` : ''}`
-        const stepDir = join(dir, 'steps', name)
-        mkdirSync(stepDir, { recursive: true })
-        const remainingMs = () => Math.max(5_000, timeoutMs - (Date.now() - started))
-        const ctx = { runId: id, runDir: dir, stepDir, env, targetUrl, suite: suiteName, versions: run.versions, remainingMs, seededDefect, echo }
-        const stepStarted = Date.now()
-        let result
-        try {
-          if (Date.now() - started > timeoutMs) throw new Error('Suite timeout reached before this step started')
-          result = await ADAPTERS[step.adapter](step, ctx)
-        } catch (error) {
-          result = { tests: [], errors: [error.message], infra: error instanceof LoadGuardError ? null : 'step crashed', refused: error instanceof LoadGuardError }
-          if (error instanceof LoadGuardError) appendEvent('load-guard.jsonl', { runId: id, env: env.name, refused: error.message })
-        }
-        for (const t of result.tests) {
-          t.step = name
-          if (result.infra && t.status === 'failed') t.infra = result.infra
-        }
-        if (!result.tests.length && (result.infra || result.errors.length)) {
-          // A step that produced no results still needs a visible record: mark it as one blocked/failed pseudo-test.
-          result.tests.push({ key: `${step.adapter}:${step.project ?? step.script ?? step.command}:step`, title: `${name} did not produce results`, adapter: step.adapter,
-            project: step.project ?? null, tags: ['@pipeline'], status: 'failed', durationMs: Date.now() - stepStarted, retries: 0, errors: result.errors, annotations: [], evidence: [], infra: result.infra ?? 'step crashed', step: name })
-        }
-        run.tests.push(...result.tests)
-        run.steps.push({ name, adapter: step.adapter, fromSuite: step.fromSuite, project: step.project ?? null, grep: step.grep ?? null, durationMs: Date.now() - stepStarted,
-          timedOut: !!result.timedOut, exitCode: result.exitCode ?? null, errors: result.errors, artifacts: result.artifacts ?? {}, testCount: result.tests.length })
-        if (result.load) run.load = result.load
-        if (result.timedOut) run.errors.push(`${name} timed out`)
+    const crashed = markCrashedRuns(id)
+    const dir = createRunDir(id)
+    const started = Date.now()
+    const timeoutMs = suites[suiteName].timeoutMs ?? 3_600_000
+    const run = {
+      schemaVersion: 1, runId: id, suite: suiteName, env: env.name, envDescription: env.description, baseUrl: env.baseUrl, trigger, scheduleId, seededDefect,
+      status: 'running', startedAt: new Date(started).toISOString(), finishedAt: null, durationMs: null, timeoutMs,
+      versions: { app: await appVersion(env), testSuite: testSuiteVersion(), pipeline: 'v1' },
+      host: { node: process.version, platform: process.platform, pid: process.pid }, lock: { tookOverFrom: lock.tookOverFrom }, recoveredCrashedRuns: crashed,
+      steps: [], tests: [], counts: { passed: 0, failed: 0, skipped: 0, blocked: 0, flaky: 0, total: 0 }, groups: [], errors: [], notifications: [], ai: { status: 'not-run' },
+    }
+    saveRun(run)
+    let proxy
+    try {
+      // Health probe first: an unreachable target is an infrastructure failure, not a wall of red product tests.
+      const health = await probe(env.baseUrl)
+      run.health = { ...health, checkedAt: new Date().toISOString(), stack: env.stack ? await stackStatus(env) : null }
+      if (!health.ok || (run.health.stack && !run.health.stack.healthy)) {
+        run.status = 'infra-failed'
+        run.errors.push(`Environment health probe failed for ${env.baseUrl}: ${health.error ?? `HTTP ${health.status}`}`)
+        if(run.health.stack&&!run.health.stack.healthy)run.errors.push(`Required stack services missing or unhealthy: ${[...(run.health.stack.missingServices??[]),...(run.health.stack.unhealthyServices??[])].join(', ')||'see stack status'}`)
+      } else {
+        // Keep collecting assertions after preparation fails; final classification must still prevent a passing run.
+        run.testData = await prepareTestData(env, { log: echo ? line => console.log(line) : () => {} })
         saveRun(run)
+        let targetUrl = env.baseUrl
+        if (seededDefect) {
+          proxy = await startChaosProxy({ target: env.baseUrl, profile: seededDefect })
+          targetUrl = proxy.url
+          run.seed = { profile: seededDefect, ...PROFILES[seededDefect], response: undefined, delayMs: undefined, proxy: proxy.url }
+        }
+        for (const [i, step] of steps.entries()) {
+          const name = `${String(i + 1).padStart(2, '0')}-${step.adapter}${step.project ? `-${step.project}` : ''}${step.script ? `-${step.script}` : ''}`
+          const stepDir = join(dir, 'steps', name)
+          mkdirSync(stepDir, { recursive: true })
+          const remainingMs = () => Math.max(5_000, timeoutMs - (Date.now() - started))
+          const ctx = { runId: id, runDir: dir, stepDir, env, targetUrl, suite: suiteName, versions: run.versions, remainingMs, seededDefect, echo }
+          const stepStarted = Date.now()
+          let result
+          try {
+            if (Date.now() - started > timeoutMs) throw new Error('Suite timeout reached before this step started')
+            result = await ADAPTERS[step.adapter](step, ctx)
+          } catch (error) {
+            result = { tests: [], errors: [error.message], infra: error instanceof LoadGuardError ? null : 'step crashed', refused: error instanceof LoadGuardError }
+            if (error instanceof LoadGuardError) appendEvent('load-guard.jsonl', { runId: id, env: env.name, refused: error.message })
+          }
+          for (const t of result.tests) {
+            t.step = name
+            if (result.infra && t.status === 'failed') t.infra = result.infra
+          }
+          if (!result.tests.length && (result.infra || result.errors.length)) {
+            // A step that produced no results still needs a visible record: mark it as one blocked/failed pseudo-test.
+            result.tests.push({ key: `${step.adapter}:${step.project ?? step.script ?? step.command}:step`, title: `${name} did not produce results`, adapter: step.adapter,
+              project: step.project ?? null, tags: ['@pipeline'], status: 'failed', durationMs: Date.now() - stepStarted, retries: 0, errors: result.errors, annotations: [], evidence: [], infra: result.infra ?? 'step crashed', step: name })
+          }
+          run.tests.push(...result.tests)
+          run.steps.push({ name, adapter: step.adapter, fromSuite: step.fromSuite, project: step.project ?? null, grep: step.grep ?? null, durationMs: Date.now() - stepStarted,
+            timedOut: !!result.timedOut, exitCode: result.exitCode ?? null, errors: result.errors, artifacts: result.artifacts ?? {}, testCount: result.tests.length })
+          if (result.load) run.load = result.load
+          if (result.timedOut) run.errors.push(`${name} timed out`)
+          saveRun(run)
+        }
+      }
+    } catch (error) {
+      run.errors.push(`Orchestrator error: ${error.stack ?? error.message}`)
+      run.status = 'infra-failed'
+    } finally {
+      if (proxy) { run.seed.stats = proxy.stats; await proxy.close() }
+    }
+
+    // Classification, grouping, comparison, coverage.
+    const requirements = config.requirements()
+    for (const t of run.tests) {
+      t.classification = classifyFailure(t)
+      t.signature = t.status === 'failed' ? signatureOf(t) : null
+      t.fingerprint = t.status === 'failed' ? fingerprintOf(t) : null
+      t.requirementIds = matchRequirements(t, requirements)
+    }
+    const c = run.counts
+    for (const t of run.tests) { c[t.status] = (c[t.status] ?? 0) + 1; if (t.flaky) c.flaky++ }
+    c.total = run.tests.length
+    run.groups = groupFailures(run.tests)
+    const prev = previousRun(run)
+    run.comparison = compareRuns(run, prev, readIndex().filter(r => r.runId !== id))
+    run.coverage = coverageOf(run.tests, requirements)
+    if (run.status === 'running') {
+      run.status = runStatus(run)
+    }
+    run.finishedAt = new Date().toISOString()
+    run.durationMs = Date.now() - started
+    // Persist execution outcomes before optional AI, report generation or external delivery.
+    saveRun(run)
+
+    // AI review is advisory; it never changes the status computed above.
+    const wantAi = shouldReview(ai, run)
+    run.ai = wantAi ? await analyzeRun(run, dir, requirements) : { status: 'not-requested', reason: ai === false ? 'AI review disabled for this run' : process.env.QA_AI_AUTO === '1' ? 'no failures to analyse' : 'QA_AI_AUTO is not 1' }
+
+    // Built before Slack so the summary can link it; a failed build only drops the link.
+    run.allure = await generateAllureReport(id, dir, { echo })
+
+    if (notify) {
+      try {
+        const delivery = await notifyRun(run, slackOptions)
+        run.notifications = delivery.results.map(r => ({ ...r, latencyFromFinishMs: r.sentAt ? Date.parse(r.sentAt) - Date.parse(run.finishedAt) : null }))
+        run.outboxRetries = delivery.outbox
+      } catch (error) {
+        run.notifications = [{ kind: 'delivery', ok: false, code: 'notification_error', reason: String(error.message).slice(0, 400) }]
       }
     }
-  } catch (error) {
-    run.errors.push(`Orchestrator error: ${error.stack ?? error.message}`)
-    run.status = 'infra-failed'
-  } finally {
-    if (proxy) { run.seed.stats = proxy.stats; await proxy.close() }
-  }
-
-  // Classification, grouping, comparison, coverage.
-  const requirements = config.requirements()
-  for (const t of run.tests) {
-    t.classification = classifyFailure(t)
-    t.signature = t.status === 'failed' ? signatureOf(t) : null
-    t.fingerprint = t.status === 'failed' ? fingerprintOf(t) : null
-    t.requirementIds = matchRequirements(t, requirements)
-  }
-  const c = run.counts
-  for (const t of run.tests) { c[t.status] = (c[t.status] ?? 0) + 1; if (t.flaky) c.flaky++ }
-  c.total = run.tests.length
-  run.groups = groupFailures(run.tests)
-  const prev = previousRun(run)
-  run.comparison = compareRuns(run, prev, readIndex().filter(r => r.runId !== id))
-  run.coverage = coverageOf(run.tests, requirements)
-  if (run.status === 'running') {
-    run.status = runStatus(run)
-  }
-  run.finishedAt = new Date().toISOString()
-  run.durationMs = Date.now() - started
-
-  // AI review is advisory; it never changes the status computed above.
-  const wantAi = shouldReview(ai, run)
-  run.ai = wantAi ? await analyzeRun(run, dir, requirements) : { status: 'not-requested', reason: ai === false ? 'AI review disabled for this run' : process.env.QA_AI_AUTO === '1' ? 'no failures to analyse' : 'QA_AI_AUTO is not 1' }
-
-  // Built before Slack so the summary can link it; a failed build only drops the link.
-  run.allure = await generateAllureReport(id, dir, { echo })
-
-  if (notify) {
-    const delivery = await notifyRun(run, slackOptions)
-    run.notifications = delivery.results.map(r => ({ ...r, latencyFromFinishMs: r.sentAt ? Date.parse(r.sentAt) - Date.parse(run.finishedAt) : null }))
-    run.outboxRetries = delivery.outbox
-  }
-  const secrets = knownSecrets()
-  const final = redactDeep(run, secrets)
-  saveRun(final)
-  writeFileSync(join(dir, 'summary.md'), renderMarkdown(final))
-  publishSummary(final)
-  lock.release()
-  return final
+    const secrets = knownSecrets()
+    const final = redactDeep(run, secrets)
+    saveRun(final)
+    writeFileSync(join(dir, 'summary.md'), renderMarkdown(final))
+    publishSummary(final)
+    return final
+  } finally { lock.release() }
 }
 
 export function renderMarkdown(run) {

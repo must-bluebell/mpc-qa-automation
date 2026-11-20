@@ -1,0 +1,17 @@
+# This workflow will to Production
+name: Production
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: false
+        type: string
+jobs:
+  deploy:
+    name: Production Stage
+    permissions: write-all
+    uses: mustcompany/mustcompany-github-manager/.github/workflows/mpc-automation-pipeline.yaml@release
+    with:
+      environment: production
+      version: ${{ inputs.version }}
+    secrets: inherit

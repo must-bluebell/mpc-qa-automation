@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test'
 import type { HDAccount, TypedDataDefinition } from 'viem'
+import { hexToString } from 'viem'
+import { createSiweMessage, parseSiweMessage, validateSiweMessage } from 'viem/siwe'
+import { target } from '../config/target.ts'
 
 /**
  * A mock browser wallet, injected before page load.
@@ -24,7 +27,7 @@ import type { HDAccount, TypedDataDefinition } from 'viem'
  * ## How signing works
  *
  * The init script runs in the browser, where the private key must never go. Signing is therefore
- * bridged out to Node through `page.exposeFunction`: the page asks, this process signs, the
+ * bridged out to Node through `page.exposeBinding`: the caller and message are checked before a
  * signature comes back. The key stays on this side.
  */
 
@@ -51,6 +54,30 @@ export type InjectWalletOptions = {
 
 const SIGN_BRIDGE = '__mpcQaSign'
 
+function authorizeSignIn(data: unknown, address: `0x${string}`, origin: URL, chainId: number): `0x${string}` {
+  if (typeof data !== 'string' || !/^0x(?:[a-fA-F0-9]{2})+$/.test(data) || data.length > 8_192) {
+    throw new Error('sign bridge: invalid sign-in payload')
+  }
+  const text = hexToString(data as `0x${string}`)
+  const message = parseSiweMessage(text)
+  const statement = origin.hostname === 'app.globalmpc.tech' ? 'MPC Unity sign-in' : 'MPC Waitlist sign-in'
+  const issued = message.issuedAt?.getTime(), expiry = message.expirationTime?.getTime(), now = Date.now()
+  if (!validateSiweMessage({message, address, domain:origin.host, scheme:origin.protocol.slice(0,-1)})
+    || message.uri !== origin.origin || message.chainId !== chainId || message.version !== '1'
+    || message.statement !== statement || !message.nonce || !/^[a-zA-Z0-9]{8,128}$/.test(message.nonce)
+    || !Number.isFinite(issued) || !Number.isFinite(expiry) || issued! > now + 30_000 || issued! < now - 300_000
+    || expiry! <= now || expiry! <= issued! || expiry! - issued! > 301_000
+    || message.resources || message.requestId || message.notBefore) {
+    throw new Error('sign bridge: unexpected SIWE request')
+  }
+  // Rebuild only the approved fields: reject ignored suffixes or additional capabilities.
+  const expected = createSiweMessage({address,chainId,domain:origin.host,scheme:origin.protocol.slice(0,-1),
+    uri:origin.origin,version:'1',statement,nonce:message.nonce,
+    issuedAt:message.issuedAt!,expirationTime:message.expirationTime!})
+  if (text !== expected) throw new Error('sign bridge: noncanonical SIWE request')
+  return data as `0x${string}`
+}
+
 /**
  * A stable UUIDv4 and reverse-DNS id. mipd (the EIP-6963 store wagmi uses) validates the shape of
  * both, so these are not free-form. `crypto.randomUUID` is deliberately not used: it is
@@ -73,21 +100,30 @@ export async function injectTestWallet(
 ): Promise<MockWallet> {
   const { account, chainId, walletName = 'Trust Wallet', failOn = {} } = options
   const address = account.address
+  const signingTarget = target(), signingOrigin = new URL(signingTarget.baseUrl)
 
   // The bridge: the page hands over what to sign, this process signs it with the derived key.
-  await page.exposeFunction(
+  await page.exposeBinding(
     SIGN_BRIDGE,
-    async (request: { method: string; params: unknown[] }): Promise<string> => {
+    async (source, request: { method: string; params: unknown[] }): Promise<string> => {
+      if (source.page !== page || source.frame !== page.mainFrame()
+        || new URL(source.frame.url()).origin !== signingOrigin.origin
+        || new URL(page.url()).origin !== signingOrigin.origin) throw new Error('sign bridge: unexpected caller')
+      if (!request || !Array.isArray(request.params) || request.params.length !== 2) throw new Error('sign bridge: invalid request')
       if (request.method === 'personal_sign') {
         // EIP-191 `personal_sign` params are [dataHex, address].
-        const [data] = request.params as [`0x${string}`, string]
+        const [raw, requestedAddress] = request.params
+        if (typeof requestedAddress !== 'string' || requestedAddress.toLowerCase() !== address.toLowerCase()) throw new Error('sign bridge: unexpected address')
+        const data = authorizeSignIn(raw, address, signingOrigin, signingTarget.chainId)
         return account.signMessage({ message: { raw: data } })
       }
       if (request.method === 'eth_signTypedData_v4' || request.method === 'eth_signTypedData_v3') {
         // EIP-712 params are [address, jsonPayload].
         const [, payload] = request.params as [string, string]
+        if (String(request.params[0]).toLowerCase() !== address.toLowerCase() || !options.beforeSignTypedData) throw new Error('sign bridge: typed signing requires explicit approval')
         const typedData = JSON.parse(payload) as TypedDataDefinition
-        await options.beforeSignTypedData?.(typedData)
+        await options.beforeSignTypedData(typedData)
+        if (source.frame !== page.mainFrame() || new URL(source.frame.url()).origin !== signingOrigin.origin) throw new Error('sign bridge: caller navigated')
         return account.signTypedData(typedData)
       }
       throw new Error(`sign bridge: unhandled method ${request.method}`)

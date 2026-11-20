@@ -221,3 +221,28 @@ test('infrastructure recovery is announced when execution resumes but a product 
  const parents=calls.filter(c=>!c.body.thread_ts)
  assert.match(parents.at(-1).body.text,/Recovered.*Suite execution/)
 })
+
+
+test('corrupt Slack state recovers the latest snapshot without resending delivered messages',async()=>{
+  const {calls,options}=setup()
+  await notifyBotRun(run('recover-state'),options)
+  const path=join(options.stateDir,'slack-bot-state.json')
+  const saved=readFileSync(path,'utf8'),count=calls.length
+  writeFileSync(path,'{"messages":')
+  await notifyBotRun(run('recover-state'),options)
+  assert.equal(calls.length,count)
+  assert.deepEqual(JSON.parse(readFileSync(path,'utf8')),JSON.parse(saved))
+  await notifyBotRun(run('new-after-recovery'),options)
+  assert.equal(calls.filter(c=>!c.body.thread_ts).length,2)
+})
+
+test('unrecoverable Slack state stays intact and releases the delivery lock',async()=>{
+  const {calls,options}=setup()
+  const path=join(options.stateDir,'slack-bot-state.json')
+  writeFileSync(path,'broken JSON')
+  await assert.rejects(notifyBotRun(run('corrupt-state'),options),/Slack delivery state.*restore/i)
+  assert.equal(readFileSync(path,'utf8'),'broken JSON')
+  assert.equal(calls.length,0)
+  writeFileSync(path,JSON.stringify({messages:[],runs:{},incidents:{}}))
+  assert.equal((await notifyBotRun(run('corrupt-state'),options)).queued,true)
+})

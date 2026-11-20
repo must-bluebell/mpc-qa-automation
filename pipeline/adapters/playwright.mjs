@@ -3,6 +3,7 @@ import { join, relative } from 'node:path'
 import { ROOT } from '../lib/env.mjs'
 import { runProcess } from '../lib/proc.mjs'
 import { classifyFailure } from '../lib/classify.mjs'
+import { warmBrowserRuntime } from './web-runtime.mjs'
 
 /** Maps one regression-reporter record (utils/regression-reporter.ts) to the pipeline's test shape. */
 export function normalizeRecord(record, { adapter = 'playwright', evidenceBase }) {
@@ -23,6 +24,9 @@ export function normalizeRecord(record, { adapter = 'playwright', evidenceBase }
 }
 
 export async function runPlaywrightStep(step, ctx) {
+  if (step.project === 'chromium' && !ctx.seededDefect) {
+    await warmBrowserRuntime(ctx.env,{timeoutMs:Math.min(60_000,ctx.remainingMs())})
+  }
   const args = ['playwright', 'test', `--project=${step.project}`]
   if (step.grep) args.push('--grep', step.grep)
   if (step.grepInvert) args.push('--grep-invert', step.grepInvert)
@@ -34,7 +38,7 @@ export async function runPlaywrightStep(step, ctx) {
     CI: process.env.CI ?? '', FORCE_COLOR: '0',
   }
   const result = await runProcess('npx', args, { cwd: ROOT, env, timeoutMs: ctx.remainingMs(), logFile: join(ctx.stepDir, 'output.log'), echo: ctx.echo,
-    passSecrets: true }) // the wallet fixture signs with QA_SEED_PHRASE; no other child receives it
+    passSecrets: ['QA_SEED_PHRASE'] }) // Signing workers never inherit Slack, AI or repository credentials.
   const summaryPath = join(ctx.stepDir, 'regression-summary.json')
   const evidenceBase = relative(ctx.runDir, ctx.stepDir).split('\\').join('/')
   const records = existsSync(summaryPath) ? JSON.parse(readFileSync(summaryPath, 'utf8')).records : []

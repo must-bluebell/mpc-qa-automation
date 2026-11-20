@@ -4,6 +4,8 @@ Playwright tests for wallet discovery, connection, SIWE sign-in, connected-addre
 
 ## Setup
 
+To run the automation runner, dashboard and Slack scheduler in their own container, use the root [Dockerfile](Dockerfile), [docker-compose.yml](docker-compose.yml), and [DevOps Docker instructions](docs/docker.md).
+
 ```sh
 npm ci
 npx playwright install chromium
@@ -41,6 +43,8 @@ The Community step name is retained only to confirm successful wallet sign-in. N
 
 `npm run check:copy` checks wallet locator strings against a sibling `globalmpc-webapp` checkout. It skips when that checkout is unavailable; use `WEBAPP_PATH` to override the location.
 
+To run the tests from a pull request comment (`/automation review`), see [GitHub App setup](docs/github-app.md).
+
 GitHub Actions runs static checks on pushes and pull requests. Wallet browser tests run when a target is supplied through workflow or repository dispatch. Configure the `QA_SEED_PHRASE` repository secret for those runs.
 
 All 20 runnable tests live in `tests/wallet`: W01–W19 and the recorded journey, which contains ordered steps W20–W24. Run the entire folder with `npm run test:wallet`.
@@ -69,18 +73,39 @@ After reviewing and reproducing a defect, annotate the relevant test with `{ typ
 
 ### Optional model review
 
-To use an existing OpenClaw GPT login, enable its Responses HTTP endpoint and create a dedicated `qa-review` agent with `tools.deny: ["*"]`, no skills, and its own workspace. Configure the private QA `.env`:
+AI review supports Codex CLI with a saved ChatGPT login, OpenAI, and Anthropic. Configure one provider in the private QA `.env`; keep `QA_AI_PROVIDER=none` to run tests without model review.
+
+To use your ChatGPT subscription, install the current Codex CLI on the QA host and sign in as the same OS user that runs the dashboard, scheduler, or Actions runner:
+
+```sh
+npm install -g @openai/codex
+export CODEX_HOME="$HOME/.codex-qa"
+codex -c 'cli_auth_credentials_store="file"' login --device-auth
+codex -c 'cli_auth_credentials_store="file"' login status
+```
+
+Select it in `.env`:
 
 ```dotenv
-QA_AI_PROVIDER=openclaw
-QA_AI_MODEL=openai/gpt-6-astra
-QA_OPENCLAW_BASE_URL=http://127.0.0.1:18789
-QA_OPENCLAW_AGENT=qa-review
-QA_OPENCLAW_TOKEN=your-private-gateway-token
+QA_AI_PROVIDER=codex-cli
+QA_CODEX_MODEL=
 QA_AI_AUTO=1
 ```
 
-`QA_AI_MODEL` labels the configured backend; the dedicated agent's OpenClaw configuration selects the actual GPT model and manages OAuth. The QA project uses only the gateway token. This adapter accepts only loopback HTTP endpoints and refuses redirects. Requests use independent sessions and disable tools. OpenClaw's Responses compatibility layer does not guarantee schema-constrained generation, so the schema is included in the instructions and the project validates all returned evidence and requirement references before accepting the review. Gateway transcripts may retain the sanitized evidence; `store: false` is not a retention guarantee for OpenClaw. Keep the gateway token private and the gateway accessible only to trusted callers. [OpenClaw endpoint documentation](https://docs.openclaw.ai/gateway/openresponses-http-api).
+Blank `QA_CODEX_MODEL` uses the Codex default model; set it to a model available to your account to override. `QA_CODEX_BIN` optionally selects an absolute executable path. The CLI must support `exec --ignore-user-config`, `--ignore-rules`, `--ephemeral`, and `--output-schema`. This provider requires a saved ChatGPT login, removes API-key variables from the child environment, and does not fall back to API billing. A missing login, unavailable CLI, subscription limit, or five-minute timeout rejects the review while preserving test results. Provider selection alone does not verify authentication.
+
+Codex runs in a private temporary directory with a read-only sandbox, shell tools and web search disabled, and user configuration ignored. Host skill discovery, plugins, hooks, and project instructions are disabled. The provider refuses a login directory containing global `AGENTS.md` or `AGENTS.override.md` files so unrelated private instructions cannot enter the review. It receives the brief on stdin, requests the existing JSON schema, reads only the final response file, and removes temporary files afterward. CLI diagnostics are suppressed. Use the same dedicated `CODEX_HOME` for local login and the local QA process; the default is `~/.codex` if unset. Never commit that directory or include it in report artifacts. Subscription limits apply. The application PR workflow uses separate GitHub-hosted runners and a dedicated subscription session stored in protected environment secrets, so the Mac can be off. See [Codex non-interactive authentication](https://learn.chatgpt.com/docs/non-interactive-mode) and [GitHub Actions setup](docs/github/README.md#codex-analysis-with-a-chatgpt-login-on-github-hosted-runners).
+
+For direct OpenAI API access, configure:
+
+```dotenv
+QA_AI_PROVIDER=openai
+OPENAI_API_KEY=your-private-api-key
+OPENAI_MODEL=your-selected-model
+QA_AI_AUTO=1
+```
+
+For Anthropic, set `QA_AI_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_MODEL` instead.
 
 Review an existing completed pipeline run without rerunning tests:
 
@@ -88,21 +113,19 @@ Review an existing completed pipeline run without rerunning tests:
 node pipeline/ai/analyze.mjs <runId>
 ```
 
-Success requires `status: "ok"`; results are saved under `runs/<runId>/ai-analysis.json` and shown in the dashboard. Gateway outages, quota failures, malformed output and missing evidence references produce a rejected review while preserving test outcomes. There is no durable AI retry queue; use the saved-run command to retry. Restart the dashboard and scheduler after changing provider settings. Smoke schedules inherit automatic failure-only review; nightly regression explicitly requests review on every result. Per-schedule `ai: true` or `ai: false` overrides automatic mode and is preserved in durable queued jobs.
+Success requires `status: "ok"`; results are saved under `runs/<runId>/ai-analysis.json` and shown in the dashboard. Model service outages, quota failures, malformed output and missing evidence references produce a rejected review while preserving test outcomes. There is no durable AI retry queue; use the saved-run command to retry. Restart the dashboard and scheduler after changing provider settings. Configured test schedules explicitly request AI review, including passing runs. Per-schedule `ai: true` or `ai: false` overrides automatic mode and is preserved in durable queued jobs.
 
-For local analysis without an API key, start Ollama, install a model (`ollama pull gpt-oss:20b`), and set `QA_AI_PROVIDER=ollama` and `QA_AI_MODEL=gpt-oss:20b` in `.env`. The default endpoint is `http://127.0.0.1:11434`; only local loopback endpoints are accepted. A Mac with 16 GB of memory has limited room for this model alongside Docker, so avoid running model inference during load measurements. The download is large and is a separate installation step. [Official local GPT-OSS guide](https://developers.openai.com/cookbook/articles/gpt-oss/run-locally-ollama).
-
-Alternatively configure `OPENAI_API_KEY` and `OPENAI_MODEL`, or the existing Anthropic provider. Then run:
+To review the standalone Playwright report with the configured provider:
 
 ```sh
 npm run analyze:ai
 ```
 
-The model reviews approved requirements and redacted execution evidence, summarizes findings, groups likely duplicate failures as hypotheses, and proposes difficult scenarios and regression checks. Ollama uses local structured JSON output without credentials; the OpenAI path uses the Responses API with `store: false`. No provider receives recovery phrases, browser storage, trace files, or screenshot contents. Output is validated against recorded evidence before use. Without model configuration, the automatic file remains clearly labelled **model not run**.
+The model reviews approved requirements and redacted execution evidence, summarizes findings, groups likely duplicate failures as hypotheses, and proposes difficult scenarios and regression checks. The OpenAI API path uses the Responses API with `store: false`; all three paths request structured JSON output. No provider receives recovery phrases, browser storage, trace files, or screenshot contents. Output is validated against recorded evidence before use. Without model configuration, the automatic file remains clearly labelled **model not run**.
 
 Generated output is checked against existing evidence IDs and approved requirement IDs. AI cannot promote an unconfirmed defect. Proposed scenarios remain marked **not an acceptance check**; no generated code executes automatically. Review requirement mapping, reproduce a failing assertion, implement the test, run it, and examine evidence before using it for acceptance or release decisions.
 
-The dashboard's **AI review** checkbox applies to Run, Run everything, and Smoke. Checking it reviews the selected run after tests finish; unchecking it explicitly skips review for that run. Set `QA_AI_AUTO=1` to select the checkbox by default and automatically review failed, blocked, timed-out, or infrastructure-failed CLI and scheduled runs. Passing scheduled runs skip automatic review. CLI `--ai` and `--no-ai` override automatic mode. Restart the dashboard and scheduler after changing `.env`. View the result in the run's AI review panel and `ai-analysis.json`; AI does not change test outcomes.
+The dashboard's **AI review** checkbox applies to Run, Run everything, and Smoke. Checking it reviews the selected run after tests finish; unchecking it explicitly skips review for that run. Set `QA_AI_AUTO=1` to select the checkbox by default and automatically review failed, blocked, timed-out, or infrastructure-failed CLI and scheduled runs. Passing runs skip automatic failure-only review unless their schedule explicitly requests AI. CLI `--ai` and `--no-ai` override automatic mode. Restart the dashboard and scheduler after changing `.env`. View the result in the run's AI review panel and `ai-analysis.json`; AI does not change test outcomes.
 
 `config/qa-evaluation.json` assigns 45% to execution reliability, 40% to confirmed defect detection, 10% to coverage and 5% to AI usefulness. No score is invented from a single passing run: history, reference defects, coverage and validated contributions must be measured first. The cart failure in the requested notification example is retained as an unapproved illustration, not a reported defect or an approved requirement.
 
@@ -112,9 +135,13 @@ Wallet readiness checks now allow 60 seconds for the authenticated session and c
 
 For KST schedules, threaded Slack summaries, bot installation and private configuration, see [Slack scheduler setup](docs/slack-scheduler.md).
 
+The existing Slack app also supports an opt-in conversational Socket Mode listener for evidence-based questions and authorized, confirmed reruns. See [conversational agent setup](docs/slack-agent.md). It uses a separate app-level token and preserves the scheduler's execution and repository restrictions.
+
 ```sh
-npm run dashboard          # http://127.0.0.1:4500
+npm run dashboard          # Open the private link printed in the terminal
 ```
+
+The dashboard prints a private startup link that establishes a browser session for API calls and evidence downloads. Open that link once after each dashboard restart; keep it private. The browser removes the access key from the address bar after use.
 
 The dashboard starts any suite (`smoke`, `api`, `regression`, `uat`, `load`, `full`) on any configured environment, streams live output, and shows run history, grouped failures, load results against SLOs, AI review status, Slack delivery and per-step Playwright HTML reports. The same runs are available from the CLI: `npm run qa:full`, `npm run qa:uat`, `npm run qa:load`, and so on. `npm run stack:status` reports the isolated Docker stack.
 
@@ -123,7 +150,7 @@ Application PRs can trigger code/type checks, dependency security auditing and a
 UAT and load run only against the isolated `local-docker` stack (`pipeline/config/environments.json`, Compose project and host ports under `stack`). The pipeline refuses them on preview, staging and production.
 
 For the complete web suite, including the write-gated cases, start Docker and run `npm run test:web:isolated`.
-This command uses the verified `mpc-qa-web-20261019` Compose project at `http://localhost:3420`, prepares a fresh local member through real registration and certificate transactions, and runs only the Chromium project with local writes enabled. This stack is now shared by the `local-docker` and `web-isolated` profiles; run tests sequentially. The previous recovery stack and its volumes are preserved. The first startup installs app dependencies and deploys local contracts; subsequent runs reuse the stack. The local app Docker image must already be built.
+This command derives its target, Compose project, and service ports from the shared `web-isolated` profile in `pipeline/config/environments.json`. The current profile uses `mpc-qa-dashboard-20261021` at `http://localhost:3460`, with chain RPC ports 8605 and 8606. It prepares a fresh local member through real registration and certificate transactions, and runs only the Chromium project with local writes enabled. This stack is shared by the `local-docker` and `web-isolated` profiles; run tests sequentially. The previous recovery stack and its volumes are preserved. The first startup installs app dependencies and deploys local contracts; subsequent runs reuse the stack. The local app Docker image must already be built.
 
 The Activity refresh and dismissal cases create owned pending/failed notification records in this disposable database and remove those records afterward. Their HTTP responses, authentication, and UI actions remain real; these notification fixtures do not establish blockchain transaction correctness. Running `npx playwright test --project=chromium` directly still uses `.env` and skips write-gated cases unless its target and prerequisites are configured.
 
@@ -138,7 +165,44 @@ To check Slack delivery without a workspace, run `node scripts/slack-sink.mjs` a
 
 ### Security
 
+- Interviewer guides and answer keys must stay in a restricted store outside this repository. Removing a previously published file from the working tree does not remove it from GitHub history or existing forks.
+- Lock acquisition, takeover, heartbeat and release share a short atomic maintenance gate. A live owner is never displaced for a delayed heartbeat. If a process is killed during maintenance and leaves a `*.lock.claim` directory, first confirm no owner is active before removing that maintenance directory; automatic competing deletion is deliberately refused.
 - The dashboard binds to 127.0.0.1 only. It rejects any other `Host` header (DNS rebinding). Every action needs the per-process token embedded in the page, a JSON body and a same-origin request. Suite, environment and seeded-defect names are whitelisted from config.
 - Artifacts are served only from inside their own `runs/<id>/` folder (no `..`, dotfiles or symlink escapes). Text files are redacted again on the way out. Playwright HTML reports open in a sandboxed origin.
 - `QA_SEED_PHRASE`, API keys and the Slack webhook are passed only to the wallet Playwright step. The WEB MPC scenarios, k6 and Docker never receive them, and known secret values are redacted from every log.
 - `.env` is mode 600. `runs/`, logs, `.env.*` and `.claude/` are git-ignored. k6 session cookies live in a private `mkdtemp` folder that is deleted after the run.
+
+## Verify Quests, Digging Process, Wallet Transaction, and UI Content
+
+Run the desktop and mobile quest/content/persistence checks against Global MPC:
+
+```sh
+npm run test:quests-dig
+```
+
+The suite uses the configured `QA_SEED_PHRASE`, `WALLET_ADDRESS`, and address index. It checks both quest lists against owner-scoped API data, all quest cards and reward amounts, tab counts (including daily check-in), progress bars, unavailable claim actions, known English copy, horizontal text clipping, dig counters, and persistence after refresh. New quests are checked against their API content; `pages/quest-copy.json` pins the English titles/descriptions observed on 2026-10-26. Changes to that baseline need editorial review. Screenshots and text are attached for review of grammar, alignment, and other visual details that automated checks cannot fully establish.
+
+Enable the state-changing 17-step journey explicitly:
+
+```sh
+QA_ALLOW_WRITES=1 QA_RUN_QUEST_DIG_CART=1 QA_AUTHORIZE_PRODUCTION_QUEST_DIG_CART=1 npm run test:quests-dig:cart
+```
+
+This spends all currently available digs, rejects the first wallet signature, injects one definitive relay refusal before the signature reaches the server, then approves one real cart record. It checks one update per tap, 3 Crew consumed per dig, exhausted digging, pending approval and duplicate-click protection, unchanged rewards after errors, real opBNB receipt status/contract/gas, one new persisted record, quest progress, and refresh. It disables retries. Ordinary test commands and pipeline runs cannot enable this journey, even with a stale opt-in flag. Capacity is checked before spending Crew, reserving two cart entries per dig for possible magnet bonuses. No balance funding or quest reward claims occur. The complete journey requires an empty starting cart with no outstanding Crew use, remaining digs, a cart with enough room for those digs, an available cart run, and no concurrent use of this wallet; missing dig/capacity prerequisites produce a skipped test with evidence. Do not run it concurrently with scheduled tests using the same wallet.
+
+The application requests a gasless EIP-712 `RecordFor` signature on opBNB (204); its relayer submits the transaction and pays gas. The injected test wallet signs through the existing Node bridge; this does not test a real wallet extension's confirmation UI. Domain, chain, contract, user, mining fields, challenge and expiry are checked before signing. Actual receipt and explorer evidence are attached. The injected relay refusal covers client recovery; it does not exercise a transaction mined with a reverted receipt.
+
+Meeting a quest requirement can enable **Claim**. **Completed** means its reward has been claimed, so sending the cart must update eligibility without automatically awarding unrelated quest rewards. This suite preserves that distinction. Desktop/mobile UI cases run by default; the real cart case is reported as skipped unless explicitly enabled.
+
+## MPC Chrome extension tests
+
+The existing packaged-extension suite is copied into [`chrom extension`](chrom%20extension/README.md), with independent pinned dependencies and Playwright configuration. The source suite contains **64 tests**, not 65; no missing case has been invented.
+
+```sh
+npm ci --prefix "chrom extension"
+cd "chrom extension" && npx playwright install chromium && cd ..
+npm run test:extension
+npm run report:extension -- --port 9323
+```
+
+`npm run test:extension:dashboard` runs the wallet dashboard subset. `npm run typecheck:extension` checks the extension tests. The full extension run includes that subset and saves its HTML/JSON reports inside `chrom extension`. These commands do not invoke the QA orchestrator, scheduler, or Slack integrations. All extension RPC traffic is simulated; no live transfers occur. The existing QA dashboard is separate from the extension HTML report.

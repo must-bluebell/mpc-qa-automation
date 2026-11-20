@@ -1,0 +1,17 @@
+name: CDK Diff
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - cdk/**
+      - .github/workflows/cdk-diff.yaml
+jobs:
+  call:
+    name: CDK Diff
+    permissions: write-all
+    uses: mustcompany/mustcompany-github-manager/.github/workflows/cdk-diff.yaml@release
+    with:
+      environment: develop
+      app_dir: cdk
+      secret_names: SLACK_BOT_TOKEN SLACK_CHANNEL_ID QA_OWNER_SLACK_ID QA_WALLET_ADDRESS WEBAPP_READ_TOKEN QA_SEED_PHRASE
+    secrets: inherit

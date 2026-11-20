@@ -20,3 +20,24 @@ runs/
 __pycache__/
 .env.*
 !.env.example
+
+ci-slack-report.json
+
+# Private signing keys and credential bundles stay outside version control.
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# Generated read-only results site (sanitized snapshot) and Vercel project link.
+vercel-site/
+.vercel/
+# Local GitHub App repository policy (operator-specific); see the committed .example.json.
+pipeline/config/*.local.json
+
+# GitHub App server deployment: copied by hand, never committed
+deploy/github-app/.env
+deploy/github-app/secrets/
+deploy/github-app/github-app.repositories.json

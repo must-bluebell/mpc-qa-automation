@@ -1,0 +1,6 @@
+# Caddy obtains and renews the HTTPS certificate for QA_PUBLIC_HOST automatically.
+# Ports 80 and 443 must reach this server, and the DNS record must point here before the first start.
+{$QA_PUBLIC_HOST} {
+	encode gzip
+	reverse_proxy 127.0.0.1:4600
+}

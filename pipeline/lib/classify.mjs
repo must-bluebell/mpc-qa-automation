@@ -10,7 +10,7 @@ const INFRA_PATTERNS = [
   [/ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|socket hang up|net::ERR_(CONNECTION|NAME|INTERNET|ADDRESS)/i, 'target unreachable'],
   [/browserType\.launch|Executable doesn't exist|Target page, context or browser has been closed|Browser closed/i, 'browser could not start'],
   [/\b(store_unavailable|preflight_unavailable|nonce_store_unavailable|signer_failed|relayer_unfunded)\b/, 'dependency outage reported by app'],
-  [/docker|compose|container .* (unhealthy|exited)|Cannot connect to the Docker daemon/i, 'docker stack unavailable'],
+  [/Cannot connect to the Docker daemon|docker: (?:command not found|Error)|\bno such container\b|\bcontainer \S+ (?:is )?(?:unhealthy|exited)\b|\bdocker compose\b[^\n]*\b(?:failed|unavailable)\b/i, 'docker stack unavailable'],
   [/stack health probe failed|environment unreachable/i, 'environment health probe failed'],
   [/worker process exited unexpectedly|Worker teardown timeout|SIGKILL|SIGSEGV/i, 'worker crashed'],
   [/k6: command not found|ENOENT.*k6/i, 'load tool missing'],

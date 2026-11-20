@@ -2,9 +2,40 @@
   "display_information": {
     "name": "MPC QA",
     "description": "Automated API, UAT and load testing with AI analysis, detailed Slack reports and daily QA health summaries.",
-    "long_description": "Hi, I am MPC QA Agent. I help the team monitor application quality through automated testing and clear, actionable reports.\n\nI run critical API and account-access UAT smoke tests every 30 minutes, full API and UAT regression every night, and controlled load tests weekly. I also send a consolidated QA health report every day.\n\nFor each workflow, I share a separate Slack summary with threaded passed and failed cases, diagnostics, available AI analysis, and system health last. AI reviews help explain recorded findings and propose additional test scenarios; test assertions determine pass or fail.\n\nI track recurring failures and recoveries, highlight skipped or blocked checks, and report infrastructure problems and missed scheduled runs so the team can see what needs attention."
+    "long_description": "Hi, I am MPC QA Agent. I help the team monitor application quality through automated testing and clear, actionable reports.\n\nI run critical API and account-access UAT smoke tests every 30 minutes, full API and UAT regression every night, and controlled load tests weekly. I also send a consolidated QA health report every day.\n\nFor each workflow, I share a separate Slack summary with threaded passed and failed cases, diagnostics, available AI analysis, and system health last. AI reviews help explain recorded findings and propose additional test scenarios; test assertions determine pass or fail.\n\nI track recurring failures and recoveries, highlight skipped or blocked checks, and report infrastructure problems and missed scheduled runs so the team can see what needs attention.\n\nWith the optional conversational listener enabled, mention me in enabled channels or message me directly to ask about recorded runs, failures, evidence and schedules. Authorized users can request and confirm controlled reruns."
   },
-  "features": { "bot_user": { "display_name": "MPC QA", "always_online": false } },
-  "oauth_config": { "scopes": { "bot": ["chat:write", "channels:history", "channels:manage"] } },
-  "settings": { "socket_mode_enabled": false }
+  "features": {
+    "bot_user": {
+      "display_name": "MPC QA",
+      "always_online": false
+    },
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "channels:history",
+        "channels:manage",
+        "app_mentions:read",
+        "im:history"
+      ]
+    }
+  },
+  "settings": {
+    "socket_mode_enabled": true,
+    "event_subscriptions": {
+      "bot_events": [
+        "app_mention",
+        "message.im"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true
+    }
+  }
 }

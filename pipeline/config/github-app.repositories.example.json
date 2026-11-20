@@ -1,0 +1,22 @@
+{
+  "testsRepository": "globalmpc/mpc-automation",
+  "testsRef": "main",
+  "timeoutMinutes": 40,
+  "playwrightArgs": ["--project=chromium"],
+  "repositories": {
+    "globalmpc/REPLACE-WITH-MPC-WEB-REPOSITORY": {
+      "previewHostPrefix": "globalmpc-webapp",
+      "impact": [
+        { "name": "dig", "paths": ["REPLACE/dig/**"], "runs": [["--project=chromium", "--grep", "@regression"], ["--project=uat"]] }
+      ]
+    },
+    "globalmpc/globalmpc-unity-private": {
+      "playwrightArgs": ["--project=api", "--project=uat", "--project=chromium"]
+    },
+    "globalmpc/globalmpc-wallet-extension-private": {
+      "extension": { "path": "REPLACE-WITH-EXTENSION-FOLDER" },
+      "testsDirectory": "chrom extension",
+      "playwrightArgs": ["--project=packaged-extension"]
+    }
+  }
+}

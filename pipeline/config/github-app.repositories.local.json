@@ -1,0 +1,13 @@
+{
+  "testsRepository": "globalmpc/mpc-automation",
+  "testsRef": "feature/github-app-automation-review",
+  "timeoutMinutes": 40,
+  "playwrightArgs": ["--project=packaged-extension"],
+  "repositories": {
+    "globalmpc/mpc-automation": {
+      "target": { "type": "local-stack" },
+      "testsDirectory": "chrom extension",
+      "playwrightArgs": ["--project=packaged-extension"]
+    }
+  }
+}

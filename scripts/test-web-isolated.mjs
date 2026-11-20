@@ -32,7 +32,7 @@ process.env.WALLET_ADDRESS_INDEX = String(index)
 const prepared = await prepareTestData(env)
 if (prepared.status !== 'ready') throw new Error('Local member preparation failed; see isolated stack health.')
 const result = await runProcess('npx', ['playwright', 'test', '--project=chromium', ...process.argv.slice(2)], {
-  cwd: ROOT, passSecrets: true, timeoutMs: 1_800_000, env: {
+  cwd: ROOT, passSecrets: ['QA_SEED_PHRASE'], timeoutMs: 1_800_000, env: {
     BASE_URL: env.baseUrl, QA_APP_ORIGIN: env.appOrigin, QA_CHAIN_ID: String(env.chainId), QA_CHAIN_NAME: env.chainName,
     QA_ALLOW_WRITES: '1', QA_ENVIRONMENT: env.name, QA_NAVIGATION: env.navigation,
     QA_WEB_FIXTURE_CONTAINER: container,

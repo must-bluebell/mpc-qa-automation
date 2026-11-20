@@ -36,12 +36,13 @@ export function resolveEnvironment(name) {
   const baseUrl = (profile.baseUrlEnv ? process.env[profile.baseUrlEnv] : profile.baseUrl) || ''
   if (!baseUrl) throw new Error(`Environment "${name}" needs ${profile.baseUrlEnv} in .env`)
   const isolated = !!profile.isolated && isLoopback(baseUrl)
-  return { name, ...profile, baseUrl: baseUrl.replace(/\/+$/, ''), appOrigin: (profile.appOrigin || baseUrl).replace(/\/+$/, ''), isolated,
+  return { name, ...profile, externalRepositoriesAllowed: process.env.QA_EXTERNAL_REPOSITORIES !== '0', baseUrl: baseUrl.replace(/\/+$/, ''), appOrigin: (profile.appOrigin || baseUrl).replace(/\/+$/, ''), isolated,
     allowWrites: !!profile.allowWrites && isolated, allowLoad: !!profile.allowLoad && isolated, allowSeededDefects: !!profile.allowSeededDefects && isolated }
 }
 
 /** Every secret value we know about, for redaction of anything written to disk or sent to Slack/AI. */
-export const SECRET_KEYS = ['QA_SEED_PHRASE', 'OPENAI_API_KEY', 'QA_OPENCLAW_TOKEN', 'ANTHROPIC_API_KEY', 'SLACK_ALERT_WEBHOOK_URL', 'SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN', 'SLACK_VERIFICATION_TOKEN', 'CRON_SECRET', 'WEBAPP_READ_TOKEN']
+// Keep retired provider credentials protected when they remain in an upgraded installation's .env.
+export const SECRET_KEYS = ['QA_SEED_PHRASE', 'OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_AUTH_JSON', 'CODEX_AUTH_WRITE_TOKEN', 'QA_OPENCLAW_TOKEN', 'ANTHROPIC_API_KEY', 'SLACK_ALERT_WEBHOOK_URL', 'SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN', 'SLACK_VERIFICATION_TOKEN', 'CRON_SECRET', 'WEBAPP_READ_TOKEN', 'WEBAPP_REPORT_TOKEN', 'GITHUB_WEBHOOK_SECRET', 'GH_TOKEN', 'QA_REVIEW_CALLBACK_SECRET', 'REVIEW_CALLBACK_SECRET']
 
 export function knownSecrets() {
   return SECRET_KEYS.map(k => process.env[k]).filter(v => v && v.length >= 8)

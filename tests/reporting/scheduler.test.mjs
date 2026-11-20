@@ -6,6 +6,14 @@ import { redactValue } from '../../pipeline/lib/safe-output.mjs'
 
 const schedules = [{ id: 'web-30m', suite: 'regression', env: 'local-docker', cron: '*/30 * * * *', graceMinutes: 60, enabled: true }]
 const rotation={id:'qa-rotation',suites:['regression','uat','api','load'],env:'local-docker',gapMinutes:30,enabled:true}
+test('scheduler recovery does not mistake a previous container worker for a reused live PID', async () => {
+  const { workerAlive } = await import('../../pipeline/scheduler.mjs')
+  const job = { pid: process.pid, pidNamespace: 'pid:[old]' }
+  assert.equal(workerAlive(job, 'pid:[new]'), false)
+  assert.equal(workerAlive(job, 'pid:[old]'), true)
+  if (process.platform === 'linux') assert.equal(workerAlive({ ...job, pidStartTime: 'previous-start' }, 'pid:[old]'), false)
+  assert.equal(workerAlive({ pid: 2147483647 }, 'pid:[new]'), false)
+})
 test('rotation starts with web, waits thirty minutes after completion and repeats in order',()=>{
   const state={jobs:[]},start=new Date('2026-10-10T05:00:00Z')
   enqueueRotation(state,rotation,start)
@@ -62,11 +70,13 @@ test('notification crash leaves a recoverable job; restart queues once before fi
   const state={jobs:[]},job={runId:'r1',status:'running',suite:'regression',env:'local-docker',at:'2026-10-09T00:00:00Z'}
   let savedRun={runId:'r1',status:'passed'},notifications=0
   const options={readRunImpl:()=>savedRun,persistImpl:()=>{},saveRunImpl:r=>savedRun=r,createDirImpl:()=>{},publishImpl:()=>{},notify:async()=>{notifications++;throw new Error('simulated crash')}}
-  await assert.rejects(completeJob(state,job,0,options),/simulated crash/)
+  await completeJob(state,job,0,options)
+  assert.match(job.reportError,/retry pending/i)
   assert.equal(job.status,'notifying')
   options.notify=async()=>({queued:true})
   await completeJob(state,job,0,options)
   assert.equal(job.status,'finished');assert.equal(notifications,1)
+  assert.equal(job.reportError,undefined)
 })
 test('dead child finalizes a running record and publishes infrastructure failure',async()=>{
   let saved={runId:'r1',status:'running',errors:[]},published
@@ -130,7 +140,7 @@ test('configuration assigns API and UAT smoke, nightly without load, and one sch
   assert.ok(nightly.some(s=>s.project==='api'))
   assert.ok(nightly.some(s=>s.adapter==='webmpc-scenarios'))
   assert.equal(nightly.some(s=>s.adapter==='k6'),false)
-  assert.doesNotMatch(readFileSync(new URL('../../.github/workflows/qa-runner.yml',import.meta.url),'utf8'),/^  schedule:/m)
+  assert.doesNotMatch(readFileSync(new URL('../../.github/workflows/quality-check.yaml',import.meta.url),'utf8'),/^  schedule:/m)
 })
 
 test('summary generation retries after a temporary outbox failure without finishing or losing the job',async()=>{
@@ -152,4 +162,48 @@ test('queued schedules retain explicit nightly AI policy across restart',()=>{
   const state={jobs:[]}
   enqueueDue(state,spec,new Date('2026-10-11T16:00:00Z'))
   assert.equal(JSON.parse(JSON.stringify(state)).jobs[0].ai,true)
+})
+
+
+test('outbox corruption does not terminate the scheduler or retain its lock',async()=>{
+  const {mkdtempSync,writeFileSync}=await import('node:fs')
+  const {tmpdir}=await import('node:os')
+  const {join}=await import('node:path')
+  const {execFile}=await import('node:child_process')
+  const {promisify}=await import('node:util')
+  const dir=mkdtempSync(join(tmpdir(),'qa-scheduler-outbox-'))
+  writeFileSync(join(dir,'slack-bot-state.json'),'broken JSON')
+  const root=new URL('../../',import.meta.url).href
+  const script=`
+    const {config}=await import(${JSON.stringify(root+'pipeline/lib/env.mjs')});
+    config.schedules=()=>({timezone:'Asia/Seoul',schedules:[]});
+    const {runScheduler}=await import(${JSON.stringify(root+'pipeline/scheduler.mjs')});
+    const {readLock}=await import(${JSON.stringify(root+'pipeline/lib/lock.mjs')});
+    const state=await runScheduler({once:true});
+    console.log(JSON.stringify({state,lock:readLock('scheduler')}));
+  `
+  const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',script],{
+    env:{...process.env,QA_RUNS_DIR:dir},timeout:10000,
+  })
+  const result=JSON.parse(stdout.trim().split('\n').at(-1))
+  assert.equal(result.lock,null)
+  assert.match(result.state.deliveryError,/retry pending/i)
+})
+
+
+test('publication failures and a busy notification queue remain retryable',async()=>{
+  for(const failure of ['publication','queue']) {
+    const job={runId:'retry',status:'running'},state={jobs:[job]}
+    let saved
+    const options={readRunImpl:()=>({runId:'retry',status:'passed'}),persistImpl:s=>{saved=JSON.parse(JSON.stringify(s))},
+      publishImpl:()=>{if(failure==='publication')throw new Error('private publication diagnostic')},
+      notify:async()=>({queued:false})}
+    await completeJob(state,job,0,options)
+    assert.equal(saved.jobs[0].status,'notifying')
+    assert.match(saved.jobs[0].reportError,/retry pending/i)
+    assert.doesNotMatch(saved.jobs[0].reportError,/private/)
+    await completeJob(state,job,0,{...options,publishImpl:()=>{},notify:async()=>({queued:true})})
+    assert.equal(saved.jobs[0].status,'finished')
+    assert.equal(saved.jobs[0].reportError,undefined)
+  }
 })

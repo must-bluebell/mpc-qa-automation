@@ -1,0 +1,1005 @@
+{
+  "generatedAt": "2026-10-29T04:24:30.460Z",
+  "runs": [
+    {
+      "runId": "sched-critical-30m-1793016000000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 21:00:15 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1793014200000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 20:30:25 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1793012400000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 20:00:11 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1793010600000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 19:30:16 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1793008800000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 19:00:08 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261026-094952-full-bf73",
+      "suite": "full",
+      "environment": "local-docker",
+      "status": "blocked",
+      "finishedAt": "26/10/2026, 18:58:05 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 85,
+        "failed": 0,
+        "skipped": 9,
+        "blocked": 1
+      },
+      "quality": {
+        "executed": 85,
+        "total": 95,
+        "passRate": 100,
+        "executionRate": 89.47368421052632
+      }
+    },
+    {
+      "runId": "20261026-093337-load-4338",
+      "suite": "load",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "26/10/2026, 18:35:25 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 6,
+        "failed": 2,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 8,
+        "total": 8,
+        "passRate": 75,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1793007000000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 18:30:19 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1793005200000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 18:00:16 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1793003400000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 17:30:21 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1793001600000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 17:00:12 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792999800000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 16:30:22 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261026-072416-uat-138a",
+      "suite": "uat",
+      "environment": "web-isolated",
+      "status": "infra-failed",
+      "finishedAt": "26/10/2026, 16:28:25 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 14,
+        "failed": 1,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 15,
+        "total": 15,
+        "passRate": 93.33333333333333,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261026-071743-regression-18fa",
+      "suite": "regression",
+      "environment": "web-isolated",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 16:24:04 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 49,
+        "failed": 0,
+        "skipped": 6,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 49,
+        "total": 55,
+        "passRate": 100,
+        "executionRate": 89.0909090909091
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792998000000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 16:00:07 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261026-064221-uat-96f9",
+      "suite": "uat",
+      "environment": "web-isolated",
+      "status": "blocked",
+      "finishedAt": "26/10/2026, 15:42:25 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 1
+      },
+      "quality": {
+        "executed": 3,
+        "total": 4,
+        "passRate": 100,
+        "executionRate": 75
+      }
+    },
+    {
+      "runId": "20261026-063541-regression-d327",
+      "suite": "regression",
+      "environment": "web-isolated",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 15:42:18 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 49,
+        "failed": 0,
+        "skipped": 6,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 49,
+        "total": 55,
+        "passRate": 100,
+        "executionRate": 89.0909090909091
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792996200000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 15:30:18 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792994400000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 15:00:18 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792992600000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 14:30:08 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792990800000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 14:00:17 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261026-044614-regression-cb3e",
+      "suite": "regression",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "26/10/2026, 13:52:31 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 49,
+        "failed": 0,
+        "skipped": 6,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 49,
+        "total": 55,
+        "passRate": 100,
+        "executionRate": 89.0909090909091
+      }
+    },
+    {
+      "runId": "20261026-043023-full-1fa5",
+      "suite": "full",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "26/10/2026, 13:45:02 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 96,
+        "failed": 1,
+        "skipped": 6,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 97,
+        "total": 103,
+        "passRate": 98.96907216494846,
+        "executionRate": 94.1747572815534
+      }
+    },
+    {
+      "runId": "20261023-115728-uat-4a74",
+      "suite": "uat",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "23/10/2026, 21:00:47 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 12,
+        "failed": 3,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 15,
+        "total": 15,
+        "passRate": 80,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261023-114302-full-e5e2",
+      "suite": "full",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "23/10/2026, 20:52:34 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 84,
+        "failed": 9,
+        "skipped": 6,
+        "blocked": 4
+      },
+      "quality": {
+        "executed": 93,
+        "total": 103,
+        "passRate": 90.3225806451613,
+        "executionRate": 90.29126213592232
+      }
+    },
+    {
+      "runId": "20261023-113927-load-e385",
+      "suite": "load",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "23/10/2026, 20:41:14 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 8,
+        "total": 8,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261023-113407-load-725c",
+      "suite": "load",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "23/10/2026, 20:35:57 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 5,
+        "failed": 3,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 8,
+        "total": 8,
+        "passRate": 62.5,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261023-111158-full-5806",
+      "suite": "full",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "23/10/2026, 20:28:03 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 93,
+        "failed": 4,
+        "skipped": 6,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 97,
+        "total": 103,
+        "passRate": 95.87628865979381,
+        "executionRate": 94.1747572815534
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792753200000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "23/10/2026, 20:00:13 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261023-104130-critical-smoke-5952",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "23/10/2026, 19:42:32 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792749600000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 19:00:01 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792747800000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 18:30:07 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792746000000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 18:00:14 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792744200000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 17:30:05 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792742400000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 17:00:11 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792740600000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 16:30:03 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792738800000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 16:00:10 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792737000000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 15:30:08 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792735200000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 15:00:15 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792733400000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 14:30:07 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792731600000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 14:00:14 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792729800000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 13:30:04 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "20261023-042137-full-e649",
+      "suite": "full",
+      "environment": "local-docker",
+      "status": "infra-failed",
+      "finishedAt": "23/10/2026, 13:21:37 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 0,
+        "total": 0,
+        "passRate": null,
+        "executionRate": null
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792670400000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "22/10/2026, 21:00:17 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "sched-critical-30m-1792668600000",
+      "suite": "critical-smoke",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "22/10/2026, 20:30:22 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 13,
+        "total": 13,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "20261022-105206-full-4f0b",
+      "suite": "full",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "22/10/2026, 20:16:11 KST",
+      "applicationVersion": "unspecified",
+      "counts": {
+        "passed": 66,
+        "failed": 19,
+        "skipped": 6,
+        "blocked": 1
+      },
+      "quality": {
+        "executed": 85,
+        "total": 92,
+        "passRate": 77.6470588235294,
+        "executionRate": 92.3913043478261
+      }
+    },
+    {
+      "runId": "manual-1792654403546-load",
+      "suite": "load",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "22/10/2026, 16:52:44 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 6,
+        "failed": 2,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 8,
+        "total": 8,
+        "passRate": 75,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "manual-1792654634035-uat-retry",
+      "suite": "uat",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "22/10/2026, 16:51:17 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 15,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 15,
+        "total": 15,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    },
+    {
+      "runId": "manual-1792654634035-regression-retry",
+      "suite": "regression",
+      "environment": "local-docker",
+      "status": "failed",
+      "finishedAt": "22/10/2026, 16:47:05 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 48,
+        "failed": 1,
+        "skipped": 6,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 49,
+        "total": 55,
+        "passRate": 97.95918367346938,
+        "executionRate": 89.0909090909091
+      }
+    },
+    {
+      "runId": "manual-1792654403546-uat",
+      "suite": "uat",
+      "environment": "local-docker",
+      "status": "passed",
+      "finishedAt": "22/10/2026, 16:39:48 KST",
+      "applicationVersion": "mpc-waitlist@0.1.0+src-2026-10-20T10:27",
+      "counts": {
+        "passed": 15,
+        "failed": 0,
+        "skipped": 0,
+        "blocked": 0
+      },
+      "quality": {
+        "executed": 15,
+        "total": 15,
+        "passRate": 100,
+        "executionRate": 100
+      }
+    }
+  ]
+}
