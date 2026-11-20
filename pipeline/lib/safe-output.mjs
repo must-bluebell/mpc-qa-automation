@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { config, knownSecrets, RUNS_DIR } from './env.mjs'
+import { prerequisiteReason } from './prerequisites.mjs'
+import { apiCaseName } from './api-case-names.mjs'
 import { qualityRates, formatRate } from './quality-rates.mjs'
 
 const testNames=JSON.parse(readFileSync(new URL('../config/test-case-names.json',import.meta.url),'utf8'))
@@ -30,6 +32,8 @@ export function kstTime(date) {
   return `${new Intl.DateTimeFormat('en-GB', { timeZone:'Asia/Seoul', year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23' }).format(new Date(date))} KST`
 }
 function diagnosticReason(test) {
+  const prerequisite = prerequisiteReason(test.skipReason)
+  if (prerequisite) return prerequisite
   const raw=[...(test.errors??[]),test.skipReason??''].join('\n').replace(/\u001b\[[0-9;]*m/g,'')
   if(/ECONNREFUSED|ERR_CONNECTION_REFUSED/.test(raw))return 'Target app unreachable (connection refused).'
   if(/ECONNRESET|ERR_CONNECTION_RESET|socket hang up/.test(raw))return 'Connection to the target app was interrupted (the app dropped the request).'
@@ -42,7 +46,7 @@ function diagnosticReason(test) {
   if(/toHaveText|toHaveAccessibleName/.test(raw))return 'UI text did not match the expected application copy.'
   if(/toBeVisible/.test(raw))return 'Expected UI control was not visible before the assertion timeout.'
   if(/Timeout|timed out/i.test(raw))return 'Test step exceeded its time limit.'
-  return ['skipped','blocked'].includes(test.status)?'Prerequisite not met; see private local execution evidence.':'Assertion failed; see private local execution evidence.'
+  return ['skipped','blocked'].includes(test.status)?'Prerequisite not met; see the authenticated run details.':'Assertion failed; see the authenticated run details.'
 
 }
 const STATUS_ORDER=['failed','blocked','skipped','passed']
@@ -100,7 +104,7 @@ export function publicSummary(run) {
       const requirementId=confirmation?.description?.match(/^([A-Z]+-\d+):/)?.[1]
       const confirmed=t.status==='failed'&&approved.has(requirementId)
       const load=t.adapter==='k6'?loadCheck(t,run,thresholds):null
-      return {id:opaqueId(t.key),name:load?.name??testNames[(t.title??'').split(' > ').at(-1)?.match(/^([WAPMCU]\d{2}) - /)?.[1]]??testNames[(t.title??'').split(' > ').at(-1)]??`Check ${opaqueId(t.key)}`,status:field(t.status),
+      return {id:opaqueId(t.key),name:load?.name??apiCaseName(t.title)??testNames[(t.title??'').split(' > ').at(-1)?.match(/^([WAPMCU]\d{2}) - /)?.[1]]??testNames[(t.title??'').split(' > ').at(-1)]??`Check ${opaqueId(t.key)}`,status:field(t.status),
         category:categoryOf(t,run),detail:load?.detail??null,
         reason:['failed','blocked','skipped'].includes(t.status)?(load?.detail&&t.status==='failed'?`${load.breaches?.length?`Breached: ${load.breaches.join('; ')}. Measured`:'SLO breached'}: ${load.detail}`:diagnosticReason(t)):null,
         requirementIds:(t.requirementIds??[]).filter(id=>approved.has(id)),

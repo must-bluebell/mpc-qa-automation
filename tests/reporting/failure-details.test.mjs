@@ -37,3 +37,37 @@ test('load rates retain precision until percentage formatting',()=>{
   assert.equal(s.loadMetrics.checkPassRate,0.996)
   assert.equal(s.loadMetrics.endpoints.find(e=>e.name==='POST /api/auth/nonce').errorRate,0.004)
 })
+
+test('missing isolated environments and fixtures are blocked, while unavailable optional features remain skipped',()=>{
+  for (const reason of [
+    'Expanded API cases require the isolated QA_ALLOW_WRITES=1 environment.',
+    'Write checks run only on an isolated environment (QA_ALLOW_WRITES=1).',
+    'Requires QA_API_CASES_FILE entry API001.success with seeded inputs and an exact response contract.',
+    'Requires an isolated administrator storageState file in QA_API_ADMIN_STATE_FILE',
+    'Requires isolated QA_API_CRON_SECRET',
+    'Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.',
+    'Join policy runs before authentication. Configure baseline 401/not_signed_in when skipEmailOtp=true, otherwise 403/otp_required.',
+  ]) {
+    const record={title:'api > API001',status:'skipped',outcome:'skipped',annotations:[{type:'skip',description:reason}],errors:[]}
+    const item=normalizeRecord(record,{evidenceBase:'step'})
+    assert.equal(item.status,'blocked',reason)
+    const summary=publicSummary({runId:'blocked',finishedAt:'2026-11-20T00:00:00Z',tests:[item]})
+    assert.doesNotMatch(summary.checks[0].reason,/private local execution evidence/)
+  }
+  assert.equal(normalizeRecord({title:'api > optional',status:'skipped',outcome:'skipped',annotations:[{type:'skip',description:'My Mine is not open on this deployment (404).'}]},{evidenceBase:'step'}).status,'skipped')
+})
+
+test('expanded API checks publish catalog names without leaking arbitrary titles',()=>{
+  const titles=[
+    'API001 POST /api/auth/activity — baseline contract',
+    'API001 POST /api/auth/activity — successful fixture contract',
+    'API088-V1 GET /api/energy/history?page=invalid rejects bad_page',
+    'API012 PATCH /api/admin/admins/invalid rejects invalid input after admin authentication',
+    'FLOW01 — two wallet sessions remain independent after logout',
+  ]
+  const s=publicSummary({runId:'catalog',finishedAt:'2026-11-20T00:00:00Z',tests:titles.map((title,i)=>({key:String(i),title,status:'blocked'}))})
+  for(const check of s.checks)assert.doesNotMatch(check.name,/^Check /)
+  assert.match(s.checks[0].name,/API001.*POST.*\/api\/auth\/activity.*baseline contract/)
+  const privateSummary=publicSummary({runId:'privacy',finishedAt:'2026-11-20T00:00:00Z',tests:[{key:'secret',title:'API001 POST /private/customer-secret — baseline contract',status:'blocked'}]})
+  assert.doesNotMatch(JSON.stringify(privateSummary),/customer-secret/)
+})

@@ -67,7 +67,7 @@ function reportLink(o,s) {
   const id=encodeURIComponent(s.runId), base=o.reportBase&&safeBase(o.reportBase)
   const run=githubRun(o.runUrl)
   const lines=[!o.reportBase&&run?`Report: <${run}|GitHub run and sanitized report>`
-    :!o.reportBase?'Report: <https://qa-automation-bq3y.onrender.com/#/|QA dashboard>'
+    :!o.reportBase?`Report: <https://qa-automation-bq3y.onrender.com/#/runs/${id}|QA dashboard>`
     :base?`Report: <${base}/${id}.md|Sanitized results>`:'Report: retained locally (invalid report base URL).']
   if(o.allureBase&&s.allureReport){
     const allure=safeBase(o.allureBase)
@@ -116,7 +116,7 @@ const SUITE_LABELS={'critical-smoke':'Critical API & UAT smoke','nightly-regress
 function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
   const c=s.counts,total=c.passed+c.failed+c.skipped+c.blocked
   const rows=s.sections.length?s.sections.map(r=>({label:r.label,status:r.status,counts:r.counts}))
-    :groups.map(([label,checks])=>({label,status:checks.some(t=>t.status==='failed')?'failed':checks.some(t=>t.status==='passed')?'passed':'blocked',
+    :groups.map(([label,checks])=>({label,status:checks.some(t=>t.status==='failed')?'failed':checks.some(t=>t.status==='blocked')?'blocked':checks.some(t=>t.status==='passed')?'passed':'blocked',
       counts:Object.fromEntries(['passed','failed','skipped','blocked'].map(k=>[k,checks.filter(t=>t.status===k).length]))}))
   const row=r=>{const n=r.counts.passed+r.counts.failed+r.counts.skipped+r.counts.blocked
     return `${badge(r.status)} *${r.label}* — ${r.counts.passed}/${n} passed${r.counts.failed?` · ${r.counts.failed} failed`:''}${r.counts.skipped?` · ${r.counts.skipped} skipped`:''}${r.counts.blocked?` · ${r.counts.blocked} blocked`:''}`}
@@ -128,7 +128,7 @@ function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
     ...(rows.length?[...rows.map(row),'']:[]),
     ...(s.pipeline.comparison?[`*Vs previous run:* ${comparisonText(s.pipeline.comparison)}`]:[]),
     ...(infraProblem(s)?[`⚠️ *Execution problem:* ${infraProblem(s)}`]:[]),
-    ...(actionable?[`🚨 *Failure alert:* ${newFailures?`${newFailures} new failure${newFailures===1?'':'s'} need attention`:'the suite could not run; investigate the environment'}${/^U[A-Z0-9]+$/.test(o.owner??'')?` <@${o.owner}>`:''}.`]:[]),
+    ...(actionable?[`🚨 *Failure alert:* ${newFailures?`${newFailures} new failure${newFailures===1?'':'s'} need attention`:'required checks could not run; investigate the prerequisites'}${/^U[A-Z0-9]+$/.test(o.owner??'')?` <@${o.owner}>`:''}.`]:[]),
     ...(recovered.length?[`✅ *Recovered:* ${recovered.slice(0,5).join(', ')}${recovered.length>5?` and ${recovered.length-5} more`:''}`]:[]),
     `*Critical:* ${critical.length?`confirmed defects mapped to ${critical.join(', ')}`:'No confirmed critical defects'}`,
     reportLink(o,s),

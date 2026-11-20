@@ -52,24 +52,45 @@ export function summarize(run) {
   }
 }
 
+function validHistoryEntry(row) {
+  const date = row?.startedAt ?? row?.finishedAt
+  return row && isRunId(row.runId) && typeof date === 'string' && Number.isFinite(Date.parse(date))
+}
+
+function savedHistory() {
+  if (!existsSync(RUNS_DIR)) return []
+  return readdirSync(RUNS_DIR, { withFileTypes: true }).filter(entry => entry.isDirectory() && isRunId(entry.name))
+    .map(entry => {
+      try {
+        const run = readRun(entry.name)
+        return validHistoryEntry(run) && run.runId === entry.name ? summarize(run) : null
+      } catch { return null } // A malformed record must not hide the other saved runs.
+    }).filter(Boolean).sort((a, b) => (a.startedAt ?? a.finishedAt).localeCompare(b.startedAt ?? b.finishedAt))
+}
+
 export function readIndex() {
-  try { return JSON.parse(readFileSync(join(RUNS_DIR, 'index.json'), 'utf8')) } catch { return [] }
+  try {
+    const index = JSON.parse(readFileSync(join(RUNS_DIR, 'index.json'), 'utf8'))
+    if (Array.isArray(index) && index.length && index.every(validHistoryEntry)) return index
+  } catch { /* Saved run records are authoritative when the index is unavailable. */ }
+  // Keep read recovery read-only so it cannot race a writer publishing a newer index.
+  return savedHistory()
 }
 
 function updateIndex(run) {
   mkdirSync(RUNS_DIR, { recursive: true })
   const index = readIndex().filter(r => r.runId !== run.runId)
   index.push(summarize(run))
-  index.sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+  index.sort((a, b) => (a.startedAt ?? a.finishedAt).localeCompare(b.startedAt ?? b.finishedAt))
   writeJsonAtomic(join(RUNS_DIR, 'index.json'), index)
 }
 
 /** Rebuilds the index from run folders (used after a crash or manual cleanup). */
 export function rebuildIndex() {
   if (!existsSync(RUNS_DIR)) return []
-  const runs = readdirSync(RUNS_DIR).map(readRun).filter(Boolean)
-  for (const run of runs) updateIndex(run)
-  return readIndex()
+  const index = savedHistory()
+  writeJsonAtomic(join(RUNS_DIR, 'index.json'), index)
+  return index
 }
 
 /** Most recent finished run for the same suite + environment, for diffing. Seeded runs compare among themselves. */

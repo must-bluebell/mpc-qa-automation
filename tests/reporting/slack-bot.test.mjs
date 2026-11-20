@@ -97,7 +97,7 @@ test('report summaries without a report host link to the deployed dashboard',asy
   options.reportBase=''
   options.runUrl=''
   await notifyBotRun({...run('render-link'),trigger:'dashboard',env:'production'},options)
-  assert.ok(calls[0].body.text.includes('Report: <https://qa-automation-bq3y.onrender.com/#/|QA dashboard>'))
+  assert.ok(calls[0].body.text.includes('Report: <https://qa-automation-bq3y.onrender.com/#/runs/render-link|QA dashboard>'))
   assert.doesNotMatch(calls[0].body.text,/127\.0\.0\.1|localhost|Local dashboard|scheduler host/)
 })
 test('GitHub CI summaries link to the run without exposing raw artifacts',async()=>{
@@ -262,4 +262,17 @@ test('unrecoverable Slack state stays intact and releases the delivery lock',asy
   assert.equal(calls.length,0)
   writeFileSync(path,JSON.stringify({messages:[],runs:{},incidents:{}}))
   assert.equal((await notifyBotRun(run('corrupt-state'),options)).queued,true)
+})
+
+test('a partially blocked API run never shows a green category badge and links to its run',async()=>{
+  const {calls,options}=setup()
+  const r={...run('blocked-api','passed'),suite:'api',status:'blocked',counts:{passed:1,failed:0,skipped:0,blocked:1},tests:[
+    {key:'read',title:'A01 - Anonymous session reports no address',adapter:'playwright',project:'api',status:'passed',annotations:[]},
+    {key:'write',title:'A03 - SIWE sign-in creates a session for the signing wallet',adapter:'playwright',project:'api',status:'blocked',annotations:[],skipReason:'Write checks run only on an isolated environment (QA_ALLOW_WRITES=1).'},
+  ]}
+  await notifyBotRun(r,options)
+  const summary=calls.find(c=>c.method==='chat.postMessage'&&!c.body.thread_ts).body.text
+  assert.match(summary,/🟡 \*API testing\*/)
+  assert.doesNotMatch(summary,/🟢/)
+  assert.match(summary,/#\/runs\/blocked-api/)
 })

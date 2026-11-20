@@ -50,3 +50,8 @@ test('failed preparation never announces infrastructure recovery even when asser
     assert.equal(executionRecovered({...run,testData:{status:'ready'}}),true)
   }
 })
+
+test('passing checks cannot hide blocked prerequisites in the same step',()=>{
+  assert.equal(runStatus({tests:[row('passed'),row('blocked')],steps:[]}), 'blocked')
+  assert.equal(runStatus({tests:[row('passed'),row('skipped')],steps:[]}), 'passed')
+})

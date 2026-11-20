@@ -2,15 +2,16 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { ROOT } from '../lib/env.mjs'
 import { runProcess } from '../lib/proc.mjs'
+import { prerequisiteReason } from '../lib/prerequisites.mjs'
 import { classifyFailure } from '../lib/classify.mjs'
 import { warmBrowserRuntime } from './web-runtime.mjs'
 
 /** Maps one regression-reporter record (utils/regression-reporter.ts) to the pipeline's test shape. */
 export function normalizeRecord(record, { adapter = 'playwright', evidenceBase }) {
-  const skipReason=record.annotations.find(a=>['skip','blocked'].includes(a.type))?.description??null
+  const skipReason=(record.annotations??[]).find(a=>['skip','blocked'].includes(a.type))?.description??null
   const dependencyBlocked=record.status==='skipped'&&skipReason&&classifyFailure({status:'failed',errors:[skipReason]})?.kind==='infrastructure'
   const blocked = record.status === 'interrupted' || record.status === 'not-run'
-    || dependencyBlocked || (record.status === 'skipped' && record.annotations.some(a => a.type === 'blocked'))
+    || dependencyBlocked || (record.status === 'skipped' && prerequisiteReason(skipReason)) || (record.status === 'skipped' && (record.annotations??[]).some(a => a.type === 'blocked'))
   const status = blocked ? 'blocked' : record.status === 'skipped' ? 'skipped'
     : ['expected', 'flaky'].includes(record.outcome) ? 'passed' : 'failed'
   const title = record.title.replace(/^[^>]*> /, '') // drop the project prefix; it is kept separately
