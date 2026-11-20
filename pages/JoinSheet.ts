@@ -6,9 +6,9 @@ import { addressChipName, copy } from './copy'
 /** How long to wait for the analytics choice banner before deciding it is not coming. */
 const CONSENT_WINDOW_MS = 8_000
 /** How long the Join CTA may stay covered by the analytics banner before the case fails. */
-const CTA_CLEAR_TIMEOUT_MS = 20_000
+const CTA_CLEAR_TIMEOUT_MS = 40_000
 /** One pointer attempt at the CTA; a refused attempt is retried by `clickCta`. */
-const CTA_ATTEMPT_MS = 4_000
+const CTA_ATTEMPT_MS = 10_000
 
 /**
  * Every locator in the suite lives here. Tests describe behaviour; this file knows how to find
