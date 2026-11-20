@@ -10,7 +10,7 @@ import {
   authorizationUrl, checkIdTokenClaims, decodeIdToken, exchangeCode, googleConfig, sessionKey, signPayload, verifyPayload,
 } from '../../dashboard/google-auth.mjs'
 
-const config = googleConfig({ QA_GOOGLE_CLIENT_ID: 'client.apps', QA_GOOGLE_CLIENT_SECRET: 'csecret', QA_GOOGLE_ALLOWED_DOMAIN: 'company.example', QA_GOOGLE_ALLOWED_EMAILS: 'Contractor@Other.example' })
+const config = googleConfig({ QA_GOOGLE_CLIENT_ID: 'client.apps', QA_GOOGLE_CLIENT_SECRET: 'csecret', QA_GOOGLE_ALLOWED_DOMAIN: 'company.example', QA_GOOGLE_ALLOWED_EMAILS: 'Dev@Company.example,contractor@other.example' })
 const NOW = Date.UTC(2026, 10, 20, 1, 0, 0)
 const claims = (over = {}) => ({
   iss: 'https://accounts.google.com', aud: 'client.apps', exp: NOW / 1000 + 600, nonce: 'n1',
@@ -27,9 +27,9 @@ test('a company account with a verified email and the hosted-domain claim is adm
   assert.deepEqual(checkIdTokenClaims(claims(), { config, nonce: 'n1', now: NOW }), { ok: true, email: 'dev@company.example' })
 })
 
-test('a listed outside email is admitted, case-insensitively', () => {
+test('an email allowlist never admits accounts outside the company domain', () => {
   const verdict = checkIdTokenClaims(claims({ email: 'contractor@other.example', hd: undefined }), { config, nonce: 'n1', now: NOW })
-  assert.equal(verdict.ok, true)
+  assert.equal(verdict.ok, false)
 })
 
 test('other domains, consumer accounts and spoofed domains are refused', () => {
@@ -145,4 +145,10 @@ test('dashboard routes: anonymous is asked to sign in, a viewer reads but cannot
   const write = await fetch(base + '/api/runs', { method: 'POST', headers: { host, cookie: viewer, 'content-type': 'application/json', 'x-qa-token': token }, body: JSON.stringify({ suite: 'smoke', env: 'production' }) })
   assert.equal(write.status, 403)
   assert.match((await write.json()).error, /admin key/)
+})
+
+test('an optional email allowlist restricts company accounts', () => {
+  assert.equal(checkIdTokenClaims(claims({ email: 'unlisted@company.example' }), { config, nonce: 'n1', now: NOW }).ok, false)
+  assert.equal(checkIdTokenClaims(claims({ email: 'DEV@company.example' }), { config, nonce: 'n1', now: NOW }).ok, true)
+  assert.equal(checkIdTokenClaims(claims(), { config: { ...config, emails: new Set() }, nonce: 'n1', now: NOW }).ok, true)
 })

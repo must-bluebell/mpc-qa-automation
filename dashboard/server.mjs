@@ -314,8 +314,10 @@ function startRun({ suite, env, seedDefect, ai, notify }) {
   const holder = busy()
   if (holder) throw Object.assign(new Error(`A run is already in progress (${holder.runId})`), { status: 409 })
   // Same policy checks the orchestrator applies, reported immediately instead of as a failed job.
-  const resolved = resolveEnvironment(env)
-  try { guard({ suiteName: suite, env: resolved, steps: expandSuite(suite, suites), seededDefect: seedDefect || null }) } catch (error) { throw Object.assign(error, { status: 422 }) }
+  try {
+    const resolved = resolveEnvironment(env)
+    guard({ suiteName: suite, env: resolved, steps: expandSuite(suite, suites), seededDefect: seedDefect || null })
+  } catch (error) { throw Object.assign(error, { status: 422 }) }
 
   const runId = newRunId(suite)
   const args = [join(ROOT, 'pipeline/orchestrator.mjs'), '--suite', suite, '--env', env, '--run-id', runId, '--trigger', 'dashboard']

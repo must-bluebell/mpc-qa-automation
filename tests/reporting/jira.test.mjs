@@ -22,7 +22,7 @@ function makeRun(extra = {}) {
   return {
     runId: RUN, suite: 'regression', env: 'production', versions: { app: { id: 'abc' } },
     tests: [
-      { key: 'chromium:W01', title: 'W01 - Display options', status: 'failed', flaky: false, classification: { kind: 'product' }, signature: 'sig1', requirementIds: ['WALLET-01'],
+      { key: 'chromium:W01', title: 'W01 - Display options', status: 'failed', retries: 1, flaky: false, classification: { kind: 'product' }, signature: 'sig1', requirementIds: ['WALLET-01'],
         errors: ['Expected visible: token=supersecret123 at 0x' + 'a'.repeat(40)], evidence: [{ name: 'shot', path: SHOT }, { name: 'trace', path: 'steps/01-playwright-chromium/t.zip' }] },
       { key: 'chromium:W02', title: 'W02', status: 'passed', flaky: true, classification: null, errors: [], evidence: [] },
       { key: 'chromium:W03', title: 'W03', status: 'failed', flaky: true, classification: { kind: 'product' }, errors: ['x'], evidence: [] },
@@ -65,6 +65,7 @@ test('a confirmed failure becomes an ME ticket with redacted text and screenshot
   const { calls, fetchImpl } = fakeJira()
   const ticket = await jira.createTicket(config, run, run.tests[0], { fetchImpl })
   assert.equal(ticket.issueKey, 'ME-101')
+  assert.equal(jira.listTickets()[0].env, 'production')
   const create = calls.find(c => c.path === '/rest/api/3/issue')
   assert.equal(create.body.fields.project.key, 'ME')
   assert.equal(create.body.fields.issuetype.name, 'Bug')
@@ -97,7 +98,7 @@ test('a test that passes again closes its ticket with a comment and the Done tra
   const first = makeRun()
   const { fetchImpl: createFetch } = fakeJira()
   await jira.createTicket(config, first, first.tests[0], { fetchImpl: createFetch })
-  const later = { runId: 'run-later', tests: [{ key: 'chromium:W01', title: 'W01', status: 'passed', flaky: false }] }
+  const later = { runId: 'run-later', env: 'production', tests: [{ key: 'chromium:W01', title: 'W01', status: 'passed', flaky: false }] }
   const { calls, fetchImpl } = fakeJira()
   const result = await jira.reconcileAfterRun(later, { config, fetchImpl, auto: false })
   assert.deepEqual(result.closed, ['ME-101'])
@@ -107,7 +108,7 @@ test('a test that passes again closes its ticket with a comment and the Done tra
 })
 
 test('automatic creation is off unless QA_JIRA_AUTO is on; a Jira outage is an error entry, not a crash', async () => {
-  const run = makeRun({ runId: 'run-auto', tests: [{ key: 'chromium:W09', title: 'W09', status: 'failed', flaky: false, classification: { kind: 'product' }, errors: ['e'], evidence: [] }] })
+  const run = makeRun({ runId: 'run-auto', tests: [{ key: 'chromium:W09', title: 'W09', status: 'failed', retries: 1, flaky: false, classification: { kind: 'product' }, errors: ['e'], evidence: [] }] })
   const off = fakeJira()
   const none = await jira.reconcileAfterRun(run, { config, fetchImpl: off.fetchImpl, auto: false })
   assert.deepEqual(none.created, [])
@@ -124,3 +125,37 @@ test('a manual ticket for a passing or unknown test is refused with a clear stat
 })
 
 test.after(() => rmSync(runsDir, { recursive: true, force: true }))
+
+test('automatic Jira confirmation requires a failed retry', async () => {
+  resetStore()
+  const run = makeRun()
+  run.tests[0].retries = 0
+  const api = fakeJira()
+  const result = await jira.reconcileAfterRun(run, { config, fetchImpl: api.fetchImpl, auto: true })
+  assert.deepEqual(result.created, [])
+  assert.equal(api.calls.length, 0)
+})
+
+test('passing in another environment does not close a production defect', async () => {
+  resetStore()
+  const run = makeRun()
+  await jira.createTicket(config, run, run.tests[0], { fetchImpl: fakeJira().fetchImpl })
+  const api = fakeJira()
+  const result = await jira.reconcileAfterRun({ runId: 'preview-pass', env: 'preview', tests: [{ ...run.tests[0], status: 'passed' }] }, { config, fetchImpl: api.fetchImpl })
+  assert.deepEqual(result.closed, [])
+  assert.equal(api.calls.length, 0)
+})
+
+test('legacy tickets recover their environment from the original saved run', async () => {
+  resetStore()
+  const run = makeRun()
+  writeFileSync(join(RUNS_DIR, RUN, 'run.json'), JSON.stringify(run))
+  writeFileSync(join(RUNS_DIR, 'jira-tickets.json'), JSON.stringify({ [run.tests[0].key]: {
+    testKey: run.tests[0].key, runId: RUN, issueKey: 'ME-99', state: 'open', url: config.baseUrl + '/browse/ME-99',
+  } }))
+  const api = fakeJira()
+  const existing = await jira.createTicket(config, run, run.tests[0], { fetchImpl: api.fetchImpl })
+  assert.equal(existing.issueKey, 'ME-99')
+  assert.equal(existing.env, 'production')
+  assert.equal(api.calls.length, 0)
+})

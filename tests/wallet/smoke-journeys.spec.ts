@@ -14,11 +14,6 @@ const t = target()
  * runs only where writes are allowed, because it leaves a session and join row behind.
  */
 test.describe('Hourly smoke journeys', { tag: ['@ui', '@smoke', '@regression'] }, () => {
-  test.skip(
-    () => !process.env.QA_SEED_PHRASE,
-    'QA_SEED_PHRASE is not set — there is no seed to derive a test wallet from',
-  )
-
   test('J01 - Digging opens for an anonymous visitor', async ({ page }) => {
     test.skip(usesActivities(), 'The Digging journey is not part of the activities navigation.')
     await page.goto('/?view=dig')
@@ -26,6 +21,9 @@ test.describe('Hourly smoke journeys', { tag: ['@ui', '@smoke', '@regression'] }
   })
 
   test('J02 - A rejected sign-in request never reaches verification', async ({ page }) => {
+    test.skip(!process.env.QA_SEED_PHRASE || !process.env.WALLET_ADDRESS,
+      'QA_SEED_PHRASE and WALLET_ADDRESS are required for wallet sign-in checks')
+
     await stubAnalytics(page)
     const wallet = await injectTestWallet(page, {
       account: getConfiguredWallet(),

@@ -9,8 +9,8 @@
       "kind": "test",
       "graceMinutes": 15,
       "priority": 5,
-      "env": "production",
-      "enabled": false,
+      "env": "preview",
+      "enabled": true,
       "ai": false
     },
     {

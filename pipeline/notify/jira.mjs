@@ -9,7 +9,7 @@ import { redactValue } from '../lib/safe-output.mjs'
  *
  * A failure is confirmed when it is a product failure that failed on its retry too (not flaky). A person
  * creates the first tickets from the dashboard; QA_JIRA_AUTO=1 turns on automatic creation later. A ticket
- * is closed automatically when its test passes again in a later run (not flaky). Tickets are keyed by test
+ * is closed automatically when its test passes again in a later run (not flaky). Tickets are keyed by environment and test
  * and stored in runs/jira-tickets.json, so one failing test never gets two open tickets.
  */
 const STORE = () => resolve(RUNS_DIR, 'jira-tickets.json')
@@ -42,7 +42,13 @@ export function jiraStatus(env = process.env) {
 }
 
 export function readTickets() {
-  try { return JSON.parse(readFileSync(STORE(), 'utf8')) } catch { return {} }
+  try {
+    const tickets = JSON.parse(readFileSync(STORE(), 'utf8'))
+    for (const ticket of Object.values(tickets)) {
+      if (!ticket.env && isRunId(ticket.runId)) ticket.env = readRun(ticket.runId)?.env ?? null
+    }
+    return tickets
+  } catch { return {} }
 }
 
 /** Plain text becomes one ADF paragraph per line. Values are never interpreted as markup. */
@@ -63,7 +69,7 @@ export function issueFields(run, test, config, { dashboardUrl = process.env.QA_D
     issuetype: { name: config.issueType },
     summary: `[QA] ${String(test.title).slice(0, 180)} fails in ${run.env}`.slice(0, 250),
     description: adfDocument([
-      'Automated QA: this check failed and failed again on its retry, so it is not flaky.',
+      test.retries >= 1 ? 'Automated QA: this check failed again on its retry.' : 'QA failure submitted for human confirmation; no failed retry was recorded.',
       `Check: ${test.title}`,
       `Suite: ${run.suite} · Environment: ${run.env} · Run: ${run.runId}`,
       `App version: ${run.versions?.app?.id ?? 'unspecified'} · Failure signature: ${test.signature ?? 'n/a'}`,
@@ -104,16 +110,21 @@ function writeTickets(map) { writeJsonAtomic(STORE(), map) }
  * The ticket is stored before attachments are uploaded, so a crash cannot leave an untracked duplicate.
  */
 export async function createTicket(config, run, test, { mode = 'manual', fetchImpl = fetch } = {}) {
-  if (test.status !== 'failed' || test.classification?.kind !== 'product' || test.flaky) {
+  if (test.status !== 'failed' || test.classification?.kind !== 'product' || test.flaky || (mode === 'auto' && !(test.retries >= 1))) {
     throw Object.assign(new Error('Only confirmed product failures get Jira tickets'), { status: 422 })
   }
   const store = readTickets()
-  if (store[test.key]?.state === 'open') return { ...store[test.key], existing: true }
+  const storeKey = JSON.stringify([run.env, test.key])
+  if (store[test.key]?.state === 'open' && !store[test.key].env) {
+    throw Object.assign(new Error('Existing Jira ticket has no recoverable environment; review it before creating another'), { status: 409 })
+  }
+  const existing = store[storeKey] ?? (store[test.key]?.env === run.env ? store[test.key] : null)
+  if (existing?.state === 'open') return { ...existing, existing: true }
   const created = await jiraCall(config, 'POST', '/rest/api/3/issue', { body: { fields: issueFields(run, test, config) }, fetchImpl })
   const issueKey = created?.key
   if (typeof issueKey !== 'string' || !ISSUE_KEY.test(issueKey)) throw new Error('Jira returned an unexpected response')
-  const ticket = { testKey: test.key, title: test.title, issueKey, url: `${config.baseUrl}/browse/${issueKey}`, runId: run.runId, mode, state: 'open', createdAt: new Date().toISOString() }
-  store[test.key] = ticket
+  const ticket = { env: run.env, testKey: test.key, title: test.title, issueKey, url: `${config.baseUrl}/browse/${issueKey}`, runId: run.runId, mode, state: 'open', createdAt: new Date().toISOString() }
+  store[storeKey] = ticket
   writeTickets(store)
   const attachmentsFailed = []
   for (const file of evidenceScreenshots(run, test)) {
@@ -145,21 +156,21 @@ export async function reconcileAfterRun(run, { config = jiraConfig(), fetchImpl 
   if (!config) return { configured: false }
   const result = { configured: true, created: [], closed: [], errors: [] }
   const store = readTickets()
-  for (const ticket of Object.values(store)) {
-    if (ticket.state !== 'open') continue
+  for (const [storeKey, ticket] of Object.entries(store)) {
+    if (ticket.state !== 'open' || !ticket.env || ticket.env !== run.env) continue
     const test = run.tests?.find(t => t.key === ticket.testKey)
     if (test?.status !== 'passed' || test.flaky) continue
     try {
       await closeTicket(config, ticket, run.runId, fetchImpl)
       const current = readTickets()
-      if (current[ticket.testKey]) current[ticket.testKey] = { ...current[ticket.testKey], state: 'done', closedAt: new Date().toISOString(), closedByRun: run.runId }
+      if (current[storeKey]) current[storeKey] = { ...current[storeKey], state: 'done', closedAt: new Date().toISOString(), closedByRun: run.runId }
       writeTickets(current)
       result.closed.push(ticket.issueKey)
     } catch (error) { result.errors.push({ issueKey: ticket.issueKey, code: error.code ?? 'jira_unavailable' }) }
   }
   if (auto) {
     for (const test of run.tests ?? []) {
-      if (test.status !== 'failed' || test.classification?.kind !== 'product' || test.flaky) continue
+      if (test.status !== 'failed' || test.classification?.kind !== 'product' || test.flaky || !(test.retries >= 1)) continue
       try {
         const ticket = await createTicket(config, run, test, { mode: 'auto', fetchImpl })
         if (!ticket.existing) result.created.push(ticket.issueKey)
@@ -186,5 +197,5 @@ export async function openTicketForTest(runId, testKey, { config = jiraConfig(),
 
 /** Open and closed tickets for the dashboard. Only identifiers and links are returned. */
 export function listTickets() {
-  return Object.values(readTickets()).map(t => ({ testKey: t.testKey, issueKey: t.issueKey, url: t.url, state: t.state, runId: t.runId }))
+  return Object.values(readTickets()).map(t => ({ env: t.env, testKey: t.testKey, issueKey: t.issueKey, url: t.url, state: t.state, runId: t.runId }))
 }

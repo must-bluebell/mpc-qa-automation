@@ -337,7 +337,7 @@ function signInPanel() {
 
 // Creates a Jira ticket for one confirmed product failure (admin only). Shows the existing ticket instead when there is one.
 function ticketControl(run, t, tickets) {
-  const existing = tickets.find(x => x.testKey === t.key)
+  const existing = tickets.find(x => x.testKey === t.key && x.env === run.env && (x.state === 'open' || x.runId === run.runId))
   if (existing) return h('span', {}, ' · ', externalLink(existing.url, existing.issueKey), existing.state === 'done' ? ' (closed)' : '')
   if (!state.status?.jira?.configured || state.status.role !== 'admin') return ''
   const message = h('span', { class: 'hint', role: 'status' })

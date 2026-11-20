@@ -14,7 +14,7 @@ const ISSUERS = ['https://accounts.google.com', 'accounts.google.com']
 
 /**
  * Reads the settings. Sign-in is on only when the client ID, client secret and company domain are all set;
- * the optional email list adds individual people from outside the domain.
+ * the optional email list further restricts accounts within that domain.
  */
 export function googleConfig(env = process.env) {
   const clientId = (env.QA_GOOGLE_CLIENT_ID || '').trim()
@@ -82,7 +82,7 @@ export function checkIdTokenClaims(claims, { config, nonce, now = Date.now() }) 
   const email = claims.email.trim().toLowerCase()
   const emailDomain = email.split('@')[1] ?? ''
   const onDomain = emailDomain === config.domain && claims.hd === config.domain
-  if (!onDomain && !config.emails.has(email)) return { ok: false, reason: 'not_allowed' }
+  if (!onDomain || (config.emails.size > 0 && !config.emails.has(email))) return { ok: false, reason: 'not_allowed' }
   return { ok: true, email }
 }
 

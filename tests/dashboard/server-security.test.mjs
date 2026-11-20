@@ -9,7 +9,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync,symli
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 
-async function dashboardServer(t) {
+async function dashboardServer(t, overrides = {}) {
   const dir=mkdtempSync(join(tmpdir(),'qa-dashboard-security-'))
   const socket=createServer().listen(0,'127.0.0.1')
   await once(socket,'listening')
@@ -41,7 +41,7 @@ async function dashboardServer(t) {
     syncBuiltinESMExports();
   `)
   const child=spawn(process.execPath,['--import',preload,'dashboard/server.mjs'],{
-    env:{...process.env,OPENAI_API_KEY:'qa-security-test-secret',QA_DEFAULT_ENV:'local-docker',QA_RUNS_DIR:dir,QA_DASHBOARD_PORT:String(port),QA_TEST_LOG_FILE:logFile,QA_TEST_READ_EVENTS:events},
+    env:{...process.env,OPENAI_API_KEY:'qa-security-test-secret',QA_DEFAULT_ENV:'local-docker',QA_RUNS_DIR:dir,QA_DASHBOARD_PORT:String(port),QA_TEST_LOG_FILE:logFile,QA_TEST_READ_EVENTS:events,...overrides},
     stdio:['ignore','pipe','pipe'],
   })
   let output='',errors=''
@@ -310,4 +310,16 @@ test('dashboard keeps an idle proxy connection reusable beyond the Node default'
   const next = await request()
   assert.equal(next.status, 200)
   assert.equal(next.reused, true, 'server must not close the proxy connection after five seconds')
+})
+
+
+test('missing preview configuration refuses a run with an actionable error and no run record', async t => {
+  const f = await dashboardServer(t, { QA_PREVIEW_BASE_URL: '' })
+  const response = await fetch(`${f.base}/api/runs`, { method: 'POST',
+    headers: { cookie: await f.session(), 'content-type': 'application/json', 'x-qa-token': f.csrf, origin: f.base },
+    body: JSON.stringify({ suite: 'smoke', env: 'preview', notify: false, ai: false }),
+  })
+  assert.equal(response.status, 422)
+  assert.match((await response.json()).error, /QA_PREVIEW_BASE_URL/)
+  assert.equal(existsSync(join(f.dir, 'index.json')), false)
 })
