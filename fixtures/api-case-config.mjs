@@ -14,6 +14,26 @@ export function isHostedReadSuccess(contract, fixture, configured = false) {
     && fixture.body === undefined && fixture.headers === undefined && fixture.storageStateEnv === undefined)
 }
 
+/**
+ * Reviewed GET baseline probes that may run on hosted targets. Each is anonymous, has no body, and
+ * expects the app to answer before any state changes: an authentication, validation or origin
+ * rejection, or a public read. Cron, development, Telegram callback and action-style GET routes
+ * (claim, run, open, social-complete, checkin-reminder) are deliberately absent.
+ */
+const hostedReadBaselines = new Set([
+  'API004', 'API009', 'API010', 'API011', 'API014', 'API016', 'API020', 'API022', 'API025', 'API029',
+  'API032', 'API039', 'API041', 'API046', 'API082', 'API084', 'API086', 'API087', 'API088', 'API089',
+  'API090', 'API092', 'API098', 'API100', 'API105', 'API107', 'API109', 'API114', 'API116', 'API118',
+  'API128', 'API130', 'API138', 'API142', 'API146', 'API149', 'API155', 'API156', 'API160', 'API165',
+  'API166', 'API170', 'API171',
+])
+
+/** A configured baseline override is isolated: the reviewed built-in probe is what runs on hosted targets. */
+export function isHostedReadBaseline(contract, configured = false) {
+  return Boolean(!configured && hostedReadBaselines.has(contract.id) && contract.method === 'GET'
+    && contract.baseline && !contract.blocked && !/^\/(api\/cron\/|dev\/)/.test(contract.route))
+}
+
 export function assertIsolatedTarget(baseUrl, allowWrites) {
   const url = new URL(baseUrl)
   if (allowWrites !== '1' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {

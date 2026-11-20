@@ -210,7 +210,7 @@ One incorrect foreign-origin assertion for GET `/api/admin/join-policy` was remo
 
 Discovery is not execution. The module suite includes 113 cases explicitly marked manual. Expanded API writes require an isolated loopback target; many success contracts also need `QA_API_CASES_FILE`, seeded IDs, or an isolated admin storage-state file. Preserve these prerequisites: production runs cannot execute the isolated mutation cases. Run details show each skipped/blocked reason. UAT has three implemented session journeys; the hundreds of API/module cases are not relabelled as UAT.
 
-Six built-in anonymous GET success contracts (session, home, quests, registration status, security.txt, and vote proposals) can run on hosted targets. Custom success fixtures remain isolated, even for those routes; GET cron and development endpoints are not exempt from isolation.
+Six built-in anonymous GET success contracts (session, home, quests, registration status, security.txt, and vote proposals) can run on hosted targets. The reviewed GET baseline list in `fixtures/api-case-config.mjs` (`isHostedReadBaseline`) also runs on hosted targets: anonymous reads that expect an authentication, validation or origin rejection. Custom success fixtures remain isolated, even for those routes; GET cron, development, Telegram callback and action-style endpoints are not exempt from isolation.
 
 Pipeline runs save `execution-inventory.json` before tests start and append each completed result to `execution-results.jsonl`. If a runner is killed, its completed results survive and uncompleted cases are reported as blocked. This avoids collapsing an interrupted suite into a single synthetic test.
 

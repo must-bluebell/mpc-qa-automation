@@ -72,3 +72,19 @@ test('hosted success policy permits only reviewed anonymous reads and keeps fixt
     assert.equal(isHostedReadSuccess(catalog.find(c => c.id === id), { ...fixture, path }), true)
   }
 })
+
+test('hosted baseline policy permits only reviewed anonymous GET probes and keeps cron, dev and overrides isolated', async () => {
+  const { isHostedReadBaseline } = await import('../../fixtures/api-case-config.mjs')
+  const catalog = read('../../testplans/api/contracts.json')
+  const allowed = catalog.filter(c => isHostedReadBaseline(c))
+  assert.ok(allowed.length >= 40, `expected reviewed reads, got ${allowed.length}`)
+  for (const c of allowed) {
+    assert.equal(c.method, 'GET')
+    assert.ok(c.baseline, `${c.id} needs a baseline`)
+    assert.ok(!/^\/(api\/cron\/|dev\/)/.test(c.route), `${c.id} must stay isolated`)
+    assert.equal(isHostedReadBaseline(c, true), false, `${c.id} configured override must stay isolated`)
+  }
+  const ids = new Set(allowed.map(c => c.id))
+  for (const id of ['API101', 'API124', 'API094', 'API096', 'API158', 'API053']) assert.equal(ids.has(id), false, `${id} is an action or callback route`)
+  for (const c of catalog.filter(c => c.method !== 'GET' || /^\/(api\/cron\/|dev\/)/.test(c.route))) assert.equal(isHostedReadBaseline(c), false, `${c.method} ${c.route} must stay isolated`)
+})
