@@ -1,12 +1,12 @@
 import { test } from '@playwright/test'
-import { contracts, configuredCases, contractCall, assertContract, requireIsolatedApi } from '../../fixtures/api-contracts'
+import { contracts, configuredCases, contractCall, assertContract, requireApiWrites } from '../../fixtures/api-contracts'
 import { isHostedReadBaseline } from '../../fixtures/api-case-config.mjs'
 
 test.describe('Unity collection contracts', { tag: ['@api', '@regression', '@collection'] }, () => {
   for (const c of contracts) {
     const expected = configuredCases[c.id]?.baseline ?? c.baseline
     // Reviewed read-only GET probes run on hosted targets; every other case stays on the isolated stack.
-    const gate = () => { if (!isHostedReadBaseline(c, Boolean(configuredCases[c.id]?.baseline))) requireIsolatedApi() }
+    const gate = () => { if (!isHostedReadBaseline(c, Boolean(configuredCases[c.id]?.baseline))) requireApiWrites() }
     test(`${c.id} ${c.method} ${c.route} — baseline contract`, async ({ request }, info) => {
       gate()
       info.annotations.push({ type: 'source', description: c.source })

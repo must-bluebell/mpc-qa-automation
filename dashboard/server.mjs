@@ -293,7 +293,7 @@ function status(role = 'admin', email = null) {
     runAllSuite: HOSTED ? 'hosted-full' : 'full',
     stackAvailable: !HOSTED,
     running: busy(),
-    jobs: [...jobs.values()].map(({ runId, suite, env, startedAt, exitCode, notify }) => ({ runId, suite, env, startedAt, exitCode: exitCode ?? null, notify })),
+    jobs: [...jobs.values()].map(({ runId, suite, env, startedAt, exitCode, notify, productionApiWrites }) => ({ runId, suite, env, startedAt, exitCode: exitCode ?? null, notify, productionApiWrites })),
     suites: Object.entries(suites).filter(([name]) => !HOSTED || hostedRunnable(name, suites)).map(([name, s]) => ({ name, description: s.description, include: s.include ?? null, requiresIsolated: !!s.requiresIsolated, requiresLoad: !!s.requiresLoad })),
     environments: Object.entries(envs).filter(([, e]) => !HOSTED || !e.isolated).map(([name, e]) => ({ name, description: e.description, isolated: !!e.isolated, allowWrites: !!e.allowWrites, allowLoad: !!e.allowLoad })),
     seededDefects: Object.entries(PROFILES).map(([name, p]) => ({ name, kind: p.kind, description: p.description })),
@@ -304,11 +304,12 @@ function status(role = 'admin', email = null) {
   }
 }
 
-function startRun({ suite, env, seedDefect, ai, notify }) {
+function startRun({ suite, env, seedDefect, ai, notify, productionApiWrites = false }) {
   const suites = config.suites()
   const envs = config.environments()
   if (typeof suite !== 'string' || !Object.hasOwn(suites, suite)) throw Object.assign(new Error('Unknown suite'), { status: 400 })
   if (typeof env !== 'string' || !Object.hasOwn(envs, env)) throw Object.assign(new Error('Unknown environment'), { status: 400 })
+  if (typeof productionApiWrites !== 'boolean') throw Object.assign(new Error('Production API writes must be a boolean'), { status: 400 })
   if (notify != null && typeof notify !== 'boolean') throw Object.assign(new Error('Slack alerts must be enabled or disabled'), { status: 400 })
   if (seedDefect != null && seedDefect !== '' && (typeof seedDefect !== 'string' || !Object.hasOwn(PROFILES, seedDefect))) throw Object.assign(new Error('Unknown seeded defect'), { status: 400 })
   const holder = busy()
@@ -316,11 +317,12 @@ function startRun({ suite, env, seedDefect, ai, notify }) {
   // Same policy checks the orchestrator applies, reported immediately instead of as a failed job.
   try {
     const resolved = resolveEnvironment(env)
-    guard({ suiteName: suite, env: resolved, steps: expandSuite(suite, suites), seededDefect: seedDefect || null })
+    guard({ suiteName: suite, env: resolved, steps: expandSuite(suite, suites), seededDefect: seedDefect || null, productionApiWrites })
   } catch (error) { throw Object.assign(error, { status: 422 }) }
 
   const runId = newRunId(suite)
   const args = [join(ROOT, 'pipeline/orchestrator.mjs'), '--suite', suite, '--env', env, '--run-id', runId, '--trigger', 'dashboard']
+  if (productionApiWrites) args.push('--production-api-writes')
   if (seedDefect) args.push('--seed-defect', seedDefect)
   if (notify === false) args.push('--no-notify')
   args.push(...aiArgs(ai))
@@ -328,7 +330,7 @@ function startRun({ suite, env, seedDefect, ai, notify }) {
   const logFile = join(JOB_LOG_DIR, `${runId}.log`)
   const log = createWriteStream(logFile, { mode: 0o600 })
   const child = spawn(process.execPath, args, { cwd: ROOT, env: { ...process.env, FORCE_COLOR: '0' }, stdio: ['ignore', 'pipe', 'pipe'] })
-  const job = { runId, suite, env, pid: child.pid, startedAt: new Date().toISOString(), logFile, exitCode: undefined, notify: notify !== false }
+  const job = { runId, suite, env, productionApiWrites, pid: child.pid, startedAt: new Date().toISOString(), logFile, exitCode: undefined, notify: notify !== false }
   jobs.set(runId, job)
   const stdout = outputRedactor(text => log.write(text)), stderr = outputRedactor(text => log.write(text))
   child.stdout.on('data', chunk => stdout.write(chunk))

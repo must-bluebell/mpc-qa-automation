@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { chromium, expect } from '@playwright/test'
 
 // Serve the real dashboard in a browser with controlled API responses. No Docker runs or Slack sends.
-async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, notifyChecked, jobNotify, startButton = 'Run', accessToken, runDetail, history = [], categoryResults } = {}) {
+async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, notifyChecked, productionWritesChecked, jobNotify, startButton = 'Run', accessToken, runDetail, history = [], categoryResults } = {}) {
   const browser = await chromium.launch()
   t.after(() => browser.close())
   const page = await browser.newPage()
@@ -17,7 +17,7 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
     jobs: jobNotify === undefined ? [] : [{runId,notify:jobNotify,exitCode:fixture.complete?0:null}],
     slack: { configured: true, valid: true }, ai: { configured: true, auto: aiAuto },
     suites: [{ name: 'full' }, { name: 'regression' }],
-    environments: [{ name: 'local-docker' }], seededDefects: [{name:'upstream-connection-timeout',kind:'infrastructure'}], categoryResults,
+    environments: [{ name: productionWritesChecked === undefined ? 'local-docker' : 'production' }], seededDefects: [{name:'upstream-connection-timeout',kind:'infrastructure'}], categoryResults,
   })
   await page.route('http://dashboard.test/**', async route => {
     const pathname = new URL(route.request().url()).pathname
@@ -53,6 +53,7 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
   if (!scheduled) {
     if (aiChecked !== undefined) await page.getByRole('checkbox', { name: 'AI review' }).setChecked(aiChecked)
     if (notifyChecked !== undefined) await page.getByRole('checkbox', { name: 'Slack alerts' }).setChecked(notifyChecked)
+    if (productionWritesChecked !== undefined) await page.getByRole('checkbox', {name:'Allow production API writes'}).setChecked(productionWritesChecked, {timeout:1000})
     await page.getByRole('button', { name: startButton, exact: true }).click()
   }
   await expect(page.locator('pre.log')).toContainText('Still running')
@@ -278,4 +279,12 @@ for (const status of [502, 503, 504]) test(`HTTP ${status} preserves output and 
   const requests = fixture.logRequests
   await page.clock.runFor(6000)
   assert.equal(fixture.logRequests, requests)
+})
+
+
+test('production API writes are explicit in dashboard run requests',async t=>{
+  for(const checked of [false,true]){
+    const {fixture}=await dashboard(t,{productionWritesChecked:checked})
+    assert.equal(fixture.lastStart.productionApiWrites,checked)
+  }
 })

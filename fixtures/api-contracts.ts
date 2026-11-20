@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type TestInfo } from '@playwright/test'
-import { appOrigin, writesAllowed } from './api'
+import { appOrigin, writesAllowed, requireWrites } from './api'
 import { target } from '../config/target'
 import { assertIsolatedTarget, loadApiCases } from './api-case-config.mjs'
 import { readFileSync } from 'node:fs'
@@ -21,6 +21,8 @@ export function requireIsolatedApi() {
   // A mistakenly exported write flag must never enable this suite on the public deployments.
   assertIsolatedTarget(target().baseUrl, process.env.QA_ALLOW_WRITES)
 }
+
+export const requireApiWrites = requireWrites
 
 export function field(value: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((v, k) => v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined, value)

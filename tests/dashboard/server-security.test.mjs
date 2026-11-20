@@ -323,3 +323,11 @@ test('missing preview configuration refuses a run with an actionable error and n
   assert.match((await response.json()).error, /QA_PREVIEW_BASE_URL/)
   assert.equal(existsSync(join(f.dir, 'index.json')), false)
 })
+
+
+test('production API write authorization rejects non-boolean input before starting a job',async t=>{
+  const f=await dashboardServer(t),headers={cookie:await f.session(),'content-type':'application/json','x-qa-token':f.csrf}
+  const r=await fetch(f.base+'/api/runs',{method:'POST',headers,body:JSON.stringify({suite:'api',env:'preview',productionApiWrites:'true'})})
+  assert.equal(r.status,400)
+  assert.match((await r.json()).error,/production.*API.*writes.*boolean/i)
+})

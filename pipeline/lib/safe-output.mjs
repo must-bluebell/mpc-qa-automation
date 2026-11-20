@@ -85,7 +85,7 @@ export function publicSummary(run) {
   const metric = value => Number.isFinite(value)&&value>=0?Number(value.toFixed(2)):null
   const thresholds=config.thresholds()
   const summary={ runId:field(run.runId), suite:field(run.suite), environment:field(run.env),status:field(run.status),
-    reportOnly:run.reportOnly===true, allureReport:run.allure?.generated===true,
+    productionApiWrites:run.productionApiWrites===true, reportOnly:run.reportOnly===true, allureReport:run.allure?.generated===true,
     sections:(run.reportSections??[]).filter(s=>REPORT_CATEGORIES.some(c=>c.suite===s.suite)).map(s=>({
       label:REPORT_CATEGORIES.find(c=>c.suite===s.suite).label,status:field(s.status),sourceRunId:field(s.sourceRunId),finishedAt:kstTime(s.finishedAt),
       counts:Object.fromEntries(['passed','failed','skipped','blocked'].map(k=>[k,count(s.counts?.[k])]))})),

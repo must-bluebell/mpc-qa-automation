@@ -1,6 +1,7 @@
 import { test, type APIRequestContext, type APIResponse, type TestInfo } from '@playwright/test'
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts'
 import { createSiweMessage } from 'viem/siwe'
+import { assertApiWriteTarget } from './api-case-config.mjs'
 import { target } from '../config/target'
 
 /**
@@ -13,13 +14,16 @@ export function appOrigin(): string {
   return (process.env.QA_APP_ORIGIN || target().baseUrl).replace(/\/+$/, '')
 }
 
-/** Writes (sign-in, run saves) only run against an environment the pipeline marked isolated. */
+/** API writes are isolated by default, with a separate per-run production authorization. */
 export function writesAllowed(): boolean {
   return process.env.QA_ALLOW_WRITES === '1'
 }
 
 export function requireWrites() {
-  test.skip(!writesAllowed(), 'Write checks run only on an isolated environment (QA_ALLOW_WRITES=1).')
+  test.skip(!writesAllowed(), 'API write checks require an isolated target or an explicitly authorized production API run.')
+  assertApiWriteTarget(target().baseUrl, process.env.QA_ALLOW_WRITES, {
+    productionApiWrites: process.env.QA_PRODUCTION_API_WRITES === '1', environment: process.env.QA_ENVIRONMENT,
+  })
 }
 
 type CallOptions = { body?: unknown; raw?: string; origin?: string | null; headers?: Record<string, string> }

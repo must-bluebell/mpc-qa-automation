@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { signIn, writesAllowed } from '../../fixtures/api'
-import { contractCall, assertContract, requireIsolatedApi } from '../../fixtures/api-contracts'
+import { contractCall, assertContract, requireApiWrites } from '../../fixtures/api-contracts'
 import { target } from '../../config/target'
 
 type Validation = { id: string; path: string; method?: string; body?: unknown; raw?: string; error: string; status?: number }
@@ -55,12 +55,12 @@ test.describe('Authenticated input validation', { tag: ['@api', '@regression', '
   let context: APIRequestContext | undefined
   test.beforeAll(async ({ playwright }) => {
     if (!writesAllowed()) return
-    requireIsolatedApi()
+    requireApiWrites()
     context = await playwright.request.newContext({ baseURL: target().baseUrl })
     await signIn(context, test.info())
   })
   test.afterAll(async () => { await context?.dispose() })
-  test.beforeEach(() => requireIsolatedApi())
+  test.beforeEach(() => requireApiWrites())
   for (const [i, c] of cases.entries()) {
     test(`${c.id}-V${i + 1} ${c.method ?? 'POST'} ${c.path} rejects ${c.error}`, async ({}, info) => {
       expect(context).toBeDefined()

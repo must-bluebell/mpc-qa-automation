@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test'
 import { signIn } from '../../fixtures/api'
-import { contractCall, assertContract, requireIsolatedApi } from '../../fixtures/api-contracts'
+import { contractCall, assertContract, requireApiWrites } from '../../fixtures/api-contracts'
 import { target } from '../../config/target'
 
 test.describe('Authenticated API workflows', { tag: ['@api', '@regression', '@collection-workflow'] }, () => {
-  test.beforeEach(() => requireIsolatedApi())
+  test.beforeEach(() => requireApiWrites())
 
   test('FLOW01 — two wallet sessions remain independent after logout', async ({ request, playwright }, info) => {
     const first = await signIn(request, info)

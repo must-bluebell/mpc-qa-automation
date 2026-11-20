@@ -1,5 +1,5 @@
 import { test } from '@playwright/test'
-import { requireIsolatedApi, contractCall, assertContract } from '../../fixtures/api-contracts'
+import { requireApiWrites, contractCall, assertContract } from '../../fixtures/api-contracts'
 import { target } from '../../config/target'
 
 // An isolated admin session is an explicit fixture, never a wallet promoted to admin.
@@ -27,8 +27,8 @@ const cases = [
 test.use({ trace: 'off' })
 test.describe('Administrator validation', { tag: ['@api', '@collection-admin'] }, () => {
   test.beforeEach(() => {
-    requireIsolatedApi()
-    test.skip(!process.env.QA_API_ADMIN_STATE_FILE, 'Requires an isolated administrator storageState file in QA_API_ADMIN_STATE_FILE')
+    requireApiWrites()
+    test.skip(!process.env.QA_API_ADMIN_STATE_FILE, 'Requires QA_API_ADMIN_STATE_FILE')
   })
   for (const [id, method, path, body, error] of cases) {
     test(`${id} ${method} ${path} rejects invalid input after admin authentication`, async ({ playwright }, info) => {

@@ -45,6 +45,8 @@ test('missing isolated environments and fixtures are blocked, while unavailable 
     'Requires QA_API_CASES_FILE entry API001.success with seeded inputs and an exact response contract.',
     'Requires an isolated administrator storageState file in QA_API_ADMIN_STATE_FILE',
     'Requires isolated QA_API_CRON_SECRET',
+    'Configured API success fixtures require an isolated target.',
+    'API write checks require an isolated target or an explicitly authorized production API run.',
     'Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.',
     'Join policy runs before authentication. Configure baseline 401/not_signed_in when skipEmailOtp=true, otherwise 403/otp_required.',
   ]) {

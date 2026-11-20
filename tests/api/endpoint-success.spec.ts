@@ -1,6 +1,6 @@
 import { test } from '@playwright/test'
 import { signIn } from '../../fixtures/api'
-import { contracts, configuredCases, contractCall, assertContract, requireIsolatedApi } from '../../fixtures/api-contracts'
+import { contracts, configuredCases, contractCall, assertContract, requireIsolatedApi, requireApiWrites } from '../../fixtures/api-contracts'
 import { target } from '../../config/target'
 import type { SuccessCase } from '../../fixtures/api-case-config.mjs'
 import { isHostedReadSuccess } from '../../fixtures/api-case-config.mjs'
@@ -32,9 +32,13 @@ test.describe('Unity success contracts', { tag: ['@api', '@collection-success'] 
   for (const c of contracts) {
     test(`${c.id} ${c.method} ${c.route} — successful fixture contract`, async ({ playwright }, info) => {
       const fixture = configuredCases[c.id]?.success ?? defaults[c.id]
-      // Only reviewed built-in anonymous reads may bypass the mutation guard.
-      if (!isHostedReadSuccess(c, fixture, Boolean(configuredCases[c.id]?.success))) requireIsolatedApi()
       test.skip(!fixture, `Requires QA_API_CASES_FILE entry ${c.id}.success with seeded inputs and an exact response contract.`)
+      // Configured fixtures may contain real transactions and remain isolated. Built-in cases use disposable wallets.
+      if (configuredCases[c.id]?.success) {
+        test.skip(process.env.QA_PRODUCTION_API_WRITES === '1', 'Configured API success fixtures require an isolated target.')
+        requireIsolatedApi()
+      }
+      else if (!isHostedReadSuccess(c, fixture)) requireApiWrites()
       const selected = fixture!
       const stateEnv = selected.auth === 'admin' ? 'QA_API_ADMIN_STATE_FILE' : selected.storageStateEnv
       const state = stateEnv ? process.env[stateEnv] : undefined

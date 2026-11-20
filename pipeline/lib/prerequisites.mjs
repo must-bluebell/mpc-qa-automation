@@ -1,5 +1,7 @@
 // Only recognized prerequisite templates are published; arbitrary errors remain private.
 export function prerequisiteReason(reason) {
+  if (reason === 'Configured API success fixtures require an isolated target.') return 'Configured success fixtures can perform seeded or transaction operations; execute them on the isolated target.'
+  if (reason === 'API write checks require an isolated target or an explicitly authorized production API run.') return 'API writes are disabled for this run; use an isolated environment or explicitly authorize production API writes.'
   if (['Expanded API cases require the isolated QA_ALLOW_WRITES=1 environment.',
     'Write checks run only on an isolated environment (QA_ALLOW_WRITES=1).'].includes(reason)) {
     return 'Requires a writable isolated QA environment. This target is read-only; production write protections prevented execution.'

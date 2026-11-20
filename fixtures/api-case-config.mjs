@@ -41,6 +41,18 @@ export function assertIsolatedTarget(baseUrl, allowWrites) {
   }
 }
 
+/** Only the authenticated per-run production API option can authorize this exact hosted origin. */
+export function assertApiWriteTarget(baseUrl, allowWrites, {productionApiWrites = false, environment} = {}) {
+  const url = new URL(baseUrl)
+  if (productionApiWrites) {
+    if (allowWrites === '1' && productionApiWrites === true && environment === 'production'
+        && url.origin === 'https://app.globalmpc.tech' && !url.username && !url.password
+        && url.pathname === '/' && !url.search && !url.hash) return
+    throw new Error('Production API writes require explicit authorization and the approved production origin')
+  }
+  assertIsolatedTarget(baseUrl, allowWrites)
+}
+
 export function validateExpected(expected) {
   if (!expected || !Number.isInteger(expected.status) || expected.status < 100 || expected.status > 599) throw new Error('An exact expected status is required')
   const assertions = ['error', 'text', 'contentType', 'location'].some(key => typeof expected[key] === 'string' && expected[key].length > 0)

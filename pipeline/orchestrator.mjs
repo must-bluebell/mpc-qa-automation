@@ -2,6 +2,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertApiWriteTarget } from '../fixtures/api-case-config.mjs'
 import { parseArgs } from 'node:util'
 import { config, knownSecrets, resolveEnvironment, isLoopback, readJson, HOSTED } from './lib/env.mjs'
 import { acquireLock, LockBusyError } from './lib/lock.mjs'
@@ -40,8 +41,14 @@ export function expandSuite(name, suites = config.suites(), seen = new Set()) {
 }
 
 /** Policy checks before anything runs. Refusals are recorded, never silently skipped. */
-export function guard({ suiteName, env, steps, seededDefect }) {
+export function guard({ suiteName, env, steps, seededDefect, productionApiWrites = false }) {
   const refusals = []
+  if (typeof productionApiWrites !== 'boolean') refusals.push('productionApiWrites must be a boolean.')
+  if (productionApiWrites) {
+    if (env.name !== 'production' || !steps.some(s => s.adapter === 'playwright' && s.project === 'api')) refusals.push('Production API writes require the production environment and an API step.')
+    try { assertApiWriteTarget(env.baseUrl, '1', {productionApiWrites:true, environment:env.name}) }
+    catch { refusals.push('Production API writes require the approved production origin.') }
+  }
   // Hosted deployments (QA_HOSTED=1) have no local Docker stack, so local-docker is never a valid target there.
   if (process.env.QA_HOSTED === '1' && env.name === 'local-docker') refusals.push('The local-docker environment is only available on a developer machine; choose a hosted environment such as staging.')
   for (const step of steps) {
@@ -71,13 +78,13 @@ function redactDeep(value, secrets) {
  * Runs one suite on one environment and returns the finished run record.
  * Exit semantics for the CLI: 0 passed, 1 product failures, 2 infrastructure/timeout, 3 overlap refused, 4 guard refused.
  */
-export async function runPipeline({ suite: suiteName, env: envName, trigger = 'manual', scheduleId = null, seededDefect = null, runId, notify = true, ai = undefined, echo = true, slackOptions = {} }) {
+export async function runPipeline({ suite: suiteName, env: envName, trigger = 'manual', scheduleId = null, seededDefect = null, runId, notify = true, ai = undefined, echo = true, slackOptions = {}, productionApiWrites = false }) {
   if (!TRIGGERS.test(trigger)) throw new GuardError(`Invalid trigger "${trigger}".`)
   if (runId != null && !isRunId(runId)) throw new GuardError(`Invalid run id "${runId}".`)
   const env = resolveEnvironment(envName)
   const suites = config.suites()
   const steps = expandSuite(suiteName, suites)
-  guard({ suiteName, env, steps, seededDefect })
+  guard({ suiteName, env, steps, seededDefect, productionApiWrites })
   const id = runId ?? newRunId(suiteName)
   let lock
   try { lock = acquireLock(id) } catch (error) {
@@ -93,7 +100,7 @@ export async function runPipeline({ suite: suiteName, env: envName, trigger = 'm
     const started = Date.now()
     const timeoutMs = suites[suiteName].timeoutMs ?? 3_600_000
     const run = {
-      schemaVersion: 1, runId: id, suite: suiteName, env: env.name, envDescription: env.description, baseUrl: env.baseUrl, trigger, scheduleId, seededDefect,
+      schemaVersion: 1, productionApiWrites, runId: id, suite: suiteName, env: env.name, envDescription: env.description, baseUrl: env.baseUrl, trigger, scheduleId, seededDefect,
       status: 'running', startedAt: new Date(started).toISOString(), finishedAt: null, durationMs: null, timeoutMs,
       versions: { app: await appVersion(env), testSuite: testSuiteVersion(), pipeline: 'v1' },
       host: { node: process.version, platform: process.platform, pid: process.pid }, lock: { tookOverFrom: lock.tookOverFrom }, recoveredCrashedRuns: crashed,
@@ -124,7 +131,7 @@ export async function runPipeline({ suite: suiteName, env: envName, trigger = 'm
           const stepDir = join(dir, 'steps', name)
           mkdirSync(stepDir, { recursive: true })
           const remainingMs = () => Math.max(5_000, timeoutMs - (Date.now() - started))
-          const ctx = { runId: id, runDir: dir, stepDir, env, targetUrl, suite: suiteName, versions: run.versions, remainingMs, seededDefect, echo }
+          const ctx = { runId: id, runDir: dir, stepDir, env, targetUrl, suite: suiteName, versions: run.versions, remainingMs, seededDefect, echo, productionApiWrites }
           const stepStarted = Date.now()
           let result
           try {
@@ -212,6 +219,7 @@ export function renderMarkdown(run) {
   const c = run.counts
   const lines = [
     `# MPC QA run ${run.runId}`, '',
+    ...(run.productionApiWrites ? ['- Production API writes: explicitly authorized for this run.'] : []),
     `- Suite: **${run.suite}**${run.seededDefect ? ` (seeded defect: ${run.seededDefect})` : ''} · Environment: **${run.env}** (${run.baseUrl})`,
     `- Trigger: ${run.trigger}${run.scheduleId ? ` (${run.scheduleId})` : ''} · Status: **${run.status}**`,
     `- Started ${kstTime(run.startedAt)} · Finished ${kstTime(run.finishedAt)} · ${Math.round(run.durationMs / 1000)}s`,
@@ -237,7 +245,7 @@ async function main() {
   const { values } = parseArgs({ options: {
     suite: { type: 'string', default: 'smoke' }, env: { type: 'string', default: process.env.QA_DEFAULT_ENV || 'production' },
     trigger: { type: 'string', default: 'manual' }, 'schedule-id': { type: 'string' }, 'seed-defect': { type: 'string' },
-    'run-id': { type: 'string' }, 'no-notify': { type: 'boolean', default: false }, ai: { type: 'boolean' }, 'no-ai': { type: 'boolean' }, quiet: { type: 'boolean', default: false },
+    'production-api-writes': { type: 'boolean', default: false }, 'run-id': { type: 'string' }, 'no-notify': { type: 'boolean', default: false }, ai: { type: 'boolean' }, 'no-ai': { type: 'boolean' }, quiet: { type: 'boolean', default: false },
   } })
   try {
     // Application suites run only on the hosted dashboard (Render) or GitHub CI, never on a developer machine.
@@ -246,7 +254,7 @@ async function main() {
     }
     if (values.ai && values['no-ai']) throw new Error('Choose either --ai or --no-ai.')
     const run = await runPipeline({ suite: values.suite, env: values.env, trigger: values.trigger, scheduleId: values['schedule-id'] ?? null,
-      seededDefect: values['seed-defect'] ?? null, runId: values['run-id'], notify: !values['no-notify'], ai: values['no-ai'] ? false : values.ai, echo: !values.quiet })
+      productionApiWrites: values['production-api-writes'], seededDefect: values['seed-defect'] ?? null, runId: values['run-id'], notify: !values['no-notify'], ai: values['no-ai'] ? false : values.ai, echo: !values.quiet })
     console.log(`\n${renderMarkdown(run)}\nRun folder: runs/${run.runId}`)
     process.exit(run.status === 'passed' ? 0 : run.status === 'failed' ? 1 : 2)
   } catch (error) {

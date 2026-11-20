@@ -3,7 +3,7 @@
 const TOKEN = document.querySelector('meta[name="qa-token"]').content
 const app = document.getElementById('app')
 const chips = document.getElementById('chips')
-let state = { status: null, stack: null, runs: [], watching: null, notify: true }
+let state = { status: null, stack: null, runs: [], watching: null, notify: true, productionApiWrites: false }
 let pollTimer = null
 let stopPolling = () => {}
 
@@ -120,6 +120,14 @@ function runForm() {
   if (typeof activeNotify === 'boolean') state.notify = activeNotify
   const notify = h('input', { type: 'checkbox', name: 'notify', checked: state.notify,
     onchange: e => { state.notify = e.target.checked } })
+  const productionWrites = h('input', {type:'checkbox', name:'productionApiWrites', checked:state.productionApiWrites,
+    onchange:e => {state.productionApiWrites = e.target.checked} })
+  const updateProductionWrites = () => {
+    productionWrites.disabled = env.value !== 'production'
+    if (productionWrites.disabled) { productionWrites.checked = false; state.productionApiWrites = false }
+  }
+  env.addEventListener('change', updateProductionWrites)
+  updateProductionWrites()
   const desc = h('p', { class: 'hint' })
   const describe = () => { desc.textContent = s.suites.find(x => x.name === suite.value)?.description ?? '' }
   suite.addEventListener('change', describe)
@@ -130,6 +138,7 @@ function runForm() {
     try {
       const { runId } = await post('/api/runs', body)
       msg.textContent = `Started ${runId}`
+      state.productionApiWrites = false
       state.watching = runId
       await refresh()
       render()
@@ -138,15 +147,16 @@ function runForm() {
   const running = !!s.running
   return h('section', { class: 'panel' },
     h('h2', {}, 'Run tests'),
-      h('form', { class: 'run', onsubmit: e => { e.preventDefault(); start({ suite: suite.value, env: env.value, seedDefect: defect.value || null, ai: ai.checked, notify: notify.checked }) } },
+      h('form', { class: 'run', onsubmit: e => { e.preventDefault(); start({ suite: suite.value, env: env.value, seedDefect: defect.value || null, ai: ai.checked, notify: notify.checked, productionApiWrites: env.value === 'production' && productionWrites.checked }) } },
       h('label', {}, 'Suite', suite), h('label', {}, 'Environment', env), h('label', {}, 'Seeded defect', defect),
       h('label', { class: 'check' }, ai, 'AI review'),
       h('label', { class: 'check' }, notify, 'Slack alerts'),
+      h('label', { class: 'check' }, productionWrites, 'Allow production API writes'),
       h('button', { class: 'primary', type: 'submit', disabled: running }, running ? 'Run in progress' : 'Run')),
     desc,
     h('div', { class: 'actions' },
-      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: s.runAllSuite, env: env.value, ai: ai.checked, notify: notify.checked }) }, s.hosted ? 'Run everything (hosted)' : 'Run everything (full)'),
-      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'smoke', env: env.value, ai: ai.checked, notify: notify.checked }) }, 'Smoke'),
+      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: s.runAllSuite, env: env.value, ai: ai.checked, notify: notify.checked, productionApiWrites: env.value === 'production' && productionWrites.checked }) }, s.hosted ? 'Run everything (hosted)' : 'Run everything (full)'),
+      h('button', { type: 'button', disabled: running, onclick: () => start({ suite: 'smoke', env: env.value, ai: ai.checked, notify: notify.checked, productionApiWrites: env.value === 'production' && productionWrites.checked }) }, 'Smoke'),
       h('button', { type: 'button', onclick: async () => {
         msg.className = 'msg'; msg.textContent = 'Sending Slack test…'
         try { const r = await post('/api/slack/test'); msg.className = `msg badge ${r.ok ? 'ok' : 'warn'}`; msg.textContent = r.ok ? 'Slack test delivered' : `Slack not delivered: ${r.code}` }
@@ -154,8 +164,8 @@ function runForm() {
       } }, 'Send Slack test')),
     msg,
     h('p', { class: 'hint' }, s.hosted
-      ? 'Hosted deployment: runs target hosted environments only. UAT and load need the local Docker stack and are not offered here. Runs never write to production or staging.'
-      : 'UAT and load run only against the isolated local Docker stack; the pipeline refuses them elsewhere. Runs never touch production or staging with writes.'))
+      ? 'Hosted deployment: runs target hosted environments only. UAT and load need the local Docker stack and are not offered here. Production API writes require the explicit checkbox and use test wallets. Administrator and seeded success cases still need fixtures.'
+      : 'UAT and load run only against the isolated local Docker stack; the pipeline refuses them elsewhere. Production API writes require explicit per-run authorization.'))
 }
 
 function liveLog() {

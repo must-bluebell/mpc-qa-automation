@@ -90,7 +90,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      // Browserless HTTP contract tests. Write checks skip unless QA_ALLOW_WRITES=1 (isolated stack).
+      // Browserless HTTP contracts. Writes require isolation or explicit per-run production API authorization.
       name: 'api',
       testDir: './tests/api',
       testMatch: '*.spec.ts',

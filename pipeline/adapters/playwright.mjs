@@ -3,6 +3,7 @@ import { join, relative } from 'node:path'
 import { ROOT } from '../lib/env.mjs'
 import { runProcess } from '../lib/proc.mjs'
 import { prerequisiteReason } from '../lib/prerequisites.mjs'
+import { assertApiWriteTarget } from '../../fixtures/api-case-config.mjs'
 import { classifyFailure } from '../lib/classify.mjs'
 import { warmBrowserRuntime } from './web-runtime.mjs'
 
@@ -46,13 +47,20 @@ export function readPlaywrightRecords(stepDir) {
     annotations: [...(record.annotations ?? []), {type:'blocked',description:'Runner stopped before this case completed.'}]})
 }
 
+/** Explicitly overwrite inherited flags; production authorization belongs only to this API step. */
+export function apiWriteEnvironment(step, ctx) {
+  const production = step.project === 'api' && ctx.productionApiWrites === true
+  if (production) assertApiWriteTarget(ctx.env.baseUrl, '1', {productionApiWrites:true, environment:ctx.env.name})
+  return {QA_ALLOW_WRITES: ctx.env.allowWrites || production ? '1' : '0', QA_PRODUCTION_API_WRITES: production ? '1' : '0'}
+}
+
 export async function runPlaywrightStep(step, ctx) {
   const args = ['playwright', 'test', `--project=${step.project}`]
   if (step.grep) args.push('--grep', step.grep)
   if (step.grepInvert) args.push('--grep-invert', step.grepInvert)
   const env = {
     BASE_URL: ctx.targetUrl, QA_APP_ORIGIN: ctx.env.appOrigin, QA_CHAIN_ID: String(ctx.env.chainId), QA_CHAIN_NAME: ctx.env.chainName??'',
-    QA_ALLOW_WRITES: ctx.env.allowWrites ? '1' : '0', QA_REPORT_DIR: ctx.stepDir, QA_ALLURE_RESULTS_DIR: join(ctx.runDir, 'allure-results'),
+    ...apiWriteEnvironment(step, ctx), QA_REPORT_DIR: ctx.stepDir, QA_ALLURE_RESULTS_DIR: join(ctx.runDir, 'allure-results'),
     QA_NAVIGATION: ctx.env.navigation??'', QA_ENVIRONMENT: ctx.env.name, QA_VERSION: ctx.versions.app.id, QA_RUN_LABEL: `${ctx.suite} (${ctx.runId})`,
     QA_WEB_FIXTURE_CONTAINER: ctx.env.isolated && (ctx.env.name === 'web-isolated' || ctx.env.stack?.verificationRuntime) ? `${ctx.env.stack.composeProject}-web-1` : '',
     // One retry for every pipeline case: timeouts on a slow page then show up as flaky, not as product failures.

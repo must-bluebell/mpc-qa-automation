@@ -88,3 +88,16 @@ test('hosted baseline policy permits only reviewed anonymous GET probes and keep
   for (const id of ['API101', 'API124', 'API094', 'API096', 'API158', 'API053']) assert.equal(ids.has(id), false, `${id} is an action or callback route`)
   for (const c of catalog.filter(c => c.method !== 'GET' || /^\/(api\/cron\/|dev\/)/.test(c.route))) assert.equal(isHostedReadBaseline(c), false, `${c.method} ${c.route} must stay isolated`)
 })
+
+test('production API writes require a per-run opt-in and the exact production origin', async()=>{
+  const {assertApiWriteTarget}=await import('../../fixtures/api-case-config.mjs')
+  assert.equal(typeof assertApiWriteTarget,'function')
+  const authorization={productionApiWrites:true,environment:'production'}
+  assert.doesNotThrow(()=>assertApiWriteTarget('https://app.globalmpc.tech','1',authorization))
+  assert.doesNotThrow(()=>assertApiWriteTarget('http://localhost:3460','1',{}))
+  for(const url of ['http://localhost:3460','https://app.globalmpc.tech.evil.test','http://app.globalmpc.tech','https://app.globalmpc.tech:8443','https://user@app.globalmpc.tech','https://app.globalmpc.tech/path','https://app.globalmpc.tech?x=1'])assert.throws(()=>assertApiWriteTarget(url,'1',authorization),url)
+  for(const options of [{},{productionApiWrites:true,environment:'staging'},{productionApiWrites:false,environment:'production'}])assert.throws(()=>assertApiWriteTarget('https://app.globalmpc.tech','1',options))
+  assert.throws(()=>assertApiWriteTarget('https://app.globalmpc.tech','0',authorization))
+  // Arbitrary configured success fixtures still use the isolated-only guard.
+  assert.throws(()=>assertIsolatedTarget('https://app.globalmpc.tech','1'))
+})

@@ -43,7 +43,7 @@ export function readRun(runId) {
 
 export function summarize(run) {
   return {
-    runId: run.runId, suite: run.suite, env: run.env, trigger: run.trigger, scheduleId: run.scheduleId ?? null,
+    productionApiWrites: run.productionApiWrites === true, runId: run.runId, suite: run.suite, env: run.env, trigger: run.trigger, scheduleId: run.scheduleId ?? null,
     seededDefect: run.seededDefect ?? null, status: run.status, startedAt: run.startedAt, finishedAt: run.finishedAt,
     durationMs: run.durationMs, counts: run.counts, coverage: run.coverage?.ratio ?? null,
     failedFingerprints: (run.tests ?? []).filter(t => t.status === 'failed').map(t => t.fingerprint),
