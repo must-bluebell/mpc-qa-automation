@@ -4,6 +4,7 @@ const catalog = JSON.parse(readFileSync(new URL('../../testplans/api/contracts.j
 const byId = new Map(catalog.map(c => [c.id, c]))
 const names = new Map(catalog.flatMap(c => [
   'baseline contract', 'forged credentials cannot bypass authorization',
+  'forged credentials preserve the rejection contract',
   'foreign origin is rejected', 'successful fixture contract',
 ].map(kind => {
   const title = `${c.id} ${c.method} ${c.route} — ${kind}`

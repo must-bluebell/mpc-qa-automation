@@ -668,7 +668,13 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 404,
+        "error": "not_found"
+      }
+    }
   },
   {
     "id": "API048",
@@ -680,7 +686,13 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 404,
+        "error": "not_found"
+      }
+    }
   },
   {
     "id": "API049",
@@ -692,7 +704,13 @@
     "wallet": true,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 401,
+        "error": "sign_in_required"
+      }
+    }
   },
   {
     "id": "API050",
@@ -704,7 +722,13 @@
     "wallet": true,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 401,
+        "error": "sign_in_required"
+      }
+    }
   },
   {
     "id": "API051",
@@ -772,7 +796,14 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 400,
+        "text": "This reminder link is invalid.",
+        "contentType": "text/html"
+      }
+    }
   },
   {
     "id": "API056",
@@ -784,7 +815,14 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 400,
+        "text": "This reminder link is invalid.",
+        "contentType": "text/html"
+      }
+    }
   },
   {
     "id": "API057",
@@ -1048,7 +1086,13 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 404,
+        "empty": true
+      }
+    }
   },
   {
     "id": "API076",
@@ -1060,7 +1104,13 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 404,
+        "empty": true
+      }
+    }
   },
   {
     "id": "API077",
@@ -1816,7 +1866,17 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 200,
+        "types": {
+          "live": "array",
+          "planned": "array",
+          "sender": "string|null"
+        }
+      }
+    }
   },
   {
     "id": "API127",
@@ -2086,7 +2146,13 @@
     "wallet": true,
     "originCheck": true,
     "baseline": null,
-    "blocked": "Join policy runs before authentication. Configure baseline 401/not_signed_in when skipEmailOtp=true, otherwise 403/otp_required."
+    "blocked": "Join policy runs before authentication. Configure baseline 401/not_signed_in when skipEmailOtp=true, otherwise 403/otp_required.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 403,
+        "error": "otp_required"
+      }
+    }
   },
   {
     "id": "API146",
@@ -2173,7 +2239,13 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 401,
+        "error": "not_signed_in"
+      }
+    }
   },
   {
     "id": "API152",
@@ -2185,7 +2257,13 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 401,
+        "error": "not_signed_in"
+      }
+    }
   },
   {
     "id": "API153",
@@ -2197,7 +2275,13 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 401,
+        "error": "not_signed_in"
+      }
+    }
   },
   {
     "id": "API154",
@@ -2209,7 +2293,13 @@
     "wallet": false,
     "originCheck": false,
     "baseline": null,
-    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate."
+    "blocked": "Requires matching source or explicit environment contract; snapshot omits the response or configuration gate.",
+    "baselineByEnvironment": {
+      "production": {
+        "status": 401,
+        "error": "not_signed_in"
+      }
+    }
   },
   {
     "id": "API155",
@@ -2421,15 +2511,21 @@
     "sourceAvailable": false,
     "path": "/api/word/guess",
     "wallet": true,
-    "originCheck": false,
+    "originCheck": true,
     "baseline": {
       "status": 401,
       "error": "not_signed_in"
     },
     "body": {
-      "day": "1970-01-01",
+      "day": 0,
       "attempt": 0,
       "word": "apple"
+    },
+    "baselineByEnvironment": {
+      "production": {
+        "status": 409,
+        "error": "day_changed"
+      }
     }
   },
   {

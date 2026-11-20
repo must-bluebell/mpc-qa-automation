@@ -28,3 +28,18 @@ Tooling verification: 355 reporting tests passed, two platform-specific checks s
 The old-code API phase completed with 421 passed, 35 failed and 193 skipped (one passing case was flaky). Private evidence was preserved under ignored `runs/remote-backups/20261120-125749-hosted-full-ab92` before the user-authorized redeploy. Commit `be84cc8` was pushed; Render accepted run `20261120-131827-api-adbf`, whose fingerprint `content-95b7199f6388` matches the Docker source inputs.
 
 That run showed the collection's protocol 6 is also stale. Read-only inspection of production's shipped `/_next/static/immutable/chunks/3fl7xm7pd26gx.js` found module 850396 sends `x-mpc-run-protocol` from module 281697's `l` export, which is literal 9. The next correction pins production to 9 and retains the snapshot's 6 for other environments, preserving explicit negative-test headers. Focused catalog checks (12) and TypeScript passed; review found no actionable issues. This correction still requires deployed verification.
+
+## Guest word contracts and recovered source coverage
+
+Render run `20261120-132359-api-41ea` completed on fingerprint `content-b47c0a74b1ff`: 454 passed, two failed, 193 blocked, zero flaky. All Mine and authentication fixes passed. Both failures were word-guess probes expecting authentication rejection. Complete results were saved under ignored `runs/remote-backups/20261120-132359-api-41ea`.
+
+A newer local source archive at `/Users/mac/Downloads/globalmpc-unity-private-main` supplies the missing contracts:
+- `daily-word/server/route-handlers/word/guess.ts` and `daily-word/server/player.ts` explicitly support guests and require a numeric UTC day. The probe now sends day 0 and expects production `409 day_changed`, which happens before guest-token issuance or recording a guess. Legacy local 401 remains; forged credentials must preserve the same rejection, and foreign origin must be rejected.
+- `ambassador/server/routes.ts` supplies invalid badge/metadata ID 404 and anonymous GET/POST 401 contracts.
+- `checkin/server/route-handlers/reminder-unsubscribe.ts` rejects absent tokens with a specific 400 HTML message before any database update.
+- `platform/chain/route-handlers/local-rpc.ts` returns an empty 404 for the invalid chain, without contacting RPC.
+- `reward-credit/server/route-handlers/guard.ts` supplies four unsigned 401 contracts while production Mine is open.
+- `my-mine/server/route-handlers/sponsor.ts` supplies a 200 response schema (`live`, `planned`, `sender`) without claiming that its providers sponsor a transaction.
+- `unity/server/route-handlers/register/skip-otp.ts` supplies 403 `otp_required` when the policy is off, as confirmed by the current run's registration workflow prerequisite.
+
+These are explicit production contracts, not response-selected expectations. Source review found no unsafe or incorrect contracts. The renamed forged-credential suffix was added to the public report allowlist while retaining historical names.

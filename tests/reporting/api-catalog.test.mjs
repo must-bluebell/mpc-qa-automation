@@ -12,6 +12,7 @@ test('catalog covers every supplied method/route exactly once', () => {
   assert.equal(new Set(catalog.map(c => c.id)).size, 171)
   for (const c of catalog) {
     assert.ok(c.source)
+    for (const expected of [...Object.values(c.baselineByEnvironment ?? {}), ...Object.values(c.originByEnvironment ?? {})]) validateExpected(expected)
     assert.ok(c.baseline || c.blocked, `${c.id} must declare a contract or an explicit gap`)
     if (c.baseline) {
       validateExpected(c.baseline)
@@ -153,6 +154,23 @@ test('production funding helper stays unavailable and word authorization probes 
   assert.deepEqual(baselineForEnvironment(dev,'production'),{status:404,empty:true})
   assert.deepEqual(baselineForEnvironment(dev,'local-docker'),{status:401,error:'not_signed_in'})
   const word=catalog.find(c=>c.id==='API169')
-  assert.deepEqual(word.body,{day:'1970-01-01',attempt:0,word:'apple'})
+  assert.deepEqual(word.body,{day:0,attempt:0,word:'apple'})
   assert.deepEqual(word.baseline,{status:401,error:'not_signed_in'})
+})
+
+test('newer production source enables bounded rejection contracts without live transaction fixtures',async()=>{
+  const {baselineForEnvironment}=await import('../../fixtures/api-case-config.mjs')
+  const catalog=read('../../testplans/api/contracts.json')
+  for(const id of ['API047','API048'])assert.deepEqual(baselineForEnvironment(catalog.find(c=>c.id===id),'production'),{status:404,error:'not_found'})
+  for(const id of ['API049','API050'])assert.deepEqual(baselineForEnvironment(catalog.find(c=>c.id===id),'production'),{status:401,error:'sign_in_required'})
+  for(const id of ['API151','API152','API153','API154'])assert.deepEqual(baselineForEnvironment(catalog.find(c=>c.id===id),'production'),{status:401,error:'not_signed_in'})
+  for(const id of ['API055','API056'])assert.deepEqual(baselineForEnvironment(catalog.find(c=>c.id===id),'production'),{status:400,text:'This reminder link is invalid.',contentType:'text/html'})
+  for(const id of ['API075','API076'])assert.deepEqual(baselineForEnvironment(catalog.find(c=>c.id===id),'production'),{status:404,empty:true})
+  const word=catalog.find(c=>c.id==='API169')
+  assert.deepEqual(word.body,{day:0,attempt:0,word:'apple'})
+  assert.deepEqual(baselineForEnvironment(word,'production'),{status:409,error:'day_changed'})
+  assert.deepEqual(baselineForEnvironment(word,'local-docker'),{status:401,error:'not_signed_in'})
+  assert.equal(word.originCheck,true)
+  assert.deepEqual(baselineForEnvironment(catalog.find(c=>c.id==='API145'),'production'),{status:403,error:'otp_required'})
+  assert.deepEqual(baselineForEnvironment(catalog.find(c=>c.id==='API126'),'production'),{status:200,types:{live:'array',planned:'array',sender:'string|null'}})
 })

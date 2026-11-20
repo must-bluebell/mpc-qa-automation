@@ -82,3 +82,11 @@ test('published API failures identify HTTP contract mismatches without exposing 
   assert.match(summary.checks[0].reason,/HTTP 200.*HTTP 409/)
   assert.doesNotMatch(summary.checks[0].reason,/private_customer/)
 })
+
+test('forged rejection contract names remain readable alongside historical authorization names',()=>{
+  for(const kind of ['forged credentials preserve the rejection contract','forged credentials cannot bypass authorization']) {
+    const title=`api > Unity collection contracts > API169 POST /api/word/guess — ${kind}`
+    const summary=publicSummary({runId:'catalog',finishedAt:'2026-11-20T00:00:00Z',tests:[{key:'word',title,status:'passed'}]})
+    assert.equal(summary.checks[0].name,`API169 POST /api/word/guess — ${kind}`)
+  }
+})

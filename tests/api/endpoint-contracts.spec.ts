@@ -17,7 +17,7 @@ test.describe('Unity collection contracts', { tag: ['@api', '@regression', '@col
       assertContract(result, expected!)
     })
     if (c.baseline?.status === 401 || expected?.status === 401) {
-      test(`${c.id} ${c.method} ${c.route} — forged credentials cannot bypass authorization`, async ({ request }, info) => {
+      test(`${c.id} ${c.method} ${c.route} — forged credentials preserve the rejection contract`, async ({ request }, info) => {
         gate()
         const result = await contractCall(request, info, c.method, c.path, {
           body: c.method === 'GET' ? undefined : c.body ?? {},
