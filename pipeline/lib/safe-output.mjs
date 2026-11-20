@@ -35,6 +35,8 @@ function diagnosticReason(test) {
   const prerequisite = prerequisiteReason(test.skipReason)
   if (prerequisite) return prerequisite
   const raw=[...(test.errors??[]),test.skipReason??''].join('\n').replace(/\u001b\[[0-9;]*m/g,'')
+  const apiStatus = raw.match(/API contract expected HTTP ([1-5]\d{2}); received HTTP ([1-5]\d{2})/)
+  if (apiStatus) return `API contract expected HTTP ${apiStatus[1]} but received HTTP ${apiStatus[2]}. See authenticated run details for response diagnostics.`
   if(/ECONNREFUSED|ERR_CONNECTION_REFUSED/.test(raw))return 'Target app unreachable (connection refused).'
   if(/ECONNRESET|ERR_CONNECTION_RESET|socket hang up/.test(raw))return 'Connection to the target app was interrupted (the app dropped the request).'
   const button=raw.match(/getByRole\('button', \{ name: '(Join Unity|Join the waitlist|Sign in|Switch network)'/)

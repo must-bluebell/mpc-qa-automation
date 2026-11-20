@@ -94,7 +94,8 @@ export default defineConfig({
       name: 'api',
       testDir: './tests/api',
       testMatch: '*.spec.ts',
-      timeout: 60_000,
+      // An authorized production request may need to wait for the server's 60-second auth window.
+      timeout: process.env.QA_PRODUCTION_API_WRITES === '1' ? 120_000 : 60_000,
       use: { baseURL: t.baseUrl },
     },
   ],

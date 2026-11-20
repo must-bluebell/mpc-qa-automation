@@ -1,7 +1,8 @@
 import { test, type APIRequestContext, type APIResponse, type TestInfo } from '@playwright/test'
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts'
 import { createSiweMessage } from 'viem/siwe'
-import { assertApiWriteTarget } from './api-case-config.mjs'
+import { assertApiWriteTarget, apiProtocolHeaders } from './api-case-config.mjs'
+import { fetchApi } from './api-rate-limit.mjs'
 import { target } from '../config/target'
 
 /**
@@ -33,14 +34,17 @@ type CallOptions = { body?: unknown; raw?: string; origin?: string | null; heade
  * secrets: test wallets are throwaway keys and cookies are not recorded.
  */
 export async function call(request: APIRequestContext, info: TestInfo, method: 'GET' | 'POST' | 'PATCH', path: string, options: CallOptions = {}) {
-  const headers: Record<string, string> = { ...options.headers }
+  const headers: Record<string, string> = apiProtocolHeaders(path, options.headers)
   // Browsers send Origin on writes; GETs only carry it when a test asks (admin GETs are origin-guarded).
   if (options.origin !== null && (method !== 'GET' || options.origin !== undefined)) headers.origin = options.origin ?? appOrigin()
   const started = Date.now()
   // A Buffer is sent byte-for-byte; Playwright would re-encode an invalid JSON string.
   const data = options.raw !== undefined ? Buffer.from(options.raw) : options.body === undefined ? undefined : Buffer.from(JSON.stringify(options.body))
   if (data !== undefined) headers['content-type'] = 'application/json'
-  const response: APIResponse = await request.fetch(path, { method, headers, data, failOnStatusCode: false, maxRedirects: 0 })
+  const response: APIResponse = await fetchApi(path, () => request.fetch(path, { method, headers, data, failOnStatusCode: false, maxRedirects: 0 }), {
+    production: process.env.QA_PRODUCTION_API_WRITES === '1',
+    onThrottle: () => info.annotations.push({type:'auth-rate-limit-retry',description:'Honored Retry-After after an explicit authentication rate-limit rejection.'}),
+  })
   const text = await response.text()
   let json: unknown = null
   try { json = text ? JSON.parse(text) : null } catch { json = null }

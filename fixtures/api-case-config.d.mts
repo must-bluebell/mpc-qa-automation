@@ -8,3 +8,10 @@ export function validateExpected(expected: Expected): void
 export function loadApiCases(path: string | undefined, catalog: Contract[]): Record<string, ApiCase>
 
 export function assertApiWriteTarget(baseUrl: string, allowWrites?: string, options?: {productionApiWrites?: boolean; environment?: string}): void
+
+export function baselineForEnvironment(contract: Contract, environment?: string, configured?: Expected): Expected | null
+
+export function originForEnvironment(contract: Contract, environment?: string): Expected
+
+export function apiErrorCode(body: unknown): string | null
+export function apiProtocolHeaders(path: string, headers?: Record<string,string>): Record<string,string>

@@ -88,3 +88,23 @@ export function loadApiCases(path, catalog) {
   }
   return input
 }
+
+/** Explicit environment contracts retain exact assertions; response observations never choose expectations. */
+export function baselineForEnvironment(contract, environment, configured) {
+  return configured ?? contract.baselineByEnvironment?.[environment] ?? contract.baseline
+}
+
+export function originForEnvironment(contract, environment) {
+  return contract.originByEnvironment?.[environment] ?? {status:403,error:'cross_origin'}
+}
+
+export function apiErrorCode(body) {
+  const code = body?.error
+  return typeof code === 'string' && /^[a-z][a-z0-9_-]{0,63}$/.test(code) ? code : null
+}
+
+/** Protocol 6 is declared by the supplied November 2026 Postman collection. */
+export function apiProtocolHeaders(path, headers = {}) {
+  const routes = ['/my-mine/run', '/my-mine/draw', '/my-mine/record', '/my-mine/record/self']
+  return {...(routes.includes(path.split('?')[0]) ? {'x-mpc-run-protocol':'6'} : {}), ...headers}
+}

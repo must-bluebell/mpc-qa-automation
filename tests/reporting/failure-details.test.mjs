@@ -73,3 +73,12 @@ test('expanded API checks publish catalog names without leaking arbitrary titles
   const privateSummary=publicSummary({runId:'privacy',finishedAt:'2026-11-20T00:00:00Z',tests:[{key:'secret',title:'API001 POST /private/customer-secret — baseline contract',status:'blocked'}]})
   assert.doesNotMatch(JSON.stringify(privateSummary),/customer-secret/)
 })
+
+test('published API failures identify HTTP contract mismatches without exposing error payloads',()=>{
+  const summary=publicSummary({runId:'api-mismatch',finishedAt:'2026-11-20T00:00:00Z',tests:[{
+    key:'api',title:'API124 GET /my-mine/run — successful fixture contract',status:'failed',
+    errors:['Error: API contract expected HTTP 200; received HTTP 409; error code: private_customer_id'],
+  }]})
+  assert.match(summary.checks[0].reason,/HTTP 200.*HTTP 409/)
+  assert.doesNotMatch(summary.checks[0].reason,/private_customer/)
+})

@@ -1,7 +1,8 @@
 import { expect, test, type APIRequestContext, type TestInfo } from '@playwright/test'
 import { appOrigin, writesAllowed, requireWrites } from './api'
+import { fetchApi } from './api-rate-limit.mjs'
 import { target } from '../config/target'
-import { assertIsolatedTarget, loadApiCases } from './api-case-config.mjs'
+import { assertIsolatedTarget, loadApiCases, apiErrorCode, apiProtocolHeaders } from './api-case-config.mjs'
 import { readFileSync } from 'node:fs'
 
 export type Expected = {
@@ -10,7 +11,7 @@ export type Expected = {
 }
 export type Contract = {
   id: string; method: string; route: string; source: string; sourceAvailable: boolean
-  path: string; wallet: boolean; originCheck: boolean; baseline: Expected | null; blocked?: string
+  path: string; wallet: boolean; originCheck: boolean; baseline: Expected | null; baselineByEnvironment?: Record<string, Expected>; originByEnvironment?: Record<string, Expected>; blocked?: string
   body?: unknown; headers?: Record<string, string>
 }
 export const contracts: Contract[] = JSON.parse(readFileSync(new URL('../testplans/api/contracts.json', import.meta.url), 'utf8'))
@@ -34,20 +35,23 @@ export async function contractCall(request: APIRequestContext, info: TestInfo, m
   expect(path.startsWith('/') && !path.startsWith('//') && !path.includes('://'), 'Only relative application paths are permitted').toBe(true)
   expect(path, 'Resolve fixture placeholders before calling the API').not.toMatch(/\{\{|\[|\]/)
   const data = options.raw !== undefined ? Buffer.from(options.raw) : options.body === undefined ? undefined : Buffer.from(JSON.stringify(options.body))
-  const response = await request.fetch(path, { method, maxRedirects: 0, failOnStatusCode: false,
-    headers: { origin: options.origin ?? appOrigin(), ...(data === undefined ? {} : { 'content-type': 'application/json' }), ...options.headers }, data })
+  const response = await fetchApi(path, () => request.fetch(path, { method, maxRedirects: 0, failOnStatusCode: false,
+    headers: { origin: options.origin ?? appOrigin(), ...(data === undefined ? {} : { 'content-type': 'application/json' }), ...apiProtocolHeaders(path, options.headers) }, data }), {
+    production: process.env.QA_PRODUCTION_API_WRITES === '1',
+    onThrottle: () => info.annotations.push({type:'auth-rate-limit-retry',description:'Honored Retry-After after an explicit authentication rate-limit rejection.'}),
+  })
   const text = await response.text()
   let json: unknown
   try { json = JSON.parse(text) } catch { /* Text, SVG, redirects and 204 are valid contracts. */ }
   // Never attach payloads/cookies: admin replies can contain temporary credentials and vouchers.
   await info.attach(`${method} ${path.split('?')[0]}`, { contentType: 'application/json', body: JSON.stringify({
-    method, route: path.split('?')[0], status: response.status(), contentType: response.headers()['content-type'], bytes: Buffer.byteLength(text),
+    method, route: path.split('?')[0], status: response.status(), contentType: response.headers()['content-type'], bytes: Buffer.byteLength(text), ...(response.status() >= 400 ? {errorCode:apiErrorCode(json)} : {}),
   }) })
   return { status: response.status(), headers: response.headers(), text, json }
 }
 
 export function assertContract(result: Awaited<ReturnType<typeof contractCall>>, expected: Expected) {
-  expect(result.status, `Expected HTTP ${expected.status}`).toBe(expected.status)
+  expect(result.status, `API contract expected HTTP ${expected.status}; received HTTP ${result.status}; error code: ${apiErrorCode(result.json) ?? 'unavailable'}`).toBe(expected.status)
   if (expected.error !== undefined) expect(field(result.json, 'error')).toBe(expected.error)
   if (expected.fields || expected.types || expected.error) {
     expect(result.headers['content-type']).toContain('application/json')
