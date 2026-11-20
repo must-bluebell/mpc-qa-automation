@@ -164,7 +164,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
   if(runNow) {
     if(!config.suites()[runNow])throw new Error('Unknown immediate suite')
     const id=`manual-${Date.now()}-${opaqueId(runNow).slice(0,4)}`
-    state.jobs.push({id,scheduleId:'run-now',suite:runNow,env:process.env.QA_DEFAULT_ENV||'local-docker',at:new Date().toISOString(),runId:id,status:'queued',graceMinutes:120})
+    state.jobs.push({id,scheduleId:'run-now',suite:runNow,env:process.env.QA_DEFAULT_ENV||'production',at:new Date().toISOString(),runId:id,status:'queued',graceMinutes:120})
   }
   const finish=async(job,code)=>{
     await completeJob(state,job,code)

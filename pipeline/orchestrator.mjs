@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { config, knownSecrets, resolveEnvironment, isLoopback, readJson } from './lib/env.mjs'
+import { config, knownSecrets, resolveEnvironment, isLoopback, readJson, HOSTED } from './lib/env.mjs'
 import { acquireLock, LockBusyError } from './lib/lock.mjs'
 import { appendEvent, createRunDir, isRunId, markCrashedRuns, newRunId, previousRun, readIndex, saveRun } from './lib/run-store.mjs'
 import { classifyFailure, fingerprintOf, groupFailures, signatureOf } from './lib/classify.mjs'
@@ -230,11 +230,15 @@ export function renderMarkdown(run) {
 
 async function main() {
   const { values } = parseArgs({ options: {
-    suite: { type: 'string', default: 'smoke' }, env: { type: 'string', default: process.env.QA_DEFAULT_ENV || 'local-docker' },
+    suite: { type: 'string', default: 'smoke' }, env: { type: 'string', default: process.env.QA_DEFAULT_ENV || 'production' },
     trigger: { type: 'string', default: 'manual' }, 'schedule-id': { type: 'string' }, 'seed-defect': { type: 'string' },
     'run-id': { type: 'string' }, 'no-notify': { type: 'boolean', default: false }, ai: { type: 'boolean' }, 'no-ai': { type: 'boolean' }, quiet: { type: 'boolean', default: false },
   } })
   try {
+    // Application suites run only on the hosted dashboard (Render) or GitHub CI, never on a developer machine.
+    if (!HOSTED && process.env.GITHUB_ACTIONS !== 'true') {
+      throw Object.assign(new Error('Application suites run only from the hosted QA dashboard or GitHub CI. Local runs are disabled.'), { exitCode: 4 })
+    }
     if (values.ai && values['no-ai']) throw new Error('Choose either --ai or --no-ai.')
     const run = await runPipeline({ suite: values.suite, env: values.env, trigger: values.trigger, scheduleId: values['schedule-id'] ?? null,
       seededDefect: values['seed-defect'] ?? null, runId: values['run-id'], notify: !values['no-notify'], ai: values['no-ai'] ? false : values.ai, echo: !values.quiet })

@@ -10,7 +10,7 @@ export const RUNS_DIR = resolve(ROOT, process.env.QA_RUNS_DIR || 'runs')
 
 /** Hosted deployments (e.g. Render) run against hosted environments only; see QA_HOSTED in render.yaml. */
 export const HOSTED = process.env.QA_HOSTED === '1'
-export const DEFAULT_ENV = process.env.QA_DEFAULT_ENV || (HOSTED ? 'production' : 'local-docker')
+export const DEFAULT_ENV = process.env.QA_DEFAULT_ENV || 'production'
 
 export function readJson(path, fallback) {
   try { return JSON.parse(readFileSync(resolve(ROOT, path), 'utf8')) } catch (error) {
