@@ -98,7 +98,7 @@
     ]
   },
   "hosted-full": {
-    "description": "Everything a hosted URL can run: API plus MPC browser regression against staging or preview. UAT and load need the local Docker stack and are not included.",
+    "description": "Everything a hosted URL can run: API plus MPC browser regression on a hosted environment (production, staging or preview). Production is read-only. UAT and load need the local Docker stack and are not included.",
     "include": [
       "api",
       "regression"

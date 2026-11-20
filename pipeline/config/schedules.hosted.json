@@ -10,7 +10,7 @@
       "graceMinutes": 15,
       "priority": 5,
       "env": "production",
-      "enabled": true,
+      "enabled": false,
       "ai": false
     },
     {
@@ -20,7 +20,7 @@
       "kind": "test",
       "graceMinutes": 360,
       "priority": 10,
-      "env": "production",
+      "env": "preview",
       "enabled": true,
       "ai": false
     }
