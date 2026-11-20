@@ -14,8 +14,9 @@ test('Join opening dismisses consent that appears after the initial page load', 
     join.querySelector('p')!.textContent = instructions
     consent.querySelector('button')!.addEventListener('click', () => { consent.hidden = true })
     cta.addEventListener('click', () => join.showModal())
-    // Reproduce the deployed race: consent arrives beyond the old three-second probe.
-    setTimeout(() => { consent.hidden = false; cta.disabled = false }, 4_000)
+    // Reproduce the deployed race: consent arrives after the bounded dismissal window has passed, while
+    // the CTA click is already waiting on it.
+    setTimeout(() => { consent.hidden = false; cta.disabled = false }, 12_000)
   }, copy.join.connectLede)
   await new JoinSheet(page).open()
   await expect(page.getByRole('dialog', { name: 'Audience measurement choice' })).toBeHidden()

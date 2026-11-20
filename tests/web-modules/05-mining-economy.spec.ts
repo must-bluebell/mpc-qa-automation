@@ -343,7 +343,9 @@ test.describe('Shared UI behaviour (gated)', { tag: ['@ui', '@regression', '@web
 
   test('UI-12 - A double-clicked Join opens one sheet (anonymous)', async ({ page }) => {
     await page.goto('/')
-    await new JoinSheet(page).cta().dblclick()
+    const sheet = new JoinSheet(page)
+    await sheet.dismissConsent()
+    await sheet.cta().dblclick()
     await expect(page.getByRole('dialog', { name: 'Join', exact: true })).toHaveCount(1)
   })
 

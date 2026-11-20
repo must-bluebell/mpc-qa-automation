@@ -5,6 +5,10 @@ import { addressChipName, copy } from './copy'
 
 /** How long to wait for the analytics choice banner before deciding it is not coming. */
 const CONSENT_WINDOW_MS = 8_000
+/** How long the Join CTA may stay covered by the analytics banner before the case fails. */
+const CTA_CLEAR_TIMEOUT_MS = 20_000
+/** One pointer attempt at the CTA; a refused attempt is retried by `clickCta`. */
+const CTA_ATTEMPT_MS = 4_000
 
 /**
  * Every locator in the suite lives here. Tests describe behaviour; this file knows how to find
@@ -96,18 +100,21 @@ export class JoinSheet {
   }
 
   /**
-   * Rejects analytics consent when it is shown, and confirms it has gone.
+   * Rejects analytics consent when it is shown within a bounded window, and confirms it has gone.
    *
-   * The banner arrives after hydration, sometimes several seconds after the CTA is already visible,
-   * and it covers the CTA while it is up. It is handled here, explicitly and within a bounded
-   * window, rather than through `addLocatorHandler`. With the handler, every CTA click on the
-   * deployed app timed out with no further detail (hosted-full 20261118-113042-hosted-full-6af3,
-   * 23 chromium cases), and the handler's Reject click was never shown to complete.
+   * The banner arrives after hydration, sometimes several seconds after the CTA is already visible.
+   * It is handled here rather than through `addLocatorHandler`, which never completed its Reject
+   * click on the deployed app (hosted-full 20261118-113042-hosted-full-6af3). A banner that arrives
+   * after this window is handled by `clickCta`.
    */
   async dismissConsent(): Promise<void> {
+    const appeared = await this.consentDialog().waitFor({ state: 'visible', timeout: CONSENT_WINDOW_MS }).then(() => true, () => false)
+    if (appeared) await this.rejectConsent()
+  }
+
+  /** Rejects the banner if it is showing now, and confirms it has closed. */
+  private async rejectConsent(): Promise<void> {
     const consent = this.consentDialog()
-    const appeared = await consent.waitFor({ state: 'visible', timeout: CONSENT_WINDOW_MS }).then(() => true, () => false)
-    if (!appeared) return
     const reject = consent.getByRole('button', { name: 'Reject', exact: true })
     await reject.click({ timeout: 5_000 }).catch(async () => {
       // A banner still in its entrance transition can refuse a pointer click. The button's own click
@@ -117,9 +124,31 @@ export class JoinSheet {
     await expect(consent, 'Analytics consent should close after Reject').toBeHidden({ timeout: 10_000 })
   }
 
-  async open(expectedStep: 'Wallet' | 'Community' = 'Wallet'): Promise<void> {
+  /**
+   * Clicks the Join CTA, clearing the analytics banner whenever it covers the button.
+   *
+   * The banner can arrive after `dismissConsent` has given up, while the click is already waiting,
+   * and it then intercepts every pointer attempt (16 chromium cases in hosted-full
+   * 20261120-045156-hosted-full-c443 waited 30 seconds on it). Playwright never dispatches a click
+   * that is intercepted, so each refused attempt is safe to repeat. After a refused attempt the
+   * banner is rejected if it is now showing, and the click is tried again until the budget runs out.
+   */
+  async clickCta(): Promise<void> {
     await this.dismissConsent()
-    await this.cta().click()
+    const deadline = Date.now() + CTA_CLEAR_TIMEOUT_MS
+    for (;;) {
+      try {
+        await this.cta().click({ timeout: CTA_ATTEMPT_MS })
+        return
+      } catch (error) {
+        if (Date.now() >= deadline) throw error
+        if (await this.consentDialog().isVisible()) await this.rejectConsent()
+      }
+    }
+  }
+
+  async open(expectedStep: 'Wallet' | 'Community' = 'Wallet'): Promise<void> {
+    await this.clickCta()
     await expect(this.sheet()).toBeVisible()
     await this.expectStep(expectedStep)
     const instructions = expectedStep === 'Community' ? validationCopy.communityIntro : copy.join.connectLede
