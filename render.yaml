@@ -15,8 +15,8 @@ services:
       - { key: QA_DEFAULT_ENV, value: production }
       - { key: QA_PREVIEW_BASE_URL, sync: false }
       - { key: QA_SCHEDULE_FILE, value: pipeline/config/schedules.hosted.json }
-      # Render runs live-site schedules only (pipeline/config/schedules.hosted.json). Docker-stack schedules
-      # live in schedules.json and are refused here by pipeline/lib/placement.mjs.
+      # Render is the only scheduler: it runs pipeline/config/schedules.hosted.json (hosted environments only).
+      # schedules.json is intentionally empty; pipeline/lib/placement.mjs refuses any Docker-stack schedule here.
       - { key: QA_SCHEDULER_ENABLED, value: "1" }
       - { key: QA_SLACK_AGENT_ENABLED, value: "0" }
       - { key: QA_EXTERNAL_REPOSITORIES, value: "0" }

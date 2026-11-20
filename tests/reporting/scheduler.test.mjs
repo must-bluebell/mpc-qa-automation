@@ -127,13 +127,14 @@ test('a busy worker still allows summaries and records expired test jobs',()=>{
   assert.equal(state.jobs[1].status,'missed')
   assert.equal(state.jobs[0].status,'running')
 })
-test('configuration assigns API and UAT smoke, nightly without load, and one scheduling owner',async()=>{
+test('local configuration has no schedules; suite definitions keep API and UAT smoke and nightly without load',async()=>{
   const {config}=await import('../../pipeline/lib/env.mjs')
   const {expandSuite}=await import('../../pipeline/orchestrator.mjs')
   const {readFileSync}=await import('node:fs')
   const spec=config.schedules(),suites=config.suites()
   assert.equal(spec.rotation.enabled,false)
-  assert.equal(spec.schedules.length,4)
+  // Render is the only scheduler; the local file is intentionally empty.
+  assert.equal(spec.schedules.length,0)
   const smoke=expandSuite('critical-smoke',suites)
   assert.deepEqual(smoke.map(s=>[s.project,s.grep]),[['api','@smoke'],['uat','@smoke']])
   const nightly=expandSuite('nightly-regression',suites)

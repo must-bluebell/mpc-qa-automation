@@ -89,7 +89,7 @@ docker compose exec automation npm run qa:full
 
 Open the private dashboard link printed in the logs. Compose uses port **4501** by default, or `QA_DASHBOARD_PORT` from your environment. Keep the private link and logs within the team. From a remote machine, forward the selected port, for example `ssh -L 4501:127.0.0.1:4501 your-qa-host`, then open the logged link locally.
 
-The scheduler runs in the foreground alongside the dashboard and uses [the existing schedules](../pipeline/config/schedules.json). It publishes through the existing Slack configuration and durable outbox. Do not run `qa:scheduler:start` inside the container: the service supervisor already owns that process. A service failure stops its peer and fails the container so Compose can restart it. `docker compose stop` signals the service process groups and waits for shutdown.
+Recurring execution now runs only on Render, and [the local schedule file](../pipeline/config/schedules.json) is empty, so the container runs no scheduled suites. Its scheduler service stays idle unless a schedule is added there. It publishes through the existing Slack configuration and durable outbox. Do not run `qa:scheduler:start` inside the container: the service supervisor already owns that process. A service failure stops its peer and fails the container so Compose can restart it. `docker compose stop` signals the service process groups and waits for shutdown.
 
 To run only the dashboard without scheduled execution or Slack sends triggered by schedules:
 

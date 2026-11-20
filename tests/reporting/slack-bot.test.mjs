@@ -5,6 +5,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { notifyBotRun, flushBotOutbox, notifyHealthSummary } from '../../pipeline/notify/slack-bot.mjs'
 
+// The local schedule file is intentionally empty (Render owns recurring runs). These tests need a
+// scheduled critical-smoke policy, so they read their own fixture instead of the shipped configuration.
+const scheduleFixtureDir = mkdtempSync(join(tmpdir(), 'qa-slack-schedules-'))
+const scheduleFixture = join(scheduleFixtureDir, 'schedules.json')
+writeFileSync(scheduleFixture, JSON.stringify({ timezone: 'Asia/Seoul', schedules: [
+  { id: 'critical-30m', slack: 'changes', suite: 'critical-smoke', cron: '*/30 * * * *', kind: 'test', graceMinutes: 10, priority: 30, env: 'local-docker', enabled: true, ai: true },
+] }))
+process.env.QA_SCHEDULE_FILE = scheduleFixture
+
 const run = (id, status = 'failed') => ({ runId:id, suite:'regression', env:'local-docker', status,
   finishedAt:'2026-10-09T00:00:00Z', versions:{app:{id:'abc123'}}, counts:{passed:status==='passed'?1:0,failed:status==='failed'?1:0,skipped:status==='skipped'?1:0,blocked:0},
   tests:[{key:'cart',title:'Cart assertion',status, fingerprint:'fp-1', requirementIds:['AUTH-01'],annotations:[]}], ai:{status:'not-requested'} })
