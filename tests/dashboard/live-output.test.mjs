@@ -32,6 +32,8 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
     if (pathname === '/api/session') { fixture.sessionRequest = route.request().postDataJSON(); data = {ok:true} }
     else if (pathname === '/api/status') { fixture.statusRequests++; if (fixture.statusError) return route.fulfill({status:503,json:{error:'Temporary status failure'}}); data = status() }
     else if (pathname === '/api/stack') data = { project: 'ui-test', healthy: true }
+    else if (pathname === '/api/jira/tickets') data = []
+    else if (pathname === '/api/trends') data = { window: { runs: 0, from: null, to: null }, series: [], topFailing: [] }
     else if (pathname === '/api/runs' && route.request().method() === 'POST') { fixture.startRequests++; fixture.lastStart = route.request().postDataJSON(); fixture.started = true; data = { runId } }
     else if (pathname === '/api/runs') data = fixture.complete ? [{ runId, suite: 'regression', status: 'passed', counts: { passed: 22 } }] : history
     else if (pathname === `/api/jobs/${runId}/log`) {

@@ -50,7 +50,7 @@ export function buildHealthSummary({end,env,schedules=[],runs=[],jobs=[],timezon
         if(finishedAt&&Date.parse(finishedAt)>=cutoff)result.pending++
         else result.completed++
       }
-      else if(['missed','cancelled'].includes(job.status))result.missed++
+      else if(['missed','cancelled','refused'].includes(job.status))result.missed++
       else result.pending++
     }
     return result

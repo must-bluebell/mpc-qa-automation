@@ -25,7 +25,7 @@ const safeHref = v => (/^(#|\/(?!\/))/.test(String(v)) ? String(v) : '#')
 async function api(path, options = {}) {
   const res = await fetch(path, { ...options, headers: { ...(options.body ? { 'content-type': 'application/json', 'x-qa-token': TOKEN } : {}), ...options.headers } })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { status: res.status })
+  if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { status: res.status, signIn: data.signIn === true })
   return data
 }
 const post = (path, body = {}) => api(path, { method: 'POST', body: JSON.stringify(body) })
@@ -83,6 +83,8 @@ function renderChips() {
       : h('span', { class: 'chip ok' }, `Target ${s.defaultEnv}`),
     h('span', { class: `chip ${s.slack.valid ? 'ok' : s.slack.configured ? 'bad' : 'warn'}` }, `Slack ${s.slack.valid ? 'configured' : s.slack.configured ? s.slack.reason || 'invalid configuration' : 'not configured'}`),
     h('span', { class: `chip ${s.ai.configured ? 'ok' : 'warn'}` }, `AI ${s.ai.configured ? `${s.ai.provider} · ${s.ai.model}` : 'not configured'}`),
+    s.role === 'viewer' ? h('span', { class: 'chip' }, `Viewing as ${s.viewerEmail}`) : '',
+    s.role === 'viewer' ? h('a', { href: '/auth/logout' }, 'Sign out') : '',
   )
 }
 
@@ -104,6 +106,11 @@ async function refresh() {
 
 function runForm() {
   const s = state.status
+  // Viewers see results only; the server refuses their writes, so this is guidance rather than a control.
+  if (s.role === 'viewer') {
+    return h('section', { class: 'panel' }, h('h2', {}, 'Run tests'),
+      h('p', { class: 'hint' }, `Signed in as ${s.viewerEmail}. Viewers can read results; starting runs and sending alerts needs the admin key.`))
+  }
   const msg = h('div', { class: 'msg', role: 'status' })
   const suite = h('select', { name: 'suite' }, s.suites.map(x => h('option', { value: x.name, selected: x.name === s.defaultSuite }, x.name)))
   const env = h('select', { name: 'env' }, s.environments.map(x => h('option', { value: x.name, selected: x.name === s.defaultEnv }, x.name)))
@@ -236,7 +243,114 @@ function runsTable() {
 }
 
 function renderHome() {
-  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), runsTable(), systemHealth())
+  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), trendsPanel(), runsTable(), systemHealth())
+  loadTrends()
+}
+
+// Trend charts: inline SVG, no library. Values come from the server as data and are written with textContent or
+// setAttribute only. The line colour is --chart-line (validated per theme); text uses ink and muted tokens.
+const SVG_NS = 'http://www.w3.org/2000/svg'
+const svg = (tag, attrs = {}, ...children) => {
+  const el = document.createElementNS(SVG_NS, tag)
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v))
+  el.append(...children.filter(c => c != null))
+  return el
+}
+const pct = v => `${Math.round(v * 100)}%`
+const shortDate = iso => (iso ? new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Seoul', day: '2-digit', month: 'short' }) : '—')
+// Only https links are made clickable; anything else is shown as plain text.
+function externalLink(url, text) {
+  const a = h('a', { target: '_blank', rel: 'noopener noreferrer' }, text)
+  try { if (new URL(url).protocol === 'https:') a.setAttribute('href', url) } catch { /* not a link */ }
+  return a
+}
+
+let trendsLoadedAt = 0
+async function loadTrends(force = false) {
+  if (!force && Date.now() - trendsLoadedAt < 60_000) return
+  trendsLoadedAt = Date.now()
+  try { state.trends = await api('/api/trends') } catch { return }
+  document.getElementById('trends')?.replaceWith(trendsPanel())
+}
+
+function trendsPanel() {
+  const t = state.trends
+  if (!t) return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'), h('p', { class: 'empty' }, 'Loading trends…'))
+  if (!t.series.length) return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'), h('p', { class: 'empty' }, 'No completed runs yet.'))
+  return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'),
+    h('p', { class: 'hint' }, `Last ${t.window.runs} completed runs · ${shortDate(t.window.from)} to ${shortDate(t.window.to)}`),
+    passRateChart(t.series),
+    h('h3', {}, 'Tests that fail most'),
+    t.topFailing.length ? failingTable(t.topFailing) : h('p', { class: 'empty' }, 'No failures in this window.'))
+}
+
+function passRateChart(series) {
+  const pts = series.filter(p => p.passRate != null)
+  if (!pts.length) return h('p', { class: 'empty' }, 'No passed or failed tests to chart yet.')
+  const W = 640, H = 220, L = 44, R = 56, T = 12, B = 30
+  const pw = W - L - R, ph = H - T - B
+  const n = pts.length
+  const x = i => (n === 1 ? L + pw / 2 : L + (i * pw) / (n - 1))
+  const y = v => T + (1 - v) * ph
+  const grid = [0, 0.5, 1].map(v => svg('g', {},
+    svg('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'chart-grid' }),
+    svg('text', { x: L - 8, y: y(v) + 4, class: 'chart-axis', 'text-anchor': 'end' }, pct(v))))
+  const line = svg('polyline', { points: pts.map((p, i) => `${x(i)},${y(p.passRate)}`).join(' '), class: 'chart-line', fill: 'none' })
+  // Each point has a larger invisible hit target, so the tooltip is easy to reach with a pointer.
+  const points = pts.map((p, i) => svg('g', {},
+    svg('circle', { cx: x(i), cy: y(p.passRate), r: 3.5, class: 'chart-dot' }),
+    svg('circle', { cx: x(i), cy: y(p.passRate), r: 11, class: 'chart-hit' },
+      svg('title', {}, `${shortDate(p.finishedAt)} · ${pct(p.passRate)} pass · ${p.passed} passed, ${p.failed} failed · ${p.runId}`))))
+  const last = pts[n - 1]
+  const endLabel = svg('text', { x: x(n - 1) + 8, y: y(last.passRate) + 4, class: 'chart-end' }, pct(last.passRate))
+  const dates = [svg('text', { x: x(0), y: H - 8, class: 'chart-axis', 'text-anchor': n === 1 ? 'middle' : 'start' }, shortDate(pts[0].finishedAt))]
+  if (n > 1) dates.push(svg('text', { x: x(n - 1), y: H - 8, class: 'chart-axis', 'text-anchor': 'end' }, shortDate(last.finishedAt)))
+  const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Pass rate over ${n} runs; latest ${pct(last.passRate)}` }, ...grid, line, ...points, endLabel, ...dates)
+  return h('figure', { class: 'chart' }, h('div', { class: 'chart-scroll' }, root),
+    h('figcaption', { class: 'hint' }, `Latest ${pct(last.passRate)}. Pass rate = passed ÷ (passed + failed) in each run. Hover a point for its run. Table view below.`),
+    runTable(series))
+}
+
+function runTable(series) {
+  return h('details', { class: 'hint' }, h('summary', {}, 'Table view'),
+    h('div', { class: 'tablewrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, ['Finished', 'Suite', 'Passed', 'Failed', 'Flaky', 'Pass rate'].map(t => h('th', { class: t === 'Finished' || t === 'Suite' ? null : 'num' }, t)))),
+      h('tbody', {}, series.map(p => h('tr', {},
+        h('td', {}, when(p.finishedAt)), h('td', {}, p.suite),
+        h('td', { class: 'num' }, p.passed), h('td', { class: 'num' }, p.failed), h('td', { class: 'num' }, p.flaky),
+        h('td', { class: 'num' }, p.passRate == null ? '—' : pct(p.passRate))))))))
+}
+
+function failingTable(rows) {
+  return h('div', { class: 'tablewrap' }, h('table', {},
+    h('thead', {}, h('tr', {}, h('th', {}, 'Test'), h('th', { class: 'num' }, 'Failed'), h('th', { class: 'num' }, 'Flaky'), h('th', { class: 'num' }, 'Runs'), h('th', {}, 'First failed'), h('th', {}, 'Last failed'))),
+    h('tbody', {}, rows.map(r => h('tr', {},
+      h('td', {}, r.title), h('td', { class: 'num' }, r.failures), h('td', { class: 'num' }, r.flaky), h('td', { class: 'num' }, r.executions),
+      h('td', {}, when(r.firstFailedAt)), h('td', {}, when(r.lastFailedAt)))))))
+}
+
+function signInPanel() {
+  return h('section', { class: 'panel' }, h('h2', {}, 'Sign in to view results'),
+    h('p', {}, 'Use your company Google account. Signed-in viewers can read runs; starting runs needs the admin key.'),
+    h('p', {}, h('a', { class: 'badge ok', href: '/auth/google/start' }, 'Sign in with Google')))
+}
+
+// Creates a Jira ticket for one confirmed product failure (admin only). Shows the existing ticket instead when there is one.
+function ticketControl(run, t, tickets) {
+  const existing = tickets.find(x => x.testKey === t.key)
+  if (existing) return h('span', {}, ' · ', externalLink(existing.url, existing.issueKey), existing.state === 'done' ? ' (closed)' : '')
+  if (!state.status?.jira?.configured || state.status.role !== 'admin') return ''
+  const message = h('span', { class: 'hint', role: 'status' })
+  const button = h('button', { type: 'button', onclick: async e => {
+    e.currentTarget.disabled = true
+    message.textContent = 'Creating ticket…'
+    try {
+      const r = await post('/api/jira/tickets', { runId: run.runId, testKey: t.key })
+      message.textContent = r.existing ? `Already tracked as ${r.issueKey}` : `Created ${r.issueKey}`
+      await renderRun(run.runId)
+    } catch (error) { message.textContent = error.message; e.currentTarget.disabled = false }
+  } }, 'Create Jira ticket')
+  return h('span', {}, ' ', button, ' ', message)
 }
 
 async function renderRun(runId, anchor) {
@@ -247,6 +361,7 @@ async function renderRun(runId, anchor) {
     app.replaceChildren(h('section', { class: 'panel' }, h('a', { href: '#/' }, '← All runs'), h('p', {}, error.message))); return
   }
   const c = run.counts
+  const tickets = await api('/api/jira/tickets').catch(() => [])
   const overview = h('section', { class: 'panel' },
     h('a', { href: '#/' }, '← All runs'),
     h('h2', {}, `${run.suite} on ${run.env} `, badge(run.status)),
@@ -278,7 +393,7 @@ async function renderRun(runId, anchor) {
       h('div', {}, h('span', { class: `badge ${g.classification === 'product' ? 'bad' : 'warn'}` }, g.classification), g.critical ? h('span', { class: 'badge bad' }, 'critical') : '',
         ` ${g.size} test(s)`, g.requirementIds?.length ? ` · ${g.requirementIds.join(', ')}` : '', g.reason ? ` · ${g.reason}` : ''),
       h('div', { class: 'err' }, g.message),
-      h('ul', {}, g.tests.map(t => h('li', {}, t.title))))) : h('p', { class: 'empty' }, 'No failures.'))
+      h('ul', {}, g.tests.map(t => h('li', {}, t.title, g.classification === 'product' ? ticketControl(run, t, tickets) : ''))))) : h('p', { class: 'empty' }, 'No failures.'))
 
   const categoryOf = t => {
     const suite = run.steps.find(s => s.name === t.step)?.fromSuite
@@ -341,4 +456,4 @@ async function connectDashboard() {
   await refresh()
   await render()
 }
-connectDashboard().catch(error => app.replaceChildren(h('section', { class: 'panel' }, `Dashboard API unavailable: ${error.message}`)))
+connectDashboard().catch(error => app.replaceChildren(error.signIn ? signInPanel() : h('section', { class: 'panel' }, `Dashboard API unavailable: ${error.message}`)))

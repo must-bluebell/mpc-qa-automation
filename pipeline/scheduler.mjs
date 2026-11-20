@@ -12,6 +12,7 @@ import { kstTime, opaqueId, publishSummary } from './lib/safe-output.mjs'
 import { aiArgs } from './ai/policy.mjs'
 import { generateHealthSummary } from './health-summary.mjs'
 import { notifyBotRun, flushBotOutbox, checkBot } from './notify/slack-bot.mjs'
+import { placementRefusal } from './lib/placement.mjs'
 
 function cronField(text,value,min,max) {
   let matched=false
@@ -63,13 +64,17 @@ export function enqueueDue(state,schedules,now=new Date(),timezone='Asia/Seoul')
     if(!/^[\w-]{1,40}$/.test(schedule.id))throw new Error('Invalid schedule ID')
     cronMatches(schedule.cron,now,timezone)
     const grace=(schedule.graceMinutes??60)*60_000
+    // A schedule this host must not run is refused up front, so it never reaches the orchestrator as a crash.
+    const refusal=placementRefusal(schedule)
     // Outages longer than a day are not replayed as a storm of obsolete runs.
     for(let at=Math.max(start,end-86_400_000);at<=end;at+=60_000) {
       if(!cronMatches(schedule.cron,new Date(at),timezone))continue
       const id=`${schedule.id}-${at}`
       if(known.has(id))continue
-      state.jobs.push({id,scheduleId:schedule.id,suite:schedule.suite,env:schedule.env,at:new Date(at).toISOString(),
-        ai:typeof schedule.ai==='boolean'?schedule.ai:undefined,kind:schedule.kind??'test',priority:schedule.priority??30,runId:`sched-${schedule.id}-${at}`,status:end-at>grace?'missed':'queued',graceMinutes:schedule.graceMinutes??60})
+      const job={id,scheduleId:schedule.id,suite:schedule.suite,env:schedule.env,at:new Date(at).toISOString(),
+        ai:typeof schedule.ai==='boolean'?schedule.ai:undefined,kind:schedule.kind??'test',priority:schedule.priority??30,runId:`sched-${schedule.id}-${at}`,status:end-at>grace?'missed':'queued',graceMinutes:schedule.graceMinutes??60}
+      if(refusal){job.status='refused';job.reason=refusal}
+      state.jobs.push(job)
       known.add(id)
     }
   }
@@ -122,6 +127,8 @@ export function workerAlive(job,pidNamespace) {
 export async function completeJob(state,job,code,{readRunImpl=readRun,saveRunImpl=saveRun,createDirImpl=createRunDir,notify=notifyBotRun,persistImpl=persist,publishImpl=publishSummary}={}) {
   let run=readRunImpl(job.runId)
   if(code===3&&!run){job.status='queued';job.pid=null;persistImpl(state);return}
+  // Exit 4 is the orchestrator's policy guard: nothing ran, so no run record and no crash report.
+  if(code===4&&!run){job.status='refused';job.reason='The orchestrator policy guard refused this run; see the scheduler log.';job.pid=null;persistImpl(state);return}
   if(!run||run.status==='running') {
     run??={runId:job.runId,suite:job.suite,env:job.env,trigger:'scheduled',scheduleId:job.scheduleId,startedAt:job.at,
       counts:{passed:0,failed:0,skipped:0,blocked:1,total:1},tests:[],groups:[],versions:{app:{id:'unspecified'}},errors:[]}
@@ -169,6 +176,11 @@ export async function runScheduler({once=false,runNow=null}={}) {
   const finish=async(job,code)=>{
     await completeJob(state,job,code)
     console.log(`${kstTime(Date.now())} ${job.suite}: ${readRun(job.runId)?.status??job.status}; ${job.runId}`)
+  }
+  // Say once, at startup, which configured schedules this host will not run, so a misplaced file is visible.
+  for(const schedule of spec.schedules.filter(s=>s.enabled)) {
+    const reason=placementRefusal(schedule)
+    if(reason)console.log(`${kstTime(Date.now())} not running ${schedule.id} on this host: ${reason}`)
   }
   const workers=new Map()
   let stopped=false

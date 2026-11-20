@@ -19,6 +19,10 @@ import { slackStatus } from './slack-settings.mjs'
 import { expandSuite, guard } from '../pipeline/orchestrator.mjs'
 import { outputRedactor } from '../pipeline/lib/output-redactor.mjs'
 import { REPORT_CATEGORIES } from '../pipeline/lib/safe-output.mjs'
+import { buildTrends } from '../pipeline/lib/test-history.mjs'
+import { runWatchdog } from '../pipeline/lib/watchdog.mjs'
+import { jiraStatus, listTickets, openTicketForTest } from '../pipeline/notify/jira.mjs'
+import { OAUTH_STATE_SECONDS, VIEWER_SESSION_SECONDS, authorizationUrl, checkIdTokenClaims, decodeIdToken, exchangeCode, googleConfig, newOauthState, sessionKey, signPayload, verifyPayload } from './google-auth.mjs'
 
 /**
  * Local QA dashboard: browse run history and start suites without opening the WEB MPC project.
@@ -46,6 +50,16 @@ const FIXED_ACCESS_TOKEN = process.env.QA_DASHBOARD_ACCESS_TOKEN || ''
 if (FIXED_ACCESS_TOKEN && FIXED_ACCESS_TOKEN.length < 32) throw new Error('QA_DASHBOARD_ACCESS_TOKEN must be at least 32 characters')
 const ACCESS_TOKEN = FIXED_ACCESS_TOKEN || randomBytes(32).toString('hex')
 const SESSION_COOKIE = `mpc_qa_session_${PORT}`
+// Google sign-in gives read-only viewer sessions. It needs the public hostname for its redirect URI and
+// fails closed: if its settings are wrong, the dashboard stays reachable only with the admin key.
+let GOOGLE = null
+try { GOOGLE = googleConfig() } catch (error) { console.error(`Google sign-in disabled: ${error.message}`) }
+const GOOGLE_ON = !!GOOGLE && !!PUBLIC_HOST
+if (GOOGLE && !PUBLIC_HOST) console.error('Google sign-in disabled: no public hostname (RENDER_EXTERNAL_HOSTNAME or QA_DASHBOARD_PUBLIC_HOST).')
+const GOOGLE_REDIRECT = PUBLIC_HOST ? `https://${PUBLIC_HOST}/auth/google/callback` : ''
+const VIEWER_COOKIE = `mpc_qa_viewer_${PORT}`
+const OAUTH_COOKIE = `mpc_qa_oauth_${PORT}`
+const SESSION_KEY = sessionKey(ACCESS_TOKEN)
 const JOB_LOG_DIR = join(RUNS_DIR, '.dashboard')
 const MAX_BODY = 4_096
 const REDACT_LIMIT = 8 * 1024 * 1024
@@ -94,6 +108,65 @@ function sessionOk(req) {
   const cookie = String(req.headers.cookie ?? '').split(';').map(c => c.trim())
     .find(c => c.startsWith(`${SESSION_COOKIE}=`))
   return accessOk(cookie?.slice(SESSION_COOKIE.length + 1))
+}
+
+function readCookie(req, name) {
+  const found = String(req.headers.cookie ?? '').split(';').map(c => c.trim()).find(c => c.startsWith(`${name}=`))
+  return found?.slice(name.length + 1)
+}
+
+/** 'admin' holds the access key; 'viewer' signed in with Google; null has neither. */
+function roleOf(req) {
+  if (sessionOk(req)) return 'admin'
+  return viewerEmail(req) ? 'viewer' : null
+}
+function viewerEmail(req) {
+  if (!GOOGLE_ON) return null
+  const payload = verifyPayload(readCookie(req, VIEWER_COOKIE), SESSION_KEY)
+  return payload?.role === 'viewer' && typeof payload.email === 'string' ? payload.email : null
+}
+
+function cookie(name, value, maxAge, path = '/') {
+  return `${name}=${value}; HttpOnly; Secure; SameSite=Lax; Path=${path}; Max-Age=${maxAge}`
+}
+function redirect(res, location, headers = {}) {
+  res.writeHead(302, { ...BASE_HEADERS, Location: location, ...headers })
+  res.end()
+}
+function sameText(a, b) {
+  const left = Buffer.from(String(a)), right = Buffer.from(String(b))
+  return left.length === right.length && timingSafeEqual(left, right)
+}
+
+function googleStart(res) {
+  if (!GOOGLE_ON) return send(res, 404, { error: 'Google sign-in is not configured' })
+  const pending = newOauthState()
+  const location = authorizationUrl(GOOGLE, { redirectUri: GOOGLE_REDIRECT, state: pending.state, nonce: pending.nonce })
+  redirect(res, location, { 'Cache-Control': 'no-store', 'Set-Cookie': cookie(OAUTH_COOKIE, signPayload(pending, SESSION_KEY), OAUTH_STATE_SECONDS, '/auth/google') })
+}
+
+async function googleCallback(req, res, url) {
+  if (!GOOGLE_ON) return send(res, 404, { error: 'Google sign-in is not configured' })
+  const clearPending = cookie(OAUTH_COOKIE, '', 0, '/auth/google')
+  // Fixed reason codes only: the page never echoes Google's or the token's contents.
+  const refuse = reason => send(res, 403, `Sign-in refused (${reason}). Ask an administrator for access.`, { 'Set-Cookie': clearPending })
+  const pending = verifyPayload(readCookie(req, OAUTH_COOKIE), SESSION_KEY)
+  const state = url.searchParams.get('state') ?? ''
+  const code = url.searchParams.get('code') ?? ''
+  if (url.searchParams.get('error')) return refuse('google_declined')
+  if (!pending || !sameText(state, pending.state) || !code || code.length > 2048) return refuse('expired_or_invalid_state')
+  let idToken = null
+  try { idToken = await exchangeCode(GOOGLE, { code, redirectUri: GOOGLE_REDIRECT }) } catch { idToken = null }
+  if (!idToken) return refuse('token_exchange_failed')
+  const verdict = checkIdTokenClaims(decodeIdToken(idToken), { config: GOOGLE, nonce: pending.nonce })
+  if (!verdict.ok) return refuse(verdict.reason)
+  const session = signPayload({ role: 'viewer', email: verdict.email, exp: Math.floor(Date.now() / 1000) + VIEWER_SESSION_SECONDS }, SESSION_KEY)
+  redirect(res, '/', { 'Cache-Control': 'no-store', 'Set-Cookie': [cookie(VIEWER_COOKIE, session, VIEWER_SESSION_SECONDS), clearPending] })
+}
+
+/** Recent runs in the default environment, for trend charts. Reads at most the last 120 saved records. */
+function recentRuns() {
+  return readIndex().filter(r => r.env === DEFAULT_ENV).slice(-120).map(r => readRun(r.runId)).filter(Boolean)
 }
 
 async function readBody(req) {
@@ -207,11 +280,13 @@ function hostedRunnable(name, suites) {
   try { return expandSuite(name, suites).every(step => !step.requiresIsolated && !step.requiresLoad) } catch { return false }
 }
 
-function status() {
+function status(role = 'admin', email = null) {
   const suites = config.suites()
   const envs = config.environments()
   const ai = aiConfig()
   return {
+    role, viewerEmail: email, googleSignIn: GOOGLE_ON,
+    jira: jiraStatus(),
     hosted: HOSTED,
     defaultEnv: DEFAULT_ENV,
     defaultSuite: HOSTED ? 'hosted-full' : 'full',
@@ -354,17 +429,34 @@ async function route(req, res) {
     if (!tokenOk(req)) return send(res, 403, { error: 'Missing or invalid dashboard token (reload the page)' })
   }
 
+  if (req.method === 'GET' && path === '/auth/google/start') return googleStart(res)
+  if (req.method === 'GET' && path === '/auth/google/callback') return googleCallback(req, res, url)
+  if (req.method === 'GET' && path === '/auth/logout') return redirect(res, '/', { 'Cache-Control': 'no-store', 'Set-Cookie': cookie(VIEWER_COOKIE, '', 0) })
+
   if (req.method === 'POST' && path === '/api/session') {
     const body = await readBody(req)
     if (!accessOk(body?.access)) return send(res, 403, { error: 'Invalid private dashboard link' })
     return send(res, 200, { ok: true }, { 'Set-Cookie': `${SESSION_COOKIE}=${ACCESS_TOKEN}; HttpOnly; SameSite=Strict; Path=/api/${PUBLIC_HOST ? '; Secure' : ''}` })
   }
-  if (path.startsWith('/api/') && !sessionOk(req)) {
-    return send(res, 403, { error: 'Open the private dashboard link printed by npm run dashboard.' })
+  // Viewers (Google sign-in) read everything; anything that changes state needs the admin key.
+  const role = roleOf(req)
+  if (path.startsWith('/api/') && !role) {
+    return send(res, 403, { error: GOOGLE_ON ? 'Sign in with your company Google account to view the dashboard.' : 'Open the private dashboard link printed by npm run dashboard.', signIn: GOOGLE_ON })
+  }
+  if (path.startsWith('/api/') && role === 'viewer' && write) {
+    return send(res, 403, { error: 'Signed-in viewers can read results. Starting runs, sending alerts and creating tickets needs the admin key.' })
   }
 
   if (req.method === 'GET' && !path.startsWith('/api/')) return serveStatic(res, path)
-  if (req.method === 'GET' && path === '/api/status') return send(res, 200, status())
+  if (req.method === 'GET' && path === '/api/me') return send(res, 200, { role, email: viewerEmail(req), googleSignIn: GOOGLE_ON })
+  if (req.method === 'GET' && path === '/api/status') return send(res, 200, status(role, viewerEmail(req)))
+  if (req.method === 'GET' && path === '/api/trends') return send(res, 200, buildTrends(recentRuns()))
+  if (req.method === 'GET' && path === '/api/jira/tickets') return send(res, 200, listTickets())
+  if (req.method === 'POST' && path === '/api/jira/tickets') {
+    const body = await readBody(req)
+    const ticket = await openTicketForTest(body?.runId, body?.testKey)
+    return send(res, ticket.existing ? 200 : 201, { issueKey: ticket.issueKey, url: ticket.url, existing: !!ticket.existing, attachmentsFailed: ticket.attachmentsFailed ?? [] })
+  }
   if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().slice(-200).reverse())
   if (req.method === 'GET' && path === '/api/stack') {
     if (HOSTED) return send(res, 404, { error: 'No local Docker stack on a hosted deployment' })
@@ -407,6 +499,15 @@ server.requestTimeout = 30_000
 // A short Node default can race a proxy request and surface as HTTP 502.
 server.keepAliveTimeout = 120_000
 server.headersTimeout = 120_000
-server.listen(PORT, HOST, () => console.log(PUBLIC_HOST
-  ? `MPC QA dashboard listening on ${HOST}:${PORT}; open https://${PUBLIC_HOST}/#access=<QA_DASHBOARD_ACCESS_TOKEN>`
-  : `MPC QA dashboard: http://${HOST}:${PORT}/#access=${ACCESS_TOKEN}  (private link; loopback only)`))
+server.listen(PORT, HOST, () => {
+  console.log(PUBLIC_HOST
+    ? `MPC QA dashboard listening on ${HOST}:${PORT}; open https://${PUBLIC_HOST}/#access=<QA_DASHBOARD_ACCESS_TOKEN>`
+    : `MPC QA dashboard: http://${HOST}:${PORT}/#access=${ACCESS_TOKEN}  (private link; loopback only)`)
+  // The watchdog lives here, not in the scheduler: a stopped scheduler cannot report its own silence.
+  if (GOOGLE_ON) console.log(`Google sign-in: viewers at https://${PUBLIC_HOST}/auth/google/start; redirect URI ${GOOGLE_REDIRECT}`)
+  if (HOSTED && process.env.QA_WATCHDOG !== '0') {
+    const tick = () => runWatchdog().catch(error => console.error(`watchdog: ${redact(error.message)}`))
+    setTimeout(tick, 60_000).unref()
+    setInterval(tick, 5 * 60_000).unref()
+  }
+})

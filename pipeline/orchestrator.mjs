@@ -22,6 +22,7 @@ import { publishSummary, kstTime } from './lib/safe-output.mjs'
 import { generateAllureReport } from './lib/allure.mjs'
 import { prepareTestData } from './lib/test-data.mjs'
 import { runStatus } from './lib/run-status.mjs'
+import { reconcileAfterRun } from './notify/jira.mjs'
 
 const ADAPTERS = { playwright: runPlaywrightStep, 'webmpc-scenarios': runWebmpcStep, k6: runK6Step }
 const TRIGGERS = /^[\w-]{1,40}$/
@@ -179,6 +180,8 @@ export async function runPipeline({ suite: suiteName, env: envName, trigger = 'm
     run.durationMs = Date.now() - started
     // Persist execution outcomes before optional AI, report generation or external delivery.
     saveRun(run)
+    // Jira is advisory: closing or opening tickets never changes the status computed above.
+    try { run.jira = await reconcileAfterRun(run) } catch (error) { run.jira = { configured: true, error: error.code ?? 'jira_unavailable' } }
 
     // AI review is advisory; it never changes the status computed above.
     const wantAi = shouldReview(ai, run)
@@ -223,7 +226,9 @@ export function renderMarkdown(run) {
     lines.push('')
   }
   const cmp = run.comparison
-  if (cmp) lines.push('## Compared with previous run', `- Previous: ${cmp.previousRunId ?? 'none'}`, `- New failures: ${cmp.newFailures.length} · Recurring: ${cmp.persisting.length} · New variants: ${cmp.newVariants.length} · Recovered: ${cmp.recovered.length}`, '')
+  // GitHub runs keep no history between runs, so "Previous: none" would be noise. The gate is unaffected.
+  const githubRun = String(run.trigger ?? '').startsWith('github-')
+  if (cmp && !githubRun) lines.push('## Compared with previous run', `- Previous: ${cmp.previousRunId ?? 'none'}`, `- New failures: ${cmp.newFailures.length} · Recurring: ${cmp.persisting.length} · New variants: ${cmp.newVariants.length} · Recovered: ${cmp.recovered.length}`, '')
   if (run.notifications.length) lines.push('## Slack', ...run.notifications.map(n => `- ${n.kind}: ${n.ok ? 'delivered' : `not delivered (${n.code})`}`), '')
   return lines.join('\n')
 }

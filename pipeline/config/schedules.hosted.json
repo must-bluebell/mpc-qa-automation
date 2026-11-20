@@ -2,6 +2,18 @@
   "timezone": "Asia/Seoul",
   "schedules": [
     {
+      "id": "hourly-smoke-hosted",
+      "slack": "changes",
+      "suite": "smoke",
+      "cron": "0 * * * *",
+      "kind": "test",
+      "graceMinutes": 15,
+      "priority": 5,
+      "env": "production",
+      "enabled": true,
+      "ai": false
+    },
+    {
       "id": "nightly-hosted",
       "suite": "hosted-full",
       "cron": "0 1 * * *",

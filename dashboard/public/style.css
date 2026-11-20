@@ -65,3 +65,17 @@ pre.log { margin: 0; max-height: 360px; overflow: auto; background: var(--bg); b
 .group ul { margin: 4px 0 0; padding-left: 18px; }
 .links a { margin-right: 10px; }
 .empty { color: var(--muted); }
+
+/* Trend chart. The line colour is a validated series colour (dataviz palette check), separate from --accent. */
+:root { --chart-line: #2f5bd3; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --chart-line: #6a8be6; } }
+:root[data-theme="dark"] { --chart-line: #6a8be6; }
+.chart { margin: 0 0 8px; }
+.chart-scroll { overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-axis { fill: var(--muted); font-size: 11px; }
+.chart-line { stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; }
+.chart-dot { fill: var(--chart-line); }
+.chart-hit { fill: transparent; }
+.chart-end { fill: var(--ink); font-size: 12px; font-weight: 600; }

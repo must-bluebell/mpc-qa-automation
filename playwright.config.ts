@@ -10,13 +10,18 @@ const reportDir = process.env.QA_REPORT_DIR
 // Set by the orchestrator to one directory per run, so all Playwright steps feed a single Allure report.
 const allureResults = process.env.QA_ALLURE_RESULTS_DIR
 
+// Pipeline runs set QA_RETRIES=1, so a timed-out or intermittent case gets one more attempt. A case that
+// passes on the retry is reported as flaky (utils/regression-reporter.ts), not as a clean pass or a failure.
+const retries = process.env.QA_RETRIES !== undefined ? Number(process.env.QA_RETRIES) : (process.env.CI ? 1 : 0)
+if (!Number.isInteger(retries) || retries < 0 || retries > 2) throw new Error(`QA_RETRIES must be 0, 1 or 2, got ${JSON.stringify(process.env.QA_RETRIES)}`)
+
 export default defineConfig({
   testDir: './tests',
   grepInvert: /@production-cart/,
   // All tests use one configured account and must not race its session.
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries,
   workers: 1,
   // A remote target over the public internet is slower than a local server; the wallet probe alone
   // is allowed a second, and SIWE adds two server round trips.
@@ -81,7 +86,7 @@ export default defineConfig({
     {
       name: 'chromium',
       testDir: './tests/wallet',
-      testMatch: ['wallet-flow.spec.ts', 'wallet-errors.spec.ts', 'web-regression.spec.ts', 'quests-dig-wallet.spec.ts', 'join-sheet.spec.ts'],
+      testMatch: ['wallet-flow.spec.ts', 'wallet-errors.spec.ts', 'web-regression.spec.ts', 'quests-dig-wallet.spec.ts', 'join-sheet.spec.ts', 'smoke-journeys.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
