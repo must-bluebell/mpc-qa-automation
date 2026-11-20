@@ -1134,8 +1134,8 @@
     "wallet": true,
     "originCheck": false,
     "baseline": {
-      "status": 401,
-      "error": "not_signed_in"
+      "status": 404,
+      "text": "Not found"
     }
   },
   {
@@ -1392,8 +1392,8 @@
     "wallet": true,
     "originCheck": false,
     "baseline": {
-      "status": 401,
-      "error": "not_signed_in"
+      "status": 404,
+      "text": "Not found"
     }
   },
   {
@@ -2391,8 +2391,11 @@
     "wallet": true,
     "originCheck": false,
     "baseline": {
-      "status": 401,
-      "error": "not_signed_in"
+      "status": 200,
+      "fields": {
+        "player": "guest",
+        "status": "playing"
+      }
     }
   }
 ]

@@ -41,7 +41,7 @@ async function dashboardServer(t) {
     syncBuiltinESMExports();
   `)
   const child=spawn(process.execPath,['--import',preload,'dashboard/server.mjs'],{
-    env:{...process.env,OPENAI_API_KEY:'qa-security-test-secret',QA_RUNS_DIR:dir,QA_DASHBOARD_PORT:String(port),QA_TEST_LOG_FILE:logFile,QA_TEST_READ_EVENTS:events},
+    env:{...process.env,OPENAI_API_KEY:'qa-security-test-secret',QA_DEFAULT_ENV:'local-docker',QA_RUNS_DIR:dir,QA_DASHBOARD_PORT:String(port),QA_TEST_LOG_FILE:logFile,QA_TEST_READ_EVENTS:events},
     stdio:['ignore','pipe','pipe'],
   })
   let output='',errors=''

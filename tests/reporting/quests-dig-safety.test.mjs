@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 function list(config, overrides={}, projects=[]) {
   return execFileSync(process.execPath,['node_modules/@playwright/test/cli.js','test','--config',config,'--list','--reporter=json', ...projects.map(project => `--project=${project}`)],{
@@ -28,14 +29,9 @@ test('authorized dedicated invocation selects only the cart transaction with no 
   assert.equal(report.config.projects[0].retries,0)
 })
 
-test('npm cart command selects the dedicated project with zero CI retries',()=>{
-  const output=execFileSync('npm',['run','--silent','test:quests-dig:cart','--','--list','--reporter=json'],{
-    encoding:'utf8',env:{...process.env,CI:'1',QA_RUN_QUEST_DIG_CART:'1',QA_ALLOW_WRITES:'1',QA_AUTHORIZE_PRODUCTION_QUEST_DIG_CART:'1'},
-    stdio:['ignore','pipe','pipe'],
-  })
-  const report=JSON.parse(output)
-  assert.equal(report.config.projects.length,1)
-  assert.equal(report.config.projects[0].name,'quests-dig-cart')
-  assert.equal(report.config.projects[0].retries,0)
-  assert.equal(report.errors.length,0)
+test('the production quest cart run has no npm entry point',()=>{
+  // Commit 407029c removed developer-facing suite scripts. The production cart journey must stay
+  // unreachable from npm, so this asserts the script is absent rather than running it.
+  const scripts=JSON.parse(readFileSync(new URL('../../package.json',import.meta.url),'utf8')).scripts
+  assert.equal(scripts['test:quests-dig:cart'],undefined)
 })
