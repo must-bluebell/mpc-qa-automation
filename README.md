@@ -16,14 +16,19 @@ Set `BASE_URL`, `QA_CHAIN_ID`, `QA_SEED_PHRASE`, `WALLET_ADDRESS`, and `WALLET_A
 
 ## Run
 
+Start application suites from the authenticated [deployed QA dashboard](https://qa-automation-bq3y.onrender.com). Select an available environment and suite, start the run, then use its run ID to retrieve status and results from the same deployment. Keep dashboard access tokens private.
+
+Local application suite execution is disabled. If dashboard authentication or the requested environment is unavailable, report the blocker rather than substituting a local pipeline or direct Playwright run. Do not bypass authentication or production write protections. The local application commands retained later in this README are historical references, not supported quick-start instructions.
+
+### Local tooling checks
+
+These commands validate tooling; they do not execute application suites or establish that the deployed version was tested:
+
 ```sh
-npm test
-npm run test:wallet
-npm run test:headed
-npm run test:ui
-npm run test:watch
 npm run typecheck
-npm run report
+npm run typecheck:extension
+npm run test:reporting
+npm run test:dashboard
 ```
 
 Tests skip when the seed phrase is missing. Sign-in tests also skip if the deployment refuses same-origin authentication requests. CI skips successful sign-in tests on mainnet targets.
@@ -135,13 +140,9 @@ For KST schedules, threaded Slack summaries, bot installation and private config
 
 The existing Slack app also supports an opt-in conversational Socket Mode listener for evidence-based questions and authorized, confirmed reruns. See [conversational agent setup](docs/slack-agent.md). It uses a separate app-level token and preserves the scheduler's execution and repository restrictions.
 
-```sh
-npm run dashboard          # Open the private link printed in the terminal
-```
+Open the [deployed QA dashboard](https://qa-automation-bq3y.onrender.com) using your authorized access. A private startup link establishes a browser session for API calls and evidence downloads; keep it private. The browser removes the access key from the address bar after use.
 
-The dashboard prints a private startup link that establishes a browser session for API calls and evidence downloads. Open that link once after each dashboard restart; keep it private. The browser removes the access key from the address bar after use.
-
-The dashboard starts any suite (`smoke`, `api`, `regression`, `uat`, `load`, `full`) on any configured environment, streams live output, and shows run history, grouped failures, load results against SLOs, AI review status, Slack delivery and per-step Playwright HTML reports. The same runs are available from the CLI: `npm run qa:full`, `npm run qa:uat`, `npm run qa:load`, and so on. `npm run stack:status` reports the isolated Docker stack.
+The dashboard starts suites on configured environments, streams live output, and shows run history, grouped failures, load results against SLOs, AI review status, Slack delivery and per-step Playwright HTML reports. Available suites depend on the deployment's capabilities; local Docker and extension prerequisites are not automatically available on Render. Record the returned run ID and inspect its results before reporting execution. Discovery counts are not execution results.
 
 Application PRs can trigger code/type checks, dependency security auditing and all four suites when opened or updated, against their exact head commit. A pending/final `MPC QA / pre-merge` status and an updated bot comment link reviewers to GitHub-hosted reports before merge. See [GitHub setup](docs/github/README.md) for the application dispatch template and required secrets. Sanitized reports show test pass rates and execution coverage for each suite. A reusable [PR QA skill](skills/merge-pr-qa/SKILL.md) describes this workflow for agents.
 
