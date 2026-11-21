@@ -5,6 +5,8 @@
  * quality either way and are left out of pass rates. A case that passed only on a retry is `passed` with
  * `flaky: true`; it is counted as passed and also in its flaky total.
  */
+import { safeText } from './safe-output.mjs'
+
 const usable = run => run && run.finishedAt && !run.seededDefect && !run.reportOnly
   && !['running', 'skipped-overlap'].includes(run.status)
 
@@ -32,6 +34,12 @@ export function buildTrends(runs, { limit = 60 } = {}) {
         entry.failures++
         entry.firstFailedAt ??= run.finishedAt
         entry.lastFailedAt = run.finishedAt
+        entry.lastFailure = {
+          runId: run.runId,
+          message: safeText((t.errors ?? []).join('\n').replace(/\u001b\[[0-9;]*m/g, '').trim() || 'No failure details recorded.').slice(0, 2000),
+          classification: safeText(t.classification?.kind ?? 'unclassified'),
+          reason: safeText(t.classification?.reason ?? t.infra ?? '').slice(0, 400),
+        }
       }
       entry.lastStatus = t.status
       tests.set(t.key, entry)
