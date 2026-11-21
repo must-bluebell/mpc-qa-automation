@@ -60,4 +60,13 @@ test.describe('Hourly smoke journeys', { tag: ['@ui', '@smoke', '@regression'] }
     expect((await session.json())?.address ?? null).toBeNull()
     expect(verificationRequests, 'a refused signature must not be sent for verification').toEqual([])
   })
+
+  test('J03 - The Digging screen renders for an anonymous visitor', async ({ page }) => {
+    await stubAnalytics(page)
+    await page.goto('/?tab=mine&screen=dig')
+    const sheet = new JoinSheet(page)
+    await sheet.dismissConsent()
+    // Anonymous visitors either see Digging or are asked to join first; a blank or crashed screen fails.
+    await expect(page.getByRole('heading', { name: 'Digging', exact: true }).or(sheet.cta())).toBeVisible()
+  })
 })
