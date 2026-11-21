@@ -49,8 +49,9 @@ export function guard({ suiteName, env, steps, seededDefect, productionApiWrites
     try { assertApiWriteTarget(env.baseUrl, '1', {productionApiWrites:true, environment:env.name}) }
     catch { refusals.push('Production API writes require the approved production origin.') }
   }
-  // Hosted deployments (QA_HOSTED=1) have no local Docker stack, so local-docker is never a valid target there.
-  if (process.env.QA_HOSTED === '1' && env.name === 'local-docker') refusals.push('The local-docker environment is only available on a developer machine; choose a hosted environment such as staging.')
+  // Hosted deployments (QA_HOSTED=1) have no local Docker stack, so every isolated profile (local-docker, web-isolated)
+  // is refused there. Isolation is resolved from a loopback URL, so this covers any alias that points at the stack.
+  if (process.env.QA_HOSTED === '1' && env.isolated) refusals.push(`The "${env.name}" environment is only available on a developer machine; choose a hosted environment such as production or staging.`)
   for (const step of steps) {
     if (step.requiresIsolated && !env.isolated) refusals.push(`${step.fromSuite}: requires the isolated local stack; "${env.name}" is not isolated.`)
     if (step.requiresLoad && !(env.allowLoad && isLoopback(env.baseUrl))) refusals.push(`${step.fromSuite}: load tests are only allowed on an approved isolated loopback environment.`)

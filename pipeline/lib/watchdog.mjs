@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createPublicClient, formatEther, http } from 'viem'
+import { createPublicClient, erc20Abi, formatEther, http, isAddress } from 'viem'
 import { RUNS_DIR, config } from './env.mjs'
 import { readIndex, writeJsonAtomic } from './run-store.mjs'
 import { cronMatches } from '../scheduler.mjs'
@@ -56,24 +56,51 @@ export function evaluateScheduler({ now, heartbeatAt, index = [], jobs = [], sch
   }
 }
 
-/** Pure rule for the test wallet: any balance above the allowed maximum is a finding. */
-export function evaluateWalletBalance({ balanceWei, maxWei = 0n }) {
-  return { funded: balanceWei > maxWei, balanceWei: balanceWei.toString(), maxWei: maxWei.toString() }
+/**
+ * Pure rule for the test wallet: any native balance above the allowed maximum is a finding, and so is any
+ * positive balance of a watched ERC-20 token (tokens have no allowed maximum: the wallet must hold none).
+ */
+export function evaluateWalletBalance({ balanceWei, maxWei = 0n, tokens = [] }) {
+  const heldTokens = tokens.filter(t => t.ok && t.balanceWei > 0n).map(t => ({ address: t.address, balanceWei: t.balanceWei.toString() }))
+  return {
+    funded: balanceWei > maxWei || heldTokens.length > 0,
+    nativeFunded: balanceWei > maxWei,
+    balanceWei: balanceWei.toString(), maxWei: maxWei.toString(), tokens: heldTokens,
+  }
+}
+
+/** Parses QA_WALLET_TOKEN_ADDRESSES (comma-separated). Malformed entries are returned separately, never silently dropped. */
+export function parseTokenAddresses(raw = '') {
+  const items = String(raw).split(',').map(s => s.trim()).filter(Boolean)
+  const invalid = items.filter(a => !isAddress(a, { strict: false }))
+  return { addresses: items.filter(a => !invalid.includes(a)), invalid }
 }
 
 const DEFAULT_RPC = { 56: 'https://bsc-dataseed.bnbchain.org', 97: 'https://data-seed-prebsc-1-s1.bnbchain.org:8545' }
 
-/** Reads the native balance of the test wallet. Any RPC failure returns null: unknown is never reported as funded. */
-export async function readWalletBalance({ address, chainId, rpcUrl, timeoutMs = 15_000 }) {
+/**
+ * Reads the native balance and each watched ERC-20 balance of the test wallet. A failed native read returns ok:false
+ * (unknown is never reported as funded). A failed token read is reported per token as unchecked.
+ */
+export async function readWalletBalance({ address, chainId, rpcUrl, tokens = [], timeoutMs = 15_000 }) {
   const url = rpcUrl || DEFAULT_RPC[chainId]
   if (!url) return { ok: false, reason: `no RPC URL for chain ${chainId}; set QA_WALLET_RPC_URL` }
+  let client
+  let balanceWei
   try {
-    const client = createPublicClient({ transport: http(url, { timeout: timeoutMs, retryCount: 1 }) })
-    const balanceWei = await client.getBalance({ address })
-    return { ok: true, balanceWei, balance: formatEther(balanceWei) }
+    client = createPublicClient({ transport: http(url, { timeout: timeoutMs, retryCount: 1 }) })
+    balanceWei = await client.getBalance({ address })
   } catch (error) {
     return { ok: false, reason: `balance lookup failed (${error.name ?? 'error'})` }
   }
+  const results = await Promise.all(tokens.map(async token => {
+    try {
+      return { address: token, ok: true, balanceWei: await client.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [address] }) }
+    } catch (error) {
+      return { address: token, ok: false, reason: `token balance lookup failed (${error.name ?? 'error'})` }
+    }
+  }))
+  return { ok: true, balanceWei, balance: formatEther(balanceWei), tokens: results }
 }
 
 function statePath() { return join(RUNS_DIR, 'watchdog.json') }
@@ -134,17 +161,24 @@ export async function runWatchdog({
   const walletDue = !state.walletCheckedAt || now.getTime() - Date.parse(state.walletCheckedAt) >= WALLET_CHECK_INTERVAL_MS
   if (walletAddress && walletDue) {
     const chainId = Number(process.env.QA_WALLET_CHAIN_ID || process.env.QA_CHAIN_ID || 56)
-    const read = await balanceReader({ address: walletAddress, chainId, rpcUrl: process.env.QA_WALLET_RPC_URL })
+    const tokenList = parseTokenAddresses(process.env.QA_WALLET_TOKEN_ADDRESSES)
+    if (tokenList.invalid.length) console.error(`watchdog: QA_WALLET_TOKEN_ADDRESSES has malformed entries, not checked: ${tokenList.invalid.join(', ')}`)
+    const read = await balanceReader({ address: walletAddress, chainId, rpcUrl: process.env.QA_WALLET_RPC_URL, tokens: tokenList.addresses })
     state.walletCheckedAt = now.toISOString()
     if (read.ok) {
       const maxWei = BigInt(process.env.QA_WALLET_MAX_BALANCE_WEI || '0')
-      const wallet = evaluateWalletBalance({ balanceWei: read.balanceWei, maxWei })
-      facts.wallet = { funded: wallet.funded, balance: read.balance, chainId }
+      const wallet = evaluateWalletBalance({ balanceWei: read.balanceWei, maxWei, tokens: read.tokens ?? [] })
+      const tokensUnchecked = (read.tokens ?? []).filter(t => !t.ok).map(t => t.address)
+      facts.wallet = { funded: wallet.funded, balance: read.balance, chainId, heldTokens: wallet.tokens, tokensUnchecked, invalidTokenAddresses: tokenList.invalid }
+      const held = [
+        ...(wallet.nativeFunded ? [`${read.balance} native tokens`] : []),
+        ...wallet.tokens.map(t => `${t.balanceWei} base units of token ${t.address}`),
+      ].join(' and ')
       if (wallet.funded && !state.walletAlertOpenedAt) {
-        if (await notifyImpl('wallet-funded', 'QA test wallet holds a balance', `The test wallet has ${read.balance} native tokens on chain ${chainId}; it must hold none. Move the funds out and check what sent them.`, 'critical'))
+        if (await notifyImpl('wallet-funded', 'QA test wallet holds a balance', `The test wallet holds ${held} on chain ${chainId}; it must hold none. Move the funds out and check what sent them.`, 'critical'))
           state.walletAlertOpenedAt = now.toISOString()
       } else if (!wallet.funded && state.walletAlertOpenedAt) {
-        if (await notifyImpl('wallet-cleared', 'QA test wallet is empty again', `Balance is back to ${read.balance} on chain ${chainId}.`, 'info'))
+        if (await notifyImpl('wallet-cleared', 'QA test wallet is empty again', `Balance is back to ${read.balance} native tokens with no watched token balance on chain ${chainId}.`, 'info'))
           delete state.walletAlertOpenedAt
       }
     } else {
