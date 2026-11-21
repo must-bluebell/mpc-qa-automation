@@ -22,7 +22,23 @@ export function classifyFailure(test) {
   const text = (test.errors ?? []).join('\n')
   for (const [pattern, reason] of INFRA_PATTERNS) if (pattern.test(text)) return { kind: 'infrastructure', reason }
   if ((test.tags ?? []).includes('@load') || (test.tags ?? []).includes('@PERF-01')) return { kind: 'product', reason: 'performance threshold breached' }
+  const missing = missingControl(text)
+  if (missing) return { kind: 'product', reason: `timed out waiting for ${missing} (not found or not enabled)` }
   return { kind: 'product', reason: 'explicit assertion failed' }
+}
+
+/**
+ * Names the control a locator timeout waited for, so a timeout reads as "the Join button never became
+ * enabled" rather than an anonymous assertion. Landmarks (main, dialog) are only context and are skipped.
+ */
+export function missingControl(message = '') {
+  const callLog = message.replace(/\u001b\[[0-9;]*m/g, '').split('waiting for').slice(1).join('\n')
+  if (!/Timeout \d+ms exceeded/.test(message) || !callLog) return null
+  const seen = new Set()
+  for (const [, role, name] of callLog.matchAll(/getByRole\('(\w+)', \{ name: '([^']+)'/g)) {
+    if (!['main', 'dialog', 'region', 'navigation'].includes(role)) seen.add(`${role} '${name}'`)
+  }
+  return seen.size ? [...seen].join(' or ') : null
 }
 
 /** Removes run-specific noise (addresses, ids, numbers, paths, timings) so the same defect hashes the same. */
