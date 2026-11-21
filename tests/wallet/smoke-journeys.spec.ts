@@ -4,7 +4,7 @@ import { injectTestWallet } from '../../fixtures/wallet'
 import { target } from '../../config/target'
 import { JoinSheet } from '../../pages/JoinSheet'
 import { copy } from '../../pages/copy'
-import { getConfiguredWallet } from '../../utils/wallet-generator'
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
 const t = target()
 
@@ -12,6 +12,9 @@ const t = target()
  * Hourly smoke journeys. They are read-only by design: no session is ever created, so they are safe on
  * production. Full sign-in (a verified SIWE signature that creates a session) stays in the API suite and
  * runs only where writes are allowed, because it leaves a session and join row behind.
+ *
+ * J02 uses a throwaway key on purpose. The wallet refuses to sign, so no signature exists and nothing is
+ * verified; the key never needs to hold or own anything, and the hourly run needs no seed phrase.
  */
 test.describe('Hourly smoke journeys', { tag: ['@ui', '@smoke', '@regression'] }, () => {
   test('J01 - Anonymous mining access requires joining', async ({ page }) => {
@@ -28,12 +31,9 @@ test.describe('Hourly smoke journeys', { tag: ['@ui', '@smoke', '@regression'] }
   })
 
   test('J02 - A rejected sign-in request never reaches verification', async ({ page }) => {
-    test.skip(!process.env.QA_SEED_PHRASE || !process.env.WALLET_ADDRESS,
-      'QA_SEED_PHRASE and WALLET_ADDRESS are required for wallet sign-in checks')
-
     await stubAnalytics(page)
     const wallet = await injectTestWallet(page, {
-      account: getConfiguredWallet(),
+      account: privateKeyToAccount(generatePrivateKey()),
       chainId: t.chainId,
       // The wallet refuses the SIWE message, so the app can never send a signature to /api/auth/verify.
       failOn: { personal_sign: 'rejected' },

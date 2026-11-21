@@ -24,3 +24,10 @@ test('the hourly smoke check is enabled and runs every hour', () => {
 test('the recurring rotation stays disabled on hosted', () => {
   assert.equal(hosted.rotation.enabled, false)
 })
+
+// The hourly run has no wallet seed phrase, so its sign-in journey must not depend on one.
+test('the hourly sign-in journey runs without wallet secrets', () => {
+  const spec = readFileSync(new URL('../../tests/wallet/smoke-journeys.spec.ts', import.meta.url), 'utf8')
+  assert.match(spec, /J02 - A rejected sign-in request/)
+  assert.doesNotMatch(spec, /QA_SEED_PHRASE|WALLET_ADDRESS|getConfiguredWallet/)
+})

@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import type { HDAccount, TypedDataDefinition } from 'viem'
+import type { LocalAccount, TypedDataDefinition } from 'viem'
 import { hexToString } from 'viem'
 import { createSiweMessage, parseSiweMessage, validateSiweMessage } from 'viem/siwe'
 import { target } from '../config/target.ts'
@@ -42,7 +42,7 @@ export type FailableMethod =
   | 'eth_signTypedData_v4'
 
 export type InjectWalletOptions = {
-  account: HDAccount
+  account: LocalAccount
   /** Reported by `eth_chainId`. Must match the target's chain or the app will ask to switch. */
   chainId: number
   /** The name shown on the wallet row — this is `connector.name`, so it is the button's label. */
@@ -89,7 +89,7 @@ const WALLET_ICON =
   'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iI2I4NzMzMyIvPjwvc3ZnPg=='
 
 export type MockWallet = {
-  account: HDAccount
+  account: LocalAccount
   address: `0x${string}`
   walletName: string
 }
