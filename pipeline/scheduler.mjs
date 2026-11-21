@@ -12,7 +12,7 @@ import { kstTime, opaqueId, publishSummary } from './lib/safe-output.mjs'
 import { aiArgs } from './ai/policy.mjs'
 import { generateHealthSummary } from './health-summary.mjs'
 import { notifyBotRun, flushBotOutbox, checkBot } from './notify/slack-bot.mjs'
-import { placementRefusal } from './lib/placement.mjs'
+import { scheduleReadiness } from './lib/placement.mjs'
 
 function cronField(text,value,min,max) {
   let matched=false
@@ -65,7 +65,7 @@ export function enqueueDue(state,schedules,now=new Date(),timezone='Asia/Seoul')
     cronMatches(schedule.cron,now,timezone)
     const grace=(schedule.graceMinutes??60)*60_000
     // A schedule this host must not run is refused up front, so it never reaches the orchestrator as a crash.
-    const refusal=placementRefusal(schedule)
+    const refusal=scheduleReadiness(schedule).reason
     // Outages longer than a day are not replayed as a storm of obsolete runs.
     for(let at=Math.max(start,end-86_400_000);at<=end;at+=60_000) {
       if(!cronMatches(schedule.cron,new Date(at),timezone))continue
@@ -179,7 +179,7 @@ export async function runScheduler({once=false,runNow=null}={}) {
   }
   // Say once, at startup, which configured schedules this host will not run, so a misplaced file is visible.
   for(const schedule of spec.schedules.filter(s=>s.enabled)) {
-    const reason=placementRefusal(schedule)
+    const reason=scheduleReadiness(schedule).reason
     if(reason)console.log(`${kstTime(Date.now())} not running ${schedule.id} on this host: ${reason}`)
   }
   const workers=new Map()

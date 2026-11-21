@@ -19,6 +19,7 @@ import { slackStatus } from './slack-settings.mjs'
 import { expandSuite, guard } from '../pipeline/orchestrator.mjs'
 import { outputRedactor } from '../pipeline/lib/output-redactor.mjs'
 import { REPORT_CATEGORIES } from '../pipeline/lib/safe-output.mjs'
+import { scheduleReadiness } from '../pipeline/lib/placement.mjs'
 import { buildTrends } from '../pipeline/lib/test-history.mjs'
 import { runWatchdog } from '../pipeline/lib/watchdog.mjs'
 import { jiraStatus, listTickets, openTicketForTest } from '../pipeline/notify/jira.mjs'
@@ -299,7 +300,7 @@ function status(role = 'admin', email = null) {
     seededDefects: Object.entries(PROFILES).map(([name, p]) => ({ name, kind: p.kind, description: p.description })),
     slack: slackStatus(),
     ai: { provider: ai.provider, configured: ai.configured, model: ai.configured ? ai.model : null, auto: process.env.QA_AI_AUTO === '1' },
-    schedules: config.schedules().schedules,
+    schedules: config.schedules().schedules.map(schedule => ({ ...schedule, readiness: scheduleReadiness(schedule) })),
     categoryResults: latestCategoryResults(),
   }
 }

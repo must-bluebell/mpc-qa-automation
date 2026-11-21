@@ -252,8 +252,18 @@ function runsTable() {
       h('td', {}, r.slack?.length ? r.slack.map(n => h('span', { class: `badge ${n.ok ? 'ok' : 'warn'}` }, `${n.kind}: ${n.ok ? 'sent' : n.code}`)) : '—')))))))
 }
 
+function schedulePanel() {
+  return h('section', { class: 'panel' }, h('h2', {}, 'Schedule configuration'),
+    h('p', { class: 'hint' }, 'Configuration checks only. Completed runs establish runtime and target health.'),
+    ...(state.status.schedules ?? []).map(s => h('p', {},
+      h('strong', {}, s.id), ` · ${s.suite} · ${s.env} · `,
+      h('span', { class: `badge ${!s.enabled || !s.readiness?.ready ? 'warn' : 'ok'}` },
+        !s.enabled ? 'Disabled' : s.readiness?.ready ? 'Configured' : 'Blocked'),
+      s.readiness?.reason ? ` — ${s.readiness.reason}` : '')))
+}
+
 function renderHome() {
-  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), trendsPanel(), runsTable(), systemHealth())
+  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), trendsPanel(), runsTable(), schedulePanel(), systemHealth())
   loadTrends()
 }
 
@@ -335,7 +345,12 @@ function failingTable(rows) {
   return h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, h('th', {}, 'Test'), h('th', { class: 'num' }, 'Failed'), h('th', { class: 'num' }, 'Flaky'), h('th', { class: 'num' }, 'Runs'), h('th', {}, 'First failed'), h('th', {}, 'Last failed'))),
     h('tbody', {}, rows.map(r => h('tr', {},
-      h('td', {}, r.title), h('td', { class: 'num' }, r.failures), h('td', { class: 'num' }, r.flaky), h('td', { class: 'num' }, r.executions),
+      h('td', {}, r.title,
+        r.failures ? h('details', {}, h('summary', {}, 'Latest failure details'),
+          h('p', { class: 'hint' }, r.lastFailure ? `${r.lastFailure.classification}${r.lastFailure.reason ? ` · ${r.lastFailure.reason}` : ''}` : ''),
+          h('pre', { class: 'log' }, r.lastFailure?.message ?? 'No failure details recorded.'),
+          r.lastFailure?.runId ? h('a', { href: `#/runs/${encodeURIComponent(r.lastFailure.runId)}/failures` }, 'View failing run and evidence') : '') : ''),
+      h('td', { class: 'num' }, r.failures), h('td', { class: 'num' }, r.flaky), h('td', { class: 'num' }, r.executions),
       h('td', {}, when(r.firstFailedAt)), h('td', {}, when(r.lastFailedAt)))))))
 }
 
@@ -415,7 +430,7 @@ async function renderRun(runId, anchor) {
     h('tbody', {}, list.map(t => h('tr', {},
       h('td', {}, t.title, h('div', { class: 'hint' }, t.step), t.skipReason ? h('div', { class: 'hint' }, t.skipReason) : ''), h('td', {}, badge(t.status), t.flaky ? h('span', { class: 'badge warn' }, 'flaky') : ''),
       h('td', { class: 'num' }, secs(t.durationMs)),
-      h('td', { class: 'links' }, (t.evidence ?? []).slice(0, 4).map(e => h('a', { href: fileUrl(run.runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name))))))))
+      h('td', { class: 'links' }, (t.evidence ?? []).map(e => h('a', { href: fileUrl(run.runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name))))))))
   const tests = h('section', { class: 'panel', id: 'test-results' }, h('h2', {}, `Tests (${run.tests.length})`),
     [...REPORT_CATEGORIES, { suite: 'uat', label: 'UAT scenarios' }, { suite: 'other', label: 'Other checks' }].flatMap(({ suite, label }) => {
       const list = run.tests.filter(t => categoryOf(t) === suite)

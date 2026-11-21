@@ -288,3 +288,13 @@ test('production API writes are explicit in dashboard run requests',async t=>{
     assert.equal(fixture.lastStart.productionApiWrites,checked)
   }
 })
+
+test('run details expose evidence from both attempts beyond the old four-link limit', async t => {
+  const evidence = Array.from({ length: 6 }, (_, i) => ({ name: `evidence ${i + 1}`, path: `steps/web/attempt-${i < 4 ? 1 : 2}/${i}.zip` }))
+  const runDetail = { runId: 'ui-completion-regression', suite: 'regression', status: 'passed', counts: { passed: 1, flaky: 1 }, groups: [], steps: [],
+    tests: [{ title: 'W01', project: 'chromium', status: 'passed', flaky: true, evidence }] }
+  const { page, runId } = await dashboard(t, { scheduled: true, runDetail })
+  await page.locator(`a[href="#/runs/${runId}"]`).first().click()
+  await expect(page.locator('#test-results a')).toHaveCount(6)
+  await expect(page.getByRole('link', { name: 'evidence 6', exact: true })).toHaveAttribute('href', /attempt-2/)
+})
