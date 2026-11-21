@@ -22,9 +22,13 @@ const WALLET_CHECK_INTERVAL_MS = 60 * MINUTE
  * switched off has nothing to be silent about). It is silent when its heartbeat is stale, or when a test
  * schedule fell due in the last window and no scheduled run has been recorded since.
  */
-export function evaluateScheduler({ now, heartbeatAt, index = [], schedules = [], timezone = 'Asia/Seoul', expected, windowMinutes = SILENCE_MINUTES }) {
+export function evaluateScheduler({ now, heartbeatAt, index = [], jobs = [], schedules = [], timezone = 'Asia/Seoul', expected, windowMinutes = SILENCE_MINUTES }) {
   const nowMs = now.getTime()
   const windowMs = windowMinutes * MINUTE
+  // A due slot the scheduler refused (for example a missing setting) is not silence: the scheduler saw it and said why.
+  const refused = jobs
+    .filter(j => j.status === 'refused' && Number.isFinite(Date.parse(j.at)) && Date.parse(j.at) > nowMs - windowMs && Date.parse(j.at) <= nowMs)
+    .map(j => ({ scheduleId: String(j.scheduleId ?? 'unknown'), reason: String(j.reason ?? 'refused') }))
   const heartbeatMs = heartbeatAt ? Date.parse(heartbeatAt) : NaN
   const heartbeatAgeMinutes = Number.isFinite(heartbeatMs) ? (nowMs - heartbeatMs) / MINUTE : null
   const scheduledActivity = index
@@ -41,12 +45,13 @@ export function evaluateScheduler({ now, heartbeatAt, index = [], schedules = []
   })
   const heartbeatStale = heartbeatAgeMinutes == null || heartbeatAgeMinutes > windowMinutes
   const noRecentRun = lastScheduledMs == null || nowMs - lastScheduledMs > windowMs
-  const silent = !!expected && (heartbeatStale || (dueInWindow && noRecentRun))
+  const silent = !!expected && (heartbeatStale || (dueInWindow && noRecentRun && refused.length === 0))
   return {
-    expected: !!expected, silent, heartbeatAgeMinutes, lastScheduledAgeMinutes, dueInWindow,
+    expected: !!expected, silent, heartbeatAgeMinutes, lastScheduledAgeMinutes, dueInWindow, refused,
     reason: !expected ? 'scheduler not enabled on this host'
       : heartbeatStale ? `no scheduler heartbeat for ${heartbeatAgeMinutes == null ? 'any recorded time' : `${Math.round(heartbeatAgeMinutes)} minutes`}`
-      : dueInWindow && noRecentRun ? `a scheduled run was due but none was recorded in ${windowMinutes} minutes`
+      : dueInWindow && noRecentRun && refused.length === 0 ? `a scheduled run was due but none was recorded in ${windowMinutes} minutes`
+      : refused.length ? `scheduled check refused: ${refused.map(r => `${r.scheduleId} (${r.reason})`).join('; ')}`
       : 'scheduler reporting',
   }
 }
@@ -95,15 +100,17 @@ export async function runWatchdog({
   expectScheduler = process.env.QA_SCHEDULER_ENABLED === '1',
   readHeartbeat = () => { try { return JSON.parse(readFileSync(join(RUNS_DIR, 'scheduler-state.json'), 'utf8')).heartbeatAt ?? null } catch { return null } },
   readIndexImpl = readIndex,
+  readJobs = () => { try { return JSON.parse(readFileSync(join(RUNS_DIR, 'scheduler-state.json'), 'utf8')).jobs ?? [] } catch { return [] } },
   schedules = config.schedules(),
   balanceReader = readWalletBalance,
   notifyImpl = raise,
   persistImpl = state => writeJsonAtomic(statePath(), state),
+  loadState = readState,
 } = {}) {
-  const state = readState()
+  const state = loadState()
   const facts = {}
 
-  const scheduler = evaluateScheduler({ now, heartbeatAt: readHeartbeat(), index: readIndexImpl(), schedules: schedules.schedules, timezone: schedules.timezone, expected: expectScheduler })
+  const scheduler = evaluateScheduler({ now, heartbeatAt: readHeartbeat(), index: readIndexImpl(), jobs: readJobs(), schedules: schedules.schedules, timezone: schedules.timezone, expected: expectScheduler })
   facts.scheduler = scheduler
   if (scheduler.silent && !state.schedulerAlertOpenedAt) {
     if (await notifyImpl('scheduler-silent', 'MPC QA scheduler is not running', `${scheduler.reason}. Scheduled checks are not running until it is restarted.`, 'critical'))
@@ -112,6 +119,16 @@ export async function runWatchdog({
     if (await notifyImpl('scheduler-recovered', 'MPC QA scheduler is running again', `${scheduler.reason}.`, 'info'))
       delete state.schedulerAlertOpenedAt
   }
+  // Refused checks: one warning per schedule and reason, so the cause is named instead of read as a stopped scheduler.
+  const refusedNow = new Map(scheduler.refused.map(r => [r.scheduleId, r.reason]))
+  state.refusedAlerts ??= {}
+  for (const [scheduleId, reason] of refusedNow) {
+    if (state.refusedAlerts[scheduleId] === reason) continue
+    const key = `schedule-refused-${scheduleId}`.replace(/[^\w-]/g, '_').slice(0, 100)
+    if (await notifyImpl(key, `Scheduled check refused: ${scheduleId}`, `${reason}. The scheduler did not start this check, so nothing ran for this slot. Fix the setting, then redeploy.`, 'warning'))
+      state.refusedAlerts[scheduleId] = reason
+  }
+  for (const scheduleId of Object.keys(state.refusedAlerts)) if (!refusedNow.has(scheduleId)) delete state.refusedAlerts[scheduleId]
 
   const walletAddress = process.env.WALLET_ADDRESS
   const walletDue = !state.walletCheckedAt || now.getTime() - Date.parse(state.walletCheckedAt) >= WALLET_CHECK_INTERVAL_MS
