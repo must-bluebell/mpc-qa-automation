@@ -108,6 +108,8 @@ export function publicSummary(run) {
       const load=t.adapter==='k6'?loadCheck(t,run,thresholds):null
       return {id:opaqueId(t.key),name:load?.name??apiCaseName(t.title)??testNames[(t.title??'').split(' > ').at(-1)?.match(/^([WAPMCU]\d{2}) - /)?.[1]]??testNames[(t.title??'').split(' > ').at(-1)]??`Check ${opaqueId(t.key)}`,status:field(t.status),
         category:categoryOf(t,run),detail:load?.detail??null,
+        // A check that failed and then passed on retry: shown in Slack so it is not mistaken for a clean pass.
+        flaky:t.flaky===true,attempts:Number.isFinite(t.retries)?t.retries+1:1,
         reason:['failed','blocked','skipped'].includes(t.status)?(load?.detail&&t.status==='failed'?`${load.breaches?.length?`Breached: ${load.breaches.join('; ')}. Measured`:'SLO breached'}: ${load.detail}`:diagnosticReason(t)):null,
         requirementIds:(t.requirementIds??[]).filter(id=>approved.has(id)),
         classification:t.status==='failed'?(confirmed?'confirmed':'suspected'):annotations.some(a=>a.type==='usability-related')?'usability-related':null,

@@ -1,6 +1,7 @@
 {
   "A01": "A01 - Anonymous session reports no address",
   "A02": "A02 - Foreign-origin write is refused",
+  "A03a": "A03a - Sign-in refuses a request with no nonce, read-only",
   "A03": "A03 - SIWE sign-in creates a session for the signing wallet",
   "A04": "A04 - A signed SIWE message cannot be replayed",
   "A05": "A05 - Malformed sign-in requests are rejected without a session",

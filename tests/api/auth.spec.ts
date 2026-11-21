@@ -16,6 +16,16 @@ test.describe('Authentication API', { tag: ['@api', '@feature-auth', '@critical'
     expect(session.json?.address ?? null).toBeNull()
   })
 
+  test('A03a - Sign-in refuses a request with no nonce, read-only', { tag: ['@smoke', '@AUTH-01'] }, async ({ request }, info) => {
+    // Read-only: no nonce is requested and nothing signs, so this runs on hosted targets where writes are off.
+    // The route checks for a nonce before it reads the body, so no session is created.
+    const res = await call(request, info, 'POST', '/api/auth/verify', { body: { message: 'x', signature: '0x00' } })
+    expect(res.status).toBe(401)
+    expect(res.json?.error).toBe('nonce_missing')
+    const session = await call(request, info, 'GET', '/api/auth/session')
+    expect(session.json?.address ?? null).toBeNull()
+  })
+
   test('A03 - SIWE sign-in creates a session for the signing wallet', { tag: ['@smoke', '@AUTH-01'] }, async ({ request }, info) => {
     requireWrites()
     const user = await signIn(request, info)

@@ -227,6 +227,8 @@ export function renderMarkdown(run) {
     `- Results: ${c.passed} passed, ${c.failed} failed, ${c.skipped} skipped, ${c.blocked} blocked, ${c.flaky} flaky (of ${c.total})`,
     `- Critical requirement coverage in this run: ${run.coverage.numerator}/${run.coverage.denominator}`, '',
   ]
+  const flakyTests = run.tests.filter(t => t.flaky)
+  if (flakyTests.length) lines.push('## Flaky (failed, then passed on retry)', ...flakyTests.map(t => `- ${t.title} · ${(t.retries ?? 0) + 1} attempts`), '')
   if (run.errors.length) lines.push('## Run errors', ...run.errors.map(e => `- ${e.split('\n')[0]}`), '')
   if (run.groups.length) {
     lines.push('## Failures (grouped by error signature)')

@@ -113,6 +113,13 @@ function infraProblem(s) {
 }
 const badge=status=>status==='passed'?'🟢':status==='failed'?'🔴':'🟡'
 const SUITE_LABELS={'critical-smoke':'Critical API & UAT smoke','nightly-regression':'Full API & UAT regression','combined-report':'Combined report',regression:'Web regression',api:'API',load:'Load',uat:'UAT',smoke:'Smoke',full:'Full suite'}
+/** Checks that failed and then passed on retry. Named, so a green run with a flaky check is visible, not silently green. */
+function flakyLines(checks=[]) {
+  const flaky=checks.filter(t=>t.flaky)
+  if(!flaky.length)return []
+  const names=flaky.slice(0,5).map(t=>`${t.name} (${t.attempts} attempts)`).join(', ')
+  return [`🟡 *Flaky — passed on retry:* ${names}${flaky.length>5?` and ${flaky.length-5} more`:''}. Evidence for each attempt is in the report.`,'']
+}
 function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
   const c=s.counts,total=c.passed+c.failed+c.skipped+c.blocked
   const rows=s.sections.length?s.sections.map(r=>({label:r.label,status:r.status,counts:r.counts}))
@@ -126,6 +133,7 @@ function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
     `Trigger: ${triggerText(s)} · Env: ${s.pipeline.environment.name}`,
     ...(s.productionApiWrites?['Production API writes: explicitly authorized for this run.']:[]),'',
     `*Overall:* ${c.passed} passed · ${c.failed} failed · ${c.skipped} skipped · ${c.blocked} blocked${total?` (${total} checks, ${formatRate(s.quality.passRate)} test pass rate; ${formatRate(s.quality.executionRate)} executed)`:''}`,'',
+    ...flakyLines(s.checks),
     ...(rows.length?[...rows.map(row),'']:[]),
     ...(s.pipeline.comparison?[`*Vs previous run:* ${comparisonText(s.pipeline.comparison)}`]:[]),
     ...(infraProblem(s)?[`⚠️ *Execution problem:* ${infraProblem(s)}`]:[]),
