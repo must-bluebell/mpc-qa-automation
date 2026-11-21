@@ -9,7 +9,7 @@
       "kind": "test",
       "graceMinutes": 15,
       "priority": 5,
-      "env": "preview",
+      "env": "production",
       "enabled": true,
       "ai": false
     },

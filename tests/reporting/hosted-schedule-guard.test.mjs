@@ -6,9 +6,15 @@ import { readFileSync } from 'node:fs'
 const hosted = JSON.parse(readFileSync(new URL('../../pipeline/config/schedules.hosted.json', import.meta.url), 'utf8'))
 const enabled = hosted.schedules.filter(s => s.enabled)
 
-test('hosted schedules run only on the read-only preview environment', () => {
+// Only the hourly smoke targets production, by explicit decision. It is read-only: production allows no writes, load or seeded defects.
+const PRODUCTION_ALLOWED = new Set(['hourly-smoke-hosted'])
+
+test('hosted schedules run only on read-only environments; production only for the hourly smoke', () => {
   assert.ok(enabled.length > 0, 'at least one hosted schedule is enabled')
-  for (const s of enabled) assert.equal(s.env, 'preview', `${s.id} must target preview, not ${s.env}`)
+  for (const s of enabled) {
+    const expected = PRODUCTION_ALLOWED.has(s.id) ? 'production' : 'preview'
+    assert.equal(s.env, expected, `${s.id} must target ${expected}, not ${s.env}`)
+  }
 })
 
 test('hosted schedules use only suites that Render can run without Docker', () => {
