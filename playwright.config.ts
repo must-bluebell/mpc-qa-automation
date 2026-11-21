@@ -41,9 +41,13 @@ export default defineConfig({
     baseURL: t.baseUrl,
     actionTimeout: 30_000,
     navigationTimeout: 60_000,
-    trace: 'retain-on-failure',
+    // Hosted runs retain DOM/network traces and failure screenshots without two continuous
+    // screencasts competing with Chromium on the dashboard's CPU.
+    trace: process.env.QA_HOSTED === '1'
+      ? { mode: 'retain-on-failure', screenshots: false, snapshots: true, sources: true }
+      : 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: process.env.QA_HOSTED === '1' ? 'off' : 'retain-on-failure',
     /**
      * Headless is the default, which is right for CI and for the 20-second local run — but it means
      * a first-time reader sees no browser and reasonably wonders whether anything happened.

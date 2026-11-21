@@ -1,8 +1,8 @@
 import type { Reporter, FullConfig, FullResult, Suite, TestCase, TestResult } from '@playwright/test/reporter'
-import { mkdirSync, writeFileSync, appendFileSync, renameSync } from 'node:fs'
-import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises'
+import { mkdirSync, writeFileSync, appendFileSync, renameSync, copyFileSync } from 'node:fs'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, join, relative, resolve } from 'node:path'
-import { formatSummary, redact, summarizeRun, type Requirement, type TestRecord } from './regression-analysis'
+import { formatSummary, redact, summarizeRun, type Requirement, type TestRecord } from './regression-analysis.ts'
 
 export default class RegressionReporter implements Reporter {
   private suite?: Suite
@@ -10,13 +10,14 @@ export default class RegressionReporter implements Reporter {
   private result?: FullResult
   private errors: string[] = []
   private checkpointDir?: string
+  private evidenceByAttempt = new Map<string, TestRecord['evidence']>()
   private checkpointRecord(item: TestCase, result?: TestResult): TestRecord {
     const secrets = [process.env.QA_SEED_PHRASE ?? '', process.env.OPENAI_API_KEY ?? '', process.env.ANTHROPIC_API_KEY ?? '', process.env.SLACK_ALERT_WEBHOOK_URL ?? '']
     return { id: item.id, title: redact(item.titlePath().filter(Boolean).join(' > '), secrets),
       status: result?.status ?? 'not-run', outcome: result ? item.outcome() : 'skipped',
       errors: (result?.errors ?? []).map(error => redact(error.message ?? 'Test failed', secrets)),
       annotations: [...item.annotations, ...(result?.annotations ?? [])].map(a => ({type:a.type,description:redact(a.description ?? '', secrets)})),
-      evidence: [], durationMs: item.results.reduce((sum, r) => sum + r.duration, 0),
+      evidence: item.results.flatMap(attempt => this.evidenceByAttempt.get(`${item.id}:${attempt.retry}`) ?? []), durationMs: item.results.reduce((sum, r) => sum + r.duration, 0),
       retries: result?.retry ?? 0, tags: item.tags, project: item.parent.project()?.name,
       startedAt: item.results[0]?.startTime.toISOString() }
   }
@@ -34,7 +35,36 @@ export default class RegressionReporter implements Reporter {
     console.log(`Discovered ${suite.allTests().length} cases; recording each result as it completes.`)
   }
   onTestEnd(item: TestCase, result: TestResult) {
-    if (this.checkpointDir) appendFileSync(join(this.checkpointDir, 'execution-results.jsonl'), JSON.stringify(this.checkpointRecord(item, result)) + '\n')
+    if (!this.checkpointDir) return
+    this.saveEvidence(item, result, this.checkpointDir)
+    appendFileSync(join(this.checkpointDir, 'execution-results.jsonl'), JSON.stringify(this.checkpointRecord(item, result)) + '\n')
+  }
+  /** Persist before journaling: a hard kill must leave usable evidence for completed attempts. */
+  private saveEvidence(item: TestCase, attempt: TestResult, output: string): TestRecord['evidence'] {
+    const key = `${item.id}:${attempt.retry}`
+    const saved = this.evidenceByAttempt.get(key)
+    if (saved) return saved
+    const evidence: TestRecord['evidence'] = []
+    const secrets = [process.env.QA_SEED_PHRASE ?? '', process.env.OPENAI_API_KEY ?? '', process.env.ANTHROPIC_API_KEY ?? '', process.env.SLACK_ALERT_WEBHOOK_URL ?? '']
+    for (const [index, attachment] of attempt.attachments.entries()) {
+      if (!attachment.path && !attachment.body) continue
+      const folder = join(output, 'evidence', item.id.replace(/[^a-zA-Z0-9_-]/g, '_'), `attempt-${attempt.retry + 1}`)
+      const name = `${attachment.name} (attempt ${attempt.retry + 1}, ${attempt.status})`
+      const extension = attachment.contentType.includes('json') ? 'json' : attachment.contentType.startsWith('text/') ? 'txt' : 'bin'
+      const filename = attachment.path ? basename(attachment.path) : `${attachment.name.replace(/[^a-zA-Z0-9_.-]+/g, '_').slice(0, 80)}.${extension}`
+      const destination = join(folder, `${index}-${filename}`)
+      try {
+        mkdirSync(folder, {recursive:true})
+        if (attachment.path) copyFileSync(attachment.path, destination)
+        else if (attachment.body) writeFileSync(destination, extension === 'bin' ? attachment.body : redact(attachment.body.toString('utf8'), secrets).slice(0, 6_000), {mode:0o600})
+        evidence.push({name, path:relative(output, destination).split('\\').join('/')})
+      } catch {
+        // A missing attachment must not discard the assertion or other available evidence.
+        this.errors.push(`Evidence unavailable for ${item.id}, attempt ${attempt.retry + 1}, attachment ${index}`)
+      }
+    }
+    this.evidenceByAttempt.set(key, evidence)
+    return evidence
   }
   onError(error: { message?: string }) { this.errors.push(error.message ?? 'Runner error') }
   onEnd(result: FullResult) { this.result = result }
@@ -49,23 +79,7 @@ export default class RegressionReporter implements Reporter {
     const records: TestRecord[] = []
     for (const item of this.suite.allTests()) {
       const last = item.results.at(-1)
-      const evidence: TestRecord['evidence'] = []
-      for (const [index, attachment] of (last?.attachments ?? []).entries()) {
-        if (!attachment.path && !attachment.body) continue
-        const folder = join(output, 'evidence', item.id.replace(/[^a-zA-Z0-9_-]/g, '_'))
-        await mkdir(folder, { recursive: true })
-        if (attachment.path) {
-          const destination = join(folder, `${index}-${basename(attachment.path)}`)
-          await copyFile(attachment.path, destination)
-          evidence.push({ name: attachment.name, path: relative(output, destination).split('\\').join('/') })
-        } else if (attachment.body) {
-          // In-memory attachments (API responses, navigation status) are evidence too; redact before writing.
-          const extension = attachment.contentType.includes('json') ? 'json' : attachment.contentType.startsWith('text/') ? 'txt' : 'bin'
-          const destination = join(folder, `${index}-${attachment.name.replace(/[^a-zA-Z0-9_.-]+/g, '_').slice(0, 80)}.${extension}`)
-          await writeFile(destination, extension === 'bin' ? attachment.body : redact(attachment.body.toString('utf8'), secrets).slice(0, 6_000))
-          evidence.push({ name: attachment.name, path: relative(output, destination).split('\\').join('/') })
-        }
-      }
+      const evidence = item.results.flatMap(attempt => this.saveEvidence(item, attempt, output))
       records.push({ id: item.id, title: item.titlePath().filter(Boolean).join(' > '),
         status: last?.status ?? 'not-run', outcome: item.outcome(),
         errors: (last?.errors ?? []).map(error => redact(error.message ?? 'Test failed', secrets)),
