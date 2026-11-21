@@ -56,6 +56,7 @@
     "baseUrlEnv": "QA_PREVIEW_BASE_URL",
     "chainId": 97,
     "allowWrites": false,
+    "signInWrites": true,
     "allowLoad": false,
     "allowSeededDefects": false,
     "isolated": false

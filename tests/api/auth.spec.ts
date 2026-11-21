@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { call, requireWrites, signIn } from '../../fixtures/api'
+import { call, requireSignInWrites, requireWrites, signIn } from '../../fixtures/api'
 
 test.describe('Authentication API', { tag: ['@api', '@feature-auth', '@critical', '@regression'] }, () => {
   test('A01 - Anonymous session reports no address', { tag: ['@smoke'] }, async ({ request }, info) => {
@@ -27,7 +27,7 @@ test.describe('Authentication API', { tag: ['@api', '@feature-auth', '@critical'
   })
 
   test('A03 - SIWE sign-in creates a session for the signing wallet', { tag: ['@smoke', '@AUTH-01'] }, async ({ request }, info) => {
-    requireWrites()
+    requireSignInWrites()
     const user = await signIn(request, info)
     const session = await call(request, info, 'GET', '/api/auth/session')
     expect(session.status).toBe(200)
@@ -35,7 +35,7 @@ test.describe('Authentication API', { tag: ['@api', '@feature-auth', '@critical'
   })
 
   test('A04 - A signed SIWE message cannot be replayed', { tag: ['@AUTH-02'] }, async ({ request }, info) => {
-    requireWrites()
+    requireSignInWrites()
     const user = await signIn(request, info)
     const replay = await call(request, info, 'POST', '/api/auth/verify', { body: { message: user.message, signature: user.signature } })
     expect(replay.status).toBe(401)

@@ -15,8 +15,20 @@ test('production API opt-in is rejected for other environments, hosts or suites 
 test('production write authorization reaches only API workers and never leaks to default or browser runs',()=>{
   assert.equal(typeof adapter.apiWriteEnvironment,'function')
   const ctx={env:resolveEnvironment('production'),productionApiWrites:true}
-  assert.deepEqual(adapter.apiWriteEnvironment({project:'api'},ctx),{QA_ALLOW_WRITES:'1',QA_PRODUCTION_API_WRITES:'1'})
-  assert.deepEqual(adapter.apiWriteEnvironment({project:'chromium'},ctx),{QA_ALLOW_WRITES:'0',QA_PRODUCTION_API_WRITES:'0'})
-  assert.deepEqual(adapter.apiWriteEnvironment({project:'api'},{...ctx,productionApiWrites:false}),{QA_ALLOW_WRITES:'0',QA_PRODUCTION_API_WRITES:'0'})
-  assert.deepEqual(adapter.apiWriteEnvironment({project:'api'},{env:resolveEnvironment('local-docker')}),{QA_ALLOW_WRITES:'1',QA_PRODUCTION_API_WRITES:'0'})
+  assert.deepEqual(adapter.apiWriteEnvironment({project:'api'},ctx),{QA_ALLOW_WRITES:'1',QA_PRODUCTION_API_WRITES:'1',QA_SIGNIN_WRITES:'0'})
+  assert.deepEqual(adapter.apiWriteEnvironment({project:'chromium'},ctx),{QA_ALLOW_WRITES:'0',QA_PRODUCTION_API_WRITES:'0',QA_SIGNIN_WRITES:'0'})
+  assert.deepEqual(adapter.apiWriteEnvironment({project:'api'},{...ctx,productionApiWrites:false}),{QA_ALLOW_WRITES:'0',QA_PRODUCTION_API_WRITES:'0',QA_SIGNIN_WRITES:'0'})
+  assert.deepEqual(adapter.apiWriteEnvironment({project:'api'},{env:resolveEnvironment('local-docker')}),{QA_ALLOW_WRITES:'1',QA_PRODUCTION_API_WRITES:'0',QA_SIGNIN_WRITES:'0'})
+})
+
+test('preview opens only sign-in sessions, never the general write suite',()=>{
+  const saved=process.env.QA_PREVIEW_BASE_URL
+  process.env.QA_PREVIEW_BASE_URL='https://preview.example'
+  try {
+    const preview=resolveEnvironment('preview')
+    assert.deepEqual(adapter.apiWriteEnvironment({project:'api'},{env:preview}),{QA_ALLOW_WRITES:'0',QA_PRODUCTION_API_WRITES:'0',QA_SIGNIN_WRITES:'1'})
+    assert.deepEqual(adapter.apiWriteEnvironment({project:'api'},{env:resolveEnvironment('production')}).QA_SIGNIN_WRITES,'0')
+  } finally {
+    if(saved===undefined)delete process.env.QA_PREVIEW_BASE_URL;else process.env.QA_PREVIEW_BASE_URL=saved
+  }
 })

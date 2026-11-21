@@ -20,6 +20,15 @@ export function writesAllowed(): boolean {
   return process.env.QA_ALLOW_WRITES === '1'
 }
 
+/**
+ * Sign-in on the hosted preview testnet only. signIn() uses a throwaway key, so this opens no other write
+ * path and does not satisfy requireWrites(); production never sets QA_SIGNIN_WRITES.
+ */
+export function requireSignInWrites() {
+  test.skip(process.env.QA_SIGNIN_WRITES !== '1' || process.env.QA_ENVIRONMENT !== 'preview',
+    'Sign-in session checks run only on the authorized hosted preview environment.')
+}
+
 export function requireWrites() {
   test.skip(!writesAllowed(), 'API write checks require an isolated target or an explicitly authorized production API run.')
   assertApiWriteTarget(target().baseUrl, process.env.QA_ALLOW_WRITES, {

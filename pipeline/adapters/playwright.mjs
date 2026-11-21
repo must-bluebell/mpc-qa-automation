@@ -51,7 +51,9 @@ export function readPlaywrightRecords(stepDir) {
 export function apiWriteEnvironment(step, ctx) {
   const production = step.project === 'api' && ctx.productionApiWrites === true
   if (production) assertApiWriteTarget(ctx.env.baseUrl, '1', {productionApiWrites:true, environment:ctx.env.name})
-  return {QA_ALLOW_WRITES: ctx.env.allowWrites || production ? '1' : '0', QA_PRODUCTION_API_WRITES: production ? '1' : '0'}
+  // Preview-only sign-in sessions: a narrow gate that never enables the general write suite.
+  return {QA_ALLOW_WRITES: ctx.env.allowWrites || production ? '1' : '0', QA_PRODUCTION_API_WRITES: production ? '1' : '0',
+    QA_SIGNIN_WRITES: ctx.env.signInWrites === true && !ctx.env.isolated && ctx.env.name === 'preview' ? '1' : '0'}
 }
 
 export async function runPlaywrightStep(step, ctx) {
