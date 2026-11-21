@@ -67,7 +67,7 @@ function categoryResults() {
       run ? h('div', {}, badge(run.status), h('p', {}, `${c?.passed ?? 0} passed · ${c?.failed ?? 0} failed · ${c?.skipped ?? 0} skipped · ${c?.blocked ?? 0} blocked`),
         h('p', { class: 'hint' }, `Recorded execution · ${when(run.finishedAt)}`),
         run.errors?.length ? h('p', { class: 'hint' }, run.errors.join(' ')) : '',
-        h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : h('p', { class: 'empty' }, `No completed ${state.status.hosted ? state.status.defaultEnv : 'local'} run recorded.`))
+        h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : emptyState(`No completed ${state.status.hosted ? state.status.defaultEnv : 'local'} run recorded.`, 'Start a run from the form above, or wait for the next scheduled check.'))
   })
 }
 
@@ -242,7 +242,7 @@ function liveLog() {
 }
 
 function runsTable() {
-  if (!state.runs.length) return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), h('p', { class: 'empty' }, 'No runs yet.'))
+  if (!state.runs.length) return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), emptyState('No runs yet', 'Runs started from this dashboard or by a schedule will be listed here.'))
   return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, ['Started', 'Suite', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration', 'Slack'].map(t => h('th', { class: ['Pass', 'Fail', 'Blocked', 'Duration'].includes(t) ? 'num' : null }, t)))),
     h('tbody', {}, state.runs.map(r => h('tr', { class: 'click', onclick: () => { location.hash = `#/runs/${r.runId}` } },
@@ -252,14 +252,45 @@ function runsTable() {
       h('td', {}, r.slack?.length ? r.slack.map(n => h('span', { class: `badge ${n.ok ? 'ok' : 'warn'}` }, `${n.kind}: ${n.ok ? 'sent' : n.code}`)) : '—')))))))
 }
 
+/** A friendly placeholder for a section with nothing to show yet: a title, an optional next step, and no fake data. */
+function emptyState(title, detail) {
+  return h('div', { class: 'empty-state' },
+    h('span', { class: 'empty-icon', 'aria-hidden': 'true' }, '–'),
+    h('div', {}, h('p', { class: 'empty-title' }, title), detail ? h('p', { class: 'hint' }, detail) : ''))
+}
+
+/** Plain-language cron. Only the shapes the hosted schedules use are named; anything else shows the raw expression. */
+function describeCron(cron = '') {
+  const parts = String(cron).trim().split(/\s+/)
+  if (parts.length !== 5) return cron
+  const [minute, hour, day, month, weekday] = parts
+  if (minute === '0' && hour === '*' && day === '*' && month === '*' && weekday === '*') return 'Every hour, on the hour'
+  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && day === '*' && month === '*' && weekday === '*') return `Daily at ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+  return cron
+}
+
+function scheduleCard(s) {
+  const ready = s.enabled && s.readiness?.ready
+  const [label, tone] = !s.enabled ? ['Disabled', 'info'] : ready ? ['Ready', 'ok'] : ['Blocked', 'bad']
+  return h('article', { class: `schedule${s.enabled && !ready ? ' needs-fix' : ''}` },
+    h('div', { class: 'schedule-head' }, h('strong', { class: 'mono' }, s.id), h('span', { class: `badge ${tone}` }, label)),
+    h('dl', { class: 'schedule-meta' },
+      h('dt', {}, 'Suite'), h('dd', {}, s.suite),
+      h('dt', {}, 'Target'), h('dd', {}, s.env),
+      h('dt', {}, 'When'), h('dd', {}, describeCron(s.cron))),
+    s.enabled && !ready && s.readiness?.reason ? h('p', { class: 'callout' }, s.readiness.reason) : '')
+}
+
 function schedulePanel() {
-  return h('section', { class: 'panel' }, h('h2', {}, 'Schedule configuration'),
+  const schedules = state.status.schedules ?? []
+  const enabled = schedules.filter(s => s.enabled)
+  const ready = enabled.filter(s => s.readiness?.ready).length
+  return h('section', { class: 'panel', id: 'schedules' },
+    h('div', { class: 'panel-head' }, h('h2', {}, 'Schedule configuration'),
+      enabled.length ? h('span', { class: `badge ${ready === enabled.length ? 'ok' : 'bad'}` }, `${ready} of ${enabled.length} ready`) : ''),
     h('p', { class: 'hint' }, 'Configuration checks only. Completed runs establish runtime and target health.'),
-    ...(state.status.schedules ?? []).map(s => h('p', {},
-      h('strong', {}, s.id), ` · ${s.suite} · ${s.env} · `,
-      h('span', { class: `badge ${!s.enabled || !s.readiness?.ready ? 'warn' : 'ok'}` },
-        !s.enabled ? 'Disabled' : s.readiness?.ready ? 'Configured' : 'Blocked'),
-      s.readiness?.reason ? ` — ${s.readiness.reason}` : '')))
+    schedules.length ? h('div', { class: 'schedule-grid' }, schedules.map(scheduleCard))
+      : emptyState('No schedules configured', 'Add a schedule to pipeline/config/schedules.hosted.json.'))
 }
 
 function renderHome() {
@@ -296,7 +327,7 @@ async function loadTrends(force = false) {
 function trendsPanel() {
   const t = state.trends
   if (!t) return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'), h('p', { class: 'empty' }, 'Loading trends…'))
-  if (!t.series.length) return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'), h('p', { class: 'empty' }, 'No completed runs yet.'))
+  if (!t.series.length) return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'), emptyState('No completed runs yet', 'Pass rate and the most-failing tests appear after the first completed run.'))
   return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'),
     h('p', { class: 'hint' }, `Last ${t.window.runs} completed runs · ${shortDate(t.window.from)} to ${shortDate(t.window.to)}`),
     passRateChart(t.series),

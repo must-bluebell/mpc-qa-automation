@@ -66,6 +66,27 @@ pre.log { margin: 0; max-height: 360px; overflow: auto; background: var(--bg); b
 .links a { margin-right: 10px; }
 .empty { color: var(--muted); }
 
+/* Panel header with a status badge on the right. */
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.panel-head h2 { margin: 0; }
+
+/* Empty state: says what is missing and what to do next, instead of a bare grey sentence. */
+.empty-state { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); }
+.empty-icon { flex: none; width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center; background: var(--info-bg); color: var(--info); font-weight: 700; }
+.empty-title { margin: 0; font-weight: 600; }
+.empty-state .hint { margin-top: 2px; }
+
+/* Schedule cards: one per schedule, with a clear status and the reason when it is blocked. */
+.schedule-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.schedule { border: 1px solid var(--line); border-left: 4px solid var(--pass); border-radius: 8px; padding: 12px; background: var(--bg); min-width: 0; }
+.schedule.needs-fix { border-left-color: var(--fail); }
+.schedule-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+.schedule-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 10px 0 0; font-size: 13px; }
+.schedule-meta dt { color: var(--muted); }
+.schedule-meta dd { margin: 0; overflow-wrap: anywhere; }
+.callout { margin: 10px 0 0; padding: 8px 10px; border-radius: 6px; font-size: 12px; background: var(--fail-bg); color: var(--fail); overflow-wrap: anywhere; }
+
 /* Trend chart. The line colour is a validated series colour (dataviz palette check), separate from --accent. */
 :root { --chart-line: #2f5bd3; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --chart-line: #6a8be6; } }
