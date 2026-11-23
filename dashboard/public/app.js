@@ -58,18 +58,20 @@ function systemHealth(health, recorded = false) {
       h('p', { class: 'hint' }, 'Current infrastructure health; the results above are recorded executions.'))
 }
 
-function categoryResults() {
-  return reportCategories().map(({ suite, label }) => {
-    const run = Array.isArray(state.status.categoryResults) ? state.status.categoryResults.find(r => r.suite === suite) : state.runs.filter(r => r.suite === suite && r.env === (state.status.defaultEnv ?? 'local-docker') && r.finishedAt && !r.seededDefect && !r.reportOnly && r.status !== 'skipped-overlap')
-      .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))[0]
-    const c = run?.counts
-    return h('section', { class: 'panel', id: `results-${suite}` }, h('h2', {}, label),
-      run ? h('div', {}, badge(run.status), h('p', {}, `${c?.passed ?? 0} passed · ${c?.failed ?? 0} failed · ${c?.skipped ?? 0} skipped · ${c?.blocked ?? 0} blocked`),
-        h('p', { class: 'hint' }, `Recorded execution · ${when(run.finishedAt)}`),
-        run.errors?.length ? h('p', { class: 'hint' }, run.errors.join(' ')) : '',
-        h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : emptyState(`No completed ${state.status.hosted ? state.status.defaultEnv : 'local'} run recorded.`, 'Start a run from the form above, or wait for the next scheduled check.'))
-  })
+function categoryPanel(suite) {
+  const { label } = REPORT_CATEGORIES.find(c => c.suite === suite)
+  const run = Array.isArray(state.status.categoryResults) ? state.status.categoryResults.find(r => r.suite === suite) : state.runs.filter(r => r.suite === suite && r.env === (state.status.defaultEnv ?? 'local-docker') && r.finishedAt && !r.seededDefect && !r.reportOnly && r.status !== 'skipped-overlap')
+    .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))[0]
+  const c = run?.counts
+  return h('section', { class: 'panel', id: `results-${suite}` }, h('h2', {}, label),
+    run ? h('div', {}, badge(run.status), h('p', {}, `${c?.passed ?? 0} passed · ${c?.failed ?? 0} failed · ${c?.skipped ?? 0} skipped · ${c?.blocked ?? 0} blocked`),
+      h('p', { class: 'hint' }, `Recorded execution · ${when(run.finishedAt)}`),
+      run.errors?.length ? h('p', { class: 'hint' }, run.errors.join(' ')) : '',
+      h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : emptyState(`No completed ${state.status.hosted ? state.status.defaultEnv : 'local'} run recorded.`, 'Start a run from the form above, or wait for the next scheduled check.'))
 }
+
+/** Result cards for the named suites, skipping any category this deployment does not run (load on hosted). */
+const categoryPanels = suites => reportCategories().filter(c => suites.includes(c.suite)).map(c => categoryPanel(c.suite))
 
 function renderChips() {
   const s = state.status
@@ -99,8 +101,7 @@ async function refresh() {
     if (location.hash === '' || location.hash === '#/') document.getElementById('system-health')?.replaceWith(systemHealth())
   }).catch(() => {})
   if (location.hash === '' || location.hash === '#/') {
-    const panels = categoryResults()
-    reportCategories().forEach(({ suite }, i) => document.getElementById(`results-${suite}`)?.replaceWith(panels[i]))
+    for (const { suite } of reportCategories()) document.getElementById(`results-${suite}`)?.replaceWith(categoryPanel(suite))
   }
 }
 
@@ -394,8 +395,55 @@ function schedulePanel() {
       : emptyState('No schedules configured', 'Add a schedule to pipeline/config/schedules.hosted.json.'))
 }
 
+// Sections behind the tab strip below the main screen. A tab with no visible content for this user is left out.
+const HOME_TABS = [
+  { id: 'history', label: 'History & health', panels: () => [trendsPanel(), ...categoryPanels(['load']), runsTable(), systemHealth()] },
+  { id: 'administration', label: 'Administration', panels: () => [signOutAllPanel(), adminsPanel(), recentSignInsPanel()] },
+]
+let activeHomeTab = 'history'
+
+function selectHomeTab(id) {
+  activeHomeTab = id
+  document.querySelectorAll('#home-tabs [role="tab"]').forEach(tab => {
+    const selected = tab.dataset.tab === id
+    tab.setAttribute('aria-selected', String(selected))
+    tab.tabIndex = selected ? 0 : -1
+  })
+  document.querySelectorAll('[role="tabpanel"][data-tab]').forEach(panel => { panel.hidden = panel.dataset.tab !== id })
+}
+
+function homeTabs() {
+  const tabs = HOME_TABS.map(t => ({ ...t, content: t.panels().filter(Boolean) }))
+  if (!tabs.some(t => t.id === activeHomeTab)) activeHomeTab = tabs[0].id
+  const strip = h('div', { id: 'home-tabs', class: 'tabs', role: 'tablist', 'aria-label': 'More dashboard sections' },
+    tabs.map(t => h('button', { type: 'button', role: 'tab', class: 'tab', id: `tab-${t.id}`, 'data-tab': t.id, 'aria-controls': `tabpanel-${t.id}`,
+      'aria-selected': String(t.id === activeHomeTab), tabIndex: t.id === activeHomeTab ? 0 : -1, onclick: () => selectHomeTab(t.id) }, t.label)))
+  return [strip, ...tabs.map(t => h('div', { role: 'tabpanel', id: `tabpanel-${t.id}`, 'data-tab': t.id, 'aria-labelledby': `tab-${t.id}`, hidden: t.id !== activeHomeTab, class: 'tab-panel' }, t.content))]
+}
+
+// Administrators only: end every Google sign-in at once, including their own. The access-key session stays.
+function signOutAllPanel() {
+  if (state.status?.role !== 'admin') return null
+  const message = h('p', { class: 'hint', role: 'status' })
+  const button = h('button', { type: 'button', class: 'danger', onclick: async () => {
+    if (!confirm('Sign out everyone who signed in with Google, including other administrators? They will need to sign in again.')) return
+    button.disabled = true
+    try {
+      await post('/api/sessions/sign-out-all')
+      message.textContent = 'Everyone who signed in with Google has been signed out.'
+      setTimeout(() => location.reload(), 1200)
+    } catch (error) {
+      button.disabled = false
+      message.textContent = `Could not sign everyone out: ${error.message}`
+    }
+  } }, 'Sign out everyone')
+  return h('section', { class: 'panel', id: 'sign-out-all' }, h('h2', {}, 'Sign-in sessions'),
+    h('p', { class: 'hint' }, 'Ends every Google sign-in, including administrators. People can sign in again straight away. Use this if an account should no longer have access.'),
+    h('div', {}, button), message)
+}
+
 function renderHome() {
-  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), trendsPanel(), runsTable(), recentSignInsPanel() ?? '', adminsPanel() ?? '', schedulePanel(), systemHealth())
+  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryPanels(['regression', 'api']), schedulePanel(), ...homeTabs())
   loadTrends()
 }
 
@@ -515,7 +563,7 @@ function signInPanel() {
   googleIcon.innerHTML = GOOGLE_G // constant markup above, never user input
   return h('section', { class: 'signin' },
     h('div', { class: 'signin-card' },
-      h('img', { class: 'signin-mark', src: '/assets/logo-mark.png', alt: '', width: 56, height: 56 }),
+      h('img', { class: 'signin-mark', src: '/assets/logo-mpc.png', alt: '', width: 936, height: 432 }),
       h('h1', {}, 'Sign in to MPC QA Dashboard'),
       h('p', { class: 'signin-lead' }, 'See test runs, failure evidence and trends with your Google account.'),
       error ? h('p', { class: 'signin-error', role: 'alert' }, error) : null,

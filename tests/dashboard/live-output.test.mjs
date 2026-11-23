@@ -86,8 +86,10 @@ test('dashboard shows regression, API and load before system health on home and 
     health:{ok:false,stack:{healthy:false,unhealthyServices:['web'],missingServices:[],services:[{service:'web',state:'exited'}]}}}
   const history=['load','api','regression'].map(suite=>({runId:'ui-completion-regression',suite,env:'local-docker',status:'failed',finishedAt:'2026-10-23T07:00:00Z',counts:{passed:2,failed:1}}))
   const {page}=await dashboard(t,{scheduled:true,runDetail:detail,history})
-  await expect(page.locator('#app > section > h2')).toContainText(['Regression testing','API testing','Load testing','System health'])
-  const headings=await page.locator('#app h2').allTextContents()
+  await expect(page.locator('#app > section > h2')).toContainText(['Regression testing','API testing'])
+  await page.getByRole('tab',{name:'History & health',exact:true}).click()
+  await expect(page.locator('#tabpanel-history')).toContainText('Load testing')
+  const headings=await page.locator('#tabpanel-history h2').allTextContents()
   assert.equal(headings.at(-1),'System health')
   await page.locator('a[href="#/runs/ui-completion-regression"]').first().click()
   await expect(page.getByRole('heading',{name:'Tests (3)',exact:true})).toBeVisible()

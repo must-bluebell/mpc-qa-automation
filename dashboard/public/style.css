@@ -34,6 +34,12 @@ a:hover { text-decoration: underline; }
 .panel h2 { margin: 0 0 12px; font-size: 15px; }
 .panel h3 { margin: 16px 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .grid2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+[hidden] { display: none !important; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.tab { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; margin-bottom: -1px; padding: 8px 12px; color: var(--muted); font-size: 14px; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tab-panel { display: grid; gap: 16px; min-width: 0; }
 @media (max-width: 860px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
 .chip, .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--info-bg); color: var(--info); }
 .ok { background: var(--pass-bg); color: var(--pass); }
@@ -109,7 +115,7 @@ pre.log { margin: 0; max-height: 360px; overflow: auto; background: var(--bg); b
 /* Sign-in page: shown to people who are not signed in yet. */
 .signin { display: grid; place-items: center; padding: 6vh 0 4vh; }
 .signin-card { width: min(100%, 420px); display: grid; gap: 14px; padding: 30px 28px 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(0, 0, 0, .2), 0 18px 48px rgba(0, 0, 0, .35); }
-.signin-mark { width: 56px; height: 56px; border-radius: 14px; display: block; }
+.signin-mark { width: min(100%, 240px); height: auto; border-radius: 14px; display: block; }
 .signin-card h1 { margin: 0; font-size: 22px; line-height: 1.25; }
 .signin-lead { margin: 0; color: var(--muted); }
 .signin-error { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--fail-bg); color: var(--fail); font-size: 13px; }

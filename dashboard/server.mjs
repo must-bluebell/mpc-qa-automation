@@ -9,6 +9,7 @@ import { DEFAULT_ENV, HOSTED, ROOT, RUNS_DIR, config, knownSecrets, resolveEnvir
 import { isRunId, newRunId, readIndex, readRun, runDir, removeRun } from '../pipeline/lib/run-store.mjs'
 import { recentSignIns, recordSignIn } from './signins.mjs'
 import { addAdmin, isAdminEmail, listAdmins, removeAdmin } from './admins.mjs'
+import { issuedAfterSignOut, signOutEveryone } from './sessions.mjs'
 import { runStatus } from '../pipeline/lib/run-status.mjs'
 import { readLock } from '../pipeline/lib/lock.mjs'
 import { stackStatus } from '../pipeline/adapters/local-stack.mjs'
@@ -129,7 +130,9 @@ function roleOf(req) {
 function viewerEmail(req) {
   if (!GOOGLE_ON) return null
   const payload = verifyPayload(readCookie(req, VIEWER_COOKIE), SESSION_KEY)
-  return payload?.role === 'viewer' && typeof payload.email === 'string' ? payload.email : null
+  if (payload?.role !== 'viewer' || typeof payload.email !== 'string') return null
+  // Sessions issued before an administrator's "sign out everyone" are refused.
+  return issuedAfterSignOut(payload) ? payload.email : null
 }
 
 function cookie(name, value, maxAge, path = '/') {
@@ -177,7 +180,7 @@ async function googleCallback(req, res, url) {
   if (!idToken) return refuse('token_exchange_failed')
   const verdict = checkIdTokenClaims(decodeIdToken(idToken), { config: GOOGLE, nonce: pending.nonce, isAdmin: isAdminEmail })
   if (!verdict.ok) return refuse(verdict.reason)
-  const session = signPayload({ role: 'viewer', email: verdict.email, exp: Math.floor(Date.now() / 1000) + VIEWER_SESSION_SECONDS }, SESSION_KEY)
+  const session = signPayload({ role: 'viewer', email: verdict.email, issuedAt: Date.now(), exp: Math.floor(Date.now() / 1000) + VIEWER_SESSION_SECONDS }, SESSION_KEY)
   try { recordSignIn(verdict.email) } catch (error) { console.warn(`Could not record sign-in: ${error.message}`) }
   redirect(res, '/', { 'Cache-Control': 'no-store', 'Set-Cookie': [cookie(VIEWER_COOKIE, session, VIEWER_SESSION_SECONDS), clearPending] })
 }
@@ -491,6 +494,13 @@ async function route(req, res) {
     const result = removeAdmin(email)
     if (result === 'settings') return send(res, 409, { error: 'This administrator comes from the server settings (QA_GOOGLE_ADMIN_EMAILS). Remove it there.' })
     return result === 'removed' ? send(res, 200, { ok: true, admins: listAdmins() }) : send(res, 404, { error: 'Not an added administrator' })
+  }
+  // Ends every Google sign-in, administrators included. The access-key session is unaffected.
+  if (req.method === 'POST' && path === '/api/sessions/sign-out-all') {
+    if (role !== 'admin') return send(res, 403, { error: 'Only administrators can sign everyone out.' })
+    const at = signOutEveryone()
+    console.warn(`All Google sign-ins ended by ${viewerEmail(req) ?? 'admin key'}`)
+    return send(res, 200, { ok: true, signedOutAt: new Date(at).toISOString() })
   }
   if (req.method === 'GET' && path === '/api/status') return send(res, 200, status(role, viewerEmail(req)))
   if (req.method === 'GET' && path === '/api/trends') return send(res, 200, buildTrends(recentRuns()))
