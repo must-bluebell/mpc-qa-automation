@@ -407,10 +407,35 @@ function failingTable(rows) {
       h('td', {}, when(r.firstFailedAt)), h('td', {}, when(r.lastFailedAt)))))))
 }
 
+// Messages for the fixed reason codes the server puts in '#signin-error=<code>' after a refused sign-in.
+const SIGN_IN_ERRORS = {
+  google_declined: 'Google sign-in was cancelled. Choose Continue with Google to try again.',
+  expired_or_invalid_state: 'That sign-in expired or was started in another browser. Start again below.',
+  token_exchange_failed: 'Google could not confirm your account. Try again in a moment.',
+  email_not_verified: 'Your Google email address is not verified. Verify it with Google, then try again.',
+  not_allowed: 'This Google account does not have dashboard access. Ask an administrator to add it.',
+  default: 'Sign-in did not finish. Try again, or ask an administrator if it keeps failing.',
+}
+function signInError() {
+  const match = /^#signin-error=([a-z_]+)$/.exec(location.hash)
+  if (!match) return null
+  return SIGN_IN_ERRORS[match[1]] ?? SIGN_IN_ERRORS.default
+}
+
 function signInPanel() {
-  return h('section', { class: 'panel' }, h('h2', {}, 'Sign in to view results'),
-    h('p', {}, 'Use your company Google account. Signed-in viewers can read runs; starting runs needs the admin key.'),
-    h('p', {}, h('a', { class: 'badge ok', href: '/auth/google/start' }, 'Sign in with Google')))
+  const error = signInError()
+  return h('section', { class: 'signin' },
+    h('div', { class: 'signin-card' },
+      h('div', { class: 'signin-brand', 'aria-hidden': 'true' }, 'QA'),
+      h('h1', {}, 'Sign in to MPC QA'),
+      h('p', { class: 'signin-lead' }, 'See test runs, failure evidence and trends with your Google account.'),
+      error ? h('p', { class: 'signin-error', role: 'alert' }, error) : null,
+      h('a', { class: 'btn-google', href: '/auth/google/start' },
+        h('span', { class: 'g-mark', 'aria-hidden': 'true' }, 'G'), 'Continue with Google'),
+      h('ul', { class: 'signin-points' },
+        h('li', {}, 'Read runs, results, evidence and trends'),
+        h('li', {}, 'Starting runs and creating tickets need an administrator')),
+      h('p', { class: 'signin-note' }, 'There is no separate sign-up. Your first Google sign-in gives you viewer access.')))
 }
 
 // Creates a Jira ticket for one confirmed product failure (admin only). Shows the existing ticket instead when there is one.

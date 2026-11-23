@@ -163,6 +163,11 @@ test('dashboard routes: anonymous is asked to sign in, a viewer reads but cannot
   const oauthCookie = start.headers.get('set-cookie').split(';')[0]
   assert.match(oauthCookie, /^mpc_qa_oauth_\d+=/)
 
+  // A callback without the matching state cookie goes back to the sign-in page with a reason code.
+  const refused = await get('/auth/google/callback?state=none&code=abc')
+  assert.equal(refused.status, 302)
+  assert.equal(refused.headers.get('location'), '/#signin-error=expired_or_invalid_state')
+
   // A forged viewer cookie is not a session.
   const forged = await get('/api/status', { cookie: `mpc_qa_viewer_${port}=${signPayload({ role: 'viewer', email: 'x@company.example', exp: NOW / 1000 + 600 }, sessionKey('z'.repeat(40)))}` })
   assert.equal(forged.status, 403)

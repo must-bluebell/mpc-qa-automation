@@ -100,3 +100,20 @@ pre.log { margin: 0; max-height: 360px; overflow: auto; background: var(--bg); b
 .chart-dot { fill: var(--chart-line); }
 .chart-hit { fill: transparent; }
 .chart-end { fill: var(--ink); font-size: 12px; font-weight: 600; }
+
+/* Sign-in page: shown to people who are not signed in yet. */
+.signin { display: grid; place-items: center; padding: 6vh 0 4vh; }
+.signin-card { width: min(100%, 420px); display: grid; gap: 14px; padding: 28px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 10px 30px rgba(0, 0, 0, .06); }
+.signin-brand { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 800; letter-spacing: .02em; }
+.signin-card h1 { margin: 0; font-size: 22px; line-height: 1.25; }
+.signin-lead { margin: 0; color: var(--muted); }
+.signin-error { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--fail-bg); color: var(--fail); font-size: 13px; }
+.btn-google { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 15px; font-weight: 600; text-decoration: none; transition: background .15s, border-color .15s; }
+.btn-google:hover { background: var(--bg); border-color: var(--muted); text-decoration: none; }
+.btn-google:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.g-mark { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--accent); color: #fff; font-size: 13px; font-weight: 800; }
+.signin-points { margin: 0; padding: 14px 0 0; list-style: none; display: grid; gap: 8px; border-top: 1px solid var(--line); font-size: 13px; }
+.signin-points li { display: flex; gap: 8px; }
+.signin-points li::before { content: "\2713"; color: var(--pass); font-weight: 700; }
+.signin-note { margin: 0; font-size: 12px; color: var(--muted); }
+@media (max-width: 480px) { .signin-card { padding: 22px; } .signin-card h1 { font-size: 20px; } }

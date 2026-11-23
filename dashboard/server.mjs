@@ -150,7 +150,8 @@ async function googleCallback(req, res, url) {
   if (!GOOGLE_ON) return send(res, 404, { error: 'Google sign-in is not configured' })
   const clearPending = cookie(OAUTH_COOKIE, '', 0, '/auth/google')
   // Fixed reason codes only: the page never echoes Google's or the token's contents.
-  const refuse = reason => send(res, 403, `Sign-in refused (${reason}). Ask an administrator for access.`, { 'Set-Cookie': clearPending })
+  // Back to the sign-in page with the reason in the fragment; the page maps it to a friendly message.
+  const refuse = reason => redirect(res, `/#signin-error=${reason}`, { 'Cache-Control': 'no-store', 'Set-Cookie': clearPending })
   const pending = verifyPayload(readCookie(req, OAUTH_COOKIE), SESSION_KEY)
   const state = url.searchParams.get('state') ?? ''
   const code = url.searchParams.get('code') ?? ''
