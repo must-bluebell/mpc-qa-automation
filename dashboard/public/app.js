@@ -85,8 +85,8 @@ function renderChips() {
       : h('span', { class: 'chip ok' }, `Target ${s.defaultEnv}`),
     h('span', { class: `chip ${s.slack.valid ? 'ok' : s.slack.configured ? 'bad' : 'warn'}` }, `Slack ${s.slack.valid ? 'configured' : s.slack.configured ? s.slack.reason || 'invalid configuration' : 'not configured'}`),
     h('span', { class: `chip ${s.ai.configured ? 'ok' : 'warn'}` }, `AI ${s.ai.configured ? `${s.ai.provider} · ${s.ai.model}` : 'not configured'}`),
-    s.role === 'viewer' ? h('span', { class: 'chip' }, `Viewing as ${s.viewerEmail}`) : '',
-    s.role === 'viewer' ? h('a', { href: '/auth/logout' }, 'Sign out') : '',
+    s.viewerEmail ? h('span', { class: 'chip' }, `${s.role === 'admin' ? 'Signed in as' : 'Viewing as'} ${s.viewerEmail}`) : '',
+    s.viewerEmail ? h('a', { href: '/auth/logout' }, 'Sign out') : '',
   )
 }
 
@@ -398,7 +398,7 @@ function schedulePanel() {
 // Sections behind the tab strip below the main screen. A tab with no visible content for this user is left out.
 const HOME_TABS = [
   { id: 'history', label: 'History & health', panels: () => [trendsPanel(), ...categoryPanels(['load']), runsTable(), systemHealth()] },
-  { id: 'administration', label: 'Administration', panels: () => [signOutAllPanel(), adminsPanel(), recentSignInsPanel()] },
+  { id: 'administration', label: 'Administration', panels: () => [adminsPanel(), recentSignInsPanel()] },
 ]
 let activeHomeTab = 'history'
 
@@ -419,27 +419,6 @@ function homeTabs() {
     tabs.map(t => h('button', { type: 'button', role: 'tab', class: 'tab', id: `tab-${t.id}`, 'data-tab': t.id, 'aria-controls': `tabpanel-${t.id}`,
       'aria-selected': String(t.id === activeHomeTab), tabIndex: t.id === activeHomeTab ? 0 : -1, onclick: () => selectHomeTab(t.id) }, t.label)))
   return [strip, ...tabs.map(t => h('div', { role: 'tabpanel', id: `tabpanel-${t.id}`, 'data-tab': t.id, 'aria-labelledby': `tab-${t.id}`, hidden: t.id !== activeHomeTab, class: 'tab-panel' }, t.content))]
-}
-
-// Administrators only: end every Google sign-in at once, including their own. The access-key session stays.
-function signOutAllPanel() {
-  if (state.status?.role !== 'admin') return null
-  const message = h('p', { class: 'hint', role: 'status' })
-  const button = h('button', { type: 'button', class: 'danger', onclick: async () => {
-    if (!confirm('Sign out everyone who signed in with Google, including other administrators? They will need to sign in again.')) return
-    button.disabled = true
-    try {
-      await post('/api/sessions/sign-out-all')
-      message.textContent = 'Everyone who signed in with Google has been signed out.'
-      setTimeout(() => location.reload(), 1200)
-    } catch (error) {
-      button.disabled = false
-      message.textContent = `Could not sign everyone out: ${error.message}`
-    }
-  } }, 'Sign out everyone')
-  return h('section', { class: 'panel', id: 'sign-out-all' }, h('h2', {}, 'Sign-in sessions'),
-    h('p', { class: 'hint' }, 'Ends every Google sign-in, including administrators. People can sign in again straight away. Use this if an account should no longer have access.'),
-    h('div', {}, button), message)
 }
 
 function renderHome() {
