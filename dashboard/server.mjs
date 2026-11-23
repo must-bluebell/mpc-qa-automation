@@ -516,6 +516,7 @@ server.listen(PORT, HOST, () => {
     : `MPC QA dashboard: http://${HOST}:${PORT}/#access=${ACCESS_TOKEN}  (private link; loopback only)`)
   // The watchdog lives here, not in the scheduler: a stopped scheduler cannot report its own silence.
   if (GOOGLE_ON) console.log(`Google sign-in: viewers at https://${PUBLIC_HOST}/auth/google/start; redirect URI ${GOOGLE_REDIRECT}`)
+  if (GOOGLE_ON && GOOGLE.anyAccount) console.warn('WARNING: QA_GOOGLE_ALLOW_ANY_ACCOUNT is set: any verified Google account can view the dashboard.')
   if (HOSTED && process.env.QA_WATCHDOG !== '0') {
     const tick = () => runWatchdog().catch(error => console.error(`watchdog: ${redact(error.message)}`))
     setTimeout(tick, 60_000).unref()

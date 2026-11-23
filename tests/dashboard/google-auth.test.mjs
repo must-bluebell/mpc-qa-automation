@@ -57,6 +57,40 @@ test('the authorization URL carries state, nonce and the hosted-domain hint', ()
   assert.equal(url.searchParams.get('response_type'), 'code')
 })
 
+test('a listed personal account with a verified email is admitted without the hosted-domain claim', () => {
+  const personal = googleConfig({ QA_GOOGLE_CLIENT_ID: 'client.apps', QA_GOOGLE_CLIENT_SECRET: 'csecret', QA_GOOGLE_ALLOWED_DOMAIN: 'company.example', QA_GOOGLE_PERSONAL_EMAILS: 'Me@Gmail.com' })
+  const check = over => checkIdTokenClaims(claims({ email: 'me@gmail.com', hd: undefined, ...over }), { config: personal, nonce: 'n1', now: NOW })
+  assert.deepEqual(check({}), { ok: true, email: 'me@gmail.com' })
+  assert.equal(check({ email_verified: false }).reason, 'email_not_verified')
+  assert.equal(check({ email: 'other@gmail.com' }).reason, 'not_allowed')
+  // A personal entry does not open a company-domain address that carries the hosted-domain claim.
+  assert.equal(checkIdTokenClaims(claims({ email: 'me@gmail.com', hd: 'gmail.com' }), { config: personal, nonce: 'n1', now: NOW }).reason, 'not_allowed')
+})
+
+test('personal accounts are not listed unless QA_GOOGLE_PERSONAL_EMAILS names them', () => {
+  assert.equal(config.personal.size, 0)
+  assert.equal(checkIdTokenClaims(claims({ email: 'me@gmail.com', hd: undefined }), { config, nonce: 'n1', now: NOW }).reason, 'not_allowed')
+})
+
+test('the hosted-domain hint is dropped from the authorization URL when personal accounts are allowed', () => {
+  const personal = googleConfig({ QA_GOOGLE_CLIENT_ID: 'client.apps', QA_GOOGLE_CLIENT_SECRET: 'csecret', QA_GOOGLE_ALLOWED_DOMAIN: 'company.example', QA_GOOGLE_PERSONAL_EMAILS: 'me@gmail.com' })
+  const url = new URL(authorizationUrl(personal, { redirectUri: 'https://dash.example/auth/google/callback', state: 's1', nonce: 'n1' }))
+  assert.equal(url.searchParams.has('hd'), false)
+})
+
+test('with QA_GOOGLE_ALLOW_ANY_ACCOUNT, any verified Google account is admitted and the lists are ignored', () => {
+  const open = googleConfig({ QA_GOOGLE_CLIENT_ID: 'client.apps', QA_GOOGLE_CLIENT_SECRET: 'csecret', QA_GOOGLE_ALLOW_ANY_ACCOUNT: '1', QA_GOOGLE_ALLOWED_EMAILS: 'dev@company.example' })
+  const check = over => checkIdTokenClaims(claims({ email: 'anyone@gmail.com', hd: undefined, ...over }), { config: open, nonce: 'n1', now: NOW })
+  assert.deepEqual(check({}), { ok: true, email: 'anyone@gmail.com' })
+  assert.equal(check({ email_verified: false }).reason, 'email_not_verified')
+  assert.equal(check({ iss: 'https://evil.example' }).reason, 'wrong_issuer')
+  assert.equal(check({ aud: 'someone-else' }).reason, 'wrong_audience')
+  assert.equal(check({ nonce: 'stale' }).reason, 'nonce_mismatch')
+  assert.equal(googleConfig({ QA_GOOGLE_CLIENT_ID: 'a', QA_GOOGLE_CLIENT_SECRET: 'b', QA_GOOGLE_ALLOW_ANY_ACCOUNT: 'false' }), null)
+  const url = new URL(authorizationUrl(open, { redirectUri: 'https://dash.example/auth/google/callback', state: 's1', nonce: 'n1' }))
+  assert.equal(url.searchParams.has('hd'), false)
+})
+
 test('signed cookies verify only with the right key, and expire', () => {
   const key = sessionKey('a'.repeat(32))
   const token = signPayload({ role: 'viewer', email: 'dev@company.example', exp: NOW / 1000 + 60 }, key)

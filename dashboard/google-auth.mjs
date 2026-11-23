@@ -20,10 +20,14 @@ export function googleConfig(env = process.env) {
   const clientId = (env.QA_GOOGLE_CLIENT_ID || '').trim()
   const clientSecret = (env.QA_GOOGLE_CLIENT_SECRET || '').trim()
   const domain = (env.QA_GOOGLE_ALLOWED_DOMAIN || '').trim().toLowerCase()
-  if (!clientId || !clientSecret || !domain) return null
-  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) throw new Error('QA_GOOGLE_ALLOWED_DOMAIN must be a bare domain such as example.com')
+  // Opt-in: any verified Google account (including every Gmail address) may sign in as a viewer.
+  const anyAccount = ['1', 'true'].includes((env.QA_GOOGLE_ALLOW_ANY_ACCOUNT || '').trim().toLowerCase())
+  if (!clientId || !clientSecret || (!domain && !anyAccount)) return null
+  if (domain && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) throw new Error('QA_GOOGLE_ALLOWED_DOMAIN must be a bare domain such as example.com')
   const emails = new Set((env.QA_GOOGLE_ALLOWED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean))
-  return { clientId, clientSecret, domain, emails }
+  // Named personal (consumer) accounts admitted in addition to the company domain. Each entry must match exactly.
+  const personal = new Set((env.QA_GOOGLE_PERSONAL_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean))
+  return { clientId, clientSecret, domain, emails, personal, anyAccount }
 }
 
 /** Signing key for every cookie this module issues, derived from the admin key so no extra secret is needed. */
@@ -59,10 +63,13 @@ export function newOauthState(now = Date.now()) {
 
 export function authorizationUrl(config, { redirectUri, state, nonce }) {
   const url = new URL(AUTH_ENDPOINT)
-  url.search = new URLSearchParams({
+  const params = {
     client_id: config.clientId, redirect_uri: redirectUri, response_type: 'code', scope: 'openid email',
-    state, nonce, hd: config.domain, prompt: 'select_account',
-  }).toString()
+    state, nonce, prompt: 'select_account',
+  }
+  // The hosted-domain hint limits the account picker to company accounts, so it is left out when personal accounts are allowed.
+  if (config.domain && config.personal.size === 0 && !config.anyAccount) params.hd = config.domain
+  url.search = new URLSearchParams(params).toString()
   return url.href
 }
 
@@ -80,6 +87,9 @@ export function checkIdTokenClaims(claims, { config, nonce, now = Date.now() }) 
   if (claims.nonce !== nonce) return { ok: false, reason: 'nonce_mismatch' }
   if (typeof claims.email !== 'string' || claims.email_verified !== true) return { ok: false, reason: 'email_not_verified' }
   const email = claims.email.trim().toLowerCase()
+  if (config.anyAccount) return { ok: true, email }
+  // A listed personal account must be a consumer account (no hosted-domain claim); company accounts never use this path.
+  if (claims.hd === undefined && config.personal.has(email)) return { ok: true, email }
   const emailDomain = email.split('@')[1] ?? ''
   const onDomain = emailDomain === config.domain && claims.hd === config.domain
   if (!onDomain || (config.emails.size > 0 && !config.emails.has(email))) return { ok: false, reason: 'not_allowed' }
