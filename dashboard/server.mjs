@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { DEFAULT_ENV, HOSTED, ROOT, RUNS_DIR, config, knownSecrets, resolveEnvironment } from '../pipeline/lib/env.mjs'
 import { isRunId, newRunId, readIndex, readRun, runDir, removeRun } from '../pipeline/lib/run-store.mjs'
 import { recentSignIns, recordSignIn } from './signins.mjs'
+import { addAdmin, isAdminEmail, listAdmins, removeAdmin } from './admins.mjs'
 import { runStatus } from '../pipeline/lib/run-status.mjs'
 import { readLock } from '../pipeline/lib/lock.mjs'
 import { stackStatus } from '../pipeline/adapters/local-stack.mjs'
@@ -120,7 +121,10 @@ function readCookie(req, name) {
 /** 'admin' holds the access key; 'viewer' signed in with Google; null has neither. */
 function roleOf(req) {
   if (sessionOk(req)) return 'admin'
-  return viewerEmail(req) ? 'viewer' : null
+  const email = viewerEmail(req)
+  if (!email) return null
+  // Checked on every request, so removing someone from the admin list takes effect at once.
+  return isAdminEmail(email) ? 'admin' : 'viewer'
 }
 function viewerEmail(req) {
   if (!GOOGLE_ON) return null
@@ -171,7 +175,7 @@ async function googleCallback(req, res, url) {
   let idToken = null
   try { idToken = await exchangeCode(GOOGLE, { code, redirectUri: GOOGLE_REDIRECT }) } catch { idToken = null }
   if (!idToken) return refuse('token_exchange_failed')
-  const verdict = checkIdTokenClaims(decodeIdToken(idToken), { config: GOOGLE, nonce: pending.nonce })
+  const verdict = checkIdTokenClaims(decodeIdToken(idToken), { config: GOOGLE, nonce: pending.nonce, isAdmin: isAdminEmail })
   if (!verdict.ok) return refuse(verdict.reason)
   const session = signPayload({ role: 'viewer', email: verdict.email, exp: Math.floor(Date.now() / 1000) + VIEWER_SESSION_SECONDS }, SESSION_KEY)
   try { recordSignIn(verdict.email) } catch (error) { console.warn(`Could not record sign-in: ${error.message}`) }
@@ -301,6 +305,7 @@ function status(role = 'admin', email = null) {
   return {
     role, viewerEmail: email, googleSignIn: GOOGLE_ON,
     recentSignIns: role === 'admin' ? recentSignIns() : undefined,
+    admins: role === 'admin' ? listAdmins() : undefined,
     jira: jiraStatus(),
     hosted: HOSTED,
     defaultEnv: DEFAULT_ENV,
@@ -467,11 +472,26 @@ async function route(req, res) {
     return send(res, 403, { error: GOOGLE_ON ? 'Sign in with your company Google account to view the dashboard.' : 'Open the private dashboard link printed by npm run dashboard.', signIn: GOOGLE_ON })
   }
   if (path.startsWith('/api/') && role === 'viewer' && write) {
-    return send(res, 403, { error: 'Signed-in viewers can read results. Starting runs, sending alerts and creating tickets needs the admin key.' })
+    return send(res, 403, { error: 'Signed-in viewers can read results. Starting runs, sending alerts and creating tickets needs an administrator.' })
   }
 
   if (req.method === 'GET' && !path.startsWith('/api/')) return serveStatic(res, path)
   if (req.method === 'GET' && path === '/api/me') return send(res, 200, { role, email: viewerEmail(req), googleSignIn: GOOGLE_ON })
+  // Administrators manage who else is an administrator. Adds and removes are checked by the write gate above.
+  if (path === '/api/admins' && role !== 'admin') return send(res, 403, { error: 'Only administrators can manage administrators.' })
+  if (req.method === 'POST' && path === '/api/admins') {
+    const body = await readBody(req)
+    const by = viewerEmail(req) ?? 'admin key'
+    const result = addAdmin(body?.email, by)
+    return result.ok ? send(res, 201, { ok: true, ...result, admins: listAdmins() }) : send(res, 400, { error: result.error })
+  }
+  if (req.method === 'DELETE' && path.startsWith('/api/admins/')) {
+    let email
+    try { email = decodeURIComponent(path.slice('/api/admins/'.length)) } catch { return send(res, 400, { error: 'Bad email' }) }
+    const result = removeAdmin(email)
+    if (result === 'settings') return send(res, 409, { error: 'This administrator comes from the server settings (QA_GOOGLE_ADMIN_EMAILS). Remove it there.' })
+    return result === 'removed' ? send(res, 200, { ok: true, admins: listAdmins() }) : send(res, 404, { error: 'Not an added administrator' })
+  }
   if (req.method === 'GET' && path === '/api/status') return send(res, 200, status(role, viewerEmail(req)))
   if (req.method === 'GET' && path === '/api/trends') return send(res, 200, buildTrends(recentRuns()))
   if (req.method === 'GET' && path === '/api/jira/tickets') return send(res, 200, listTickets())

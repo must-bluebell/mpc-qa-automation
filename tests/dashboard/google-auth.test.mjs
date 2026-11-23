@@ -137,7 +137,7 @@ test('dashboard routes: anonymous is asked to sign in, a viewer reads but cannot
     env: {
       ...process.env, QA_RUNS_DIR: dir, QA_HOSTED: '1', QA_DASHBOARD_HOST: '127.0.0.1', QA_DASHBOARD_PORT: String(port), QA_DASHBOARD_PUBLIC_HOST: host,
       QA_DASHBOARD_ACCESS_TOKEN: accessToken, QA_GOOGLE_CLIENT_ID: 'client.apps', QA_GOOGLE_CLIENT_SECRET: 'csecret', QA_GOOGLE_ALLOWED_DOMAIN: 'company.example',
-      QA_WATCHDOG: '0', SLACK_BOT_TOKEN: '', SLACK_ALERT_WEBHOOK_URL: '',
+      QA_WATCHDOG: '0', SLACK_BOT_TOKEN: '', SLACK_ALERT_WEBHOOK_URL: '', QA_GOOGLE_ADMIN_EMAILS: 'admin@company.example',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -191,7 +191,34 @@ test('dashboard routes: anonymous is asked to sign in, a viewer reads but cannot
   const token = (await page.text()).match(/name="qa-token" content="([^"]+)"/)[1]
   const write = await fetch(base + '/api/runs', { method: 'POST', headers: { host, cookie: viewer, 'content-type': 'application/json', 'x-qa-token': token }, body: JSON.stringify({ suite: 'smoke', env: 'production' }) })
   assert.equal(write.status, 403)
-  assert.match((await write.json()).error, /admin key/)
+  assert.match((await write.json()).error, /administrator/)
+
+  // Viewers cannot read or change the administrator list.
+  assert.equal((await get('/api/admins', { cookie: viewer })).status, 403)
+
+  // A signed-in administrator (listed in settings) can run work, see the list and make another person an administrator.
+  const admin = `mpc_qa_viewer_${port}=${signPayload({ role: 'viewer', email: 'admin@company.example', exp: Math.floor(Date.now() / 1000) + 600 }, sessionKey(accessToken))}`
+  const adminStatus = await (await get('/api/status', { cookie: admin })).json()
+  assert.equal(adminStatus.role, 'admin')
+  assert.ok(adminStatus.admins.some(a => a.email === 'admin@company.example' && a.source === 'settings'))
+  const adminPage = await get('/', { cookie: admin })
+  const adminToken = (await adminPage.text()).match(/name="qa-token" content="([^"]+)"/)[1]
+  const headersFor = cookie => ({ host, cookie, 'content-type': 'application/json', 'x-qa-token': adminToken })
+  const added = await fetch(base + '/api/admins', { method: 'POST', headers: headersFor(admin), body: JSON.stringify({ email: 'New.Admin@Gmail.com' }) })
+  assert.equal(added.status, 201)
+  assert.ok((await added.json()).admins.some(a => a.email === 'new.admin@gmail.com' && a.source === 'added'))
+  // The newly added administrator is an administrator at once, without a restart.
+  const newAdmin = `mpc_qa_viewer_${port}=${signPayload({ role: 'viewer', email: 'new.admin@gmail.com', exp: Math.floor(Date.now() / 1000) + 600 }, sessionKey(accessToken))}`
+  assert.equal((await (await get('/api/status', { cookie: newAdmin })).json()).role, 'admin')
+  // A bad address is refused.
+  const bad = await fetch(base + '/api/admins', { method: 'POST', headers: headersFor(admin), body: JSON.stringify({ email: 'not-an-email' }) })
+  assert.equal(bad.status, 400)
+  // Removing an added administrator demotes them at once; a settings administrator cannot be removed here.
+  const removed = await fetch(base + '/api/admins/' + encodeURIComponent('new.admin@gmail.com'), { method: 'DELETE', headers: headersFor(admin) })
+  assert.equal(removed.status, 200)
+  assert.equal((await (await get('/api/status', { cookie: newAdmin })).json()).role, 'viewer')
+  const settingsRemove = await fetch(base + '/api/admins/' + encodeURIComponent('admin@company.example'), { method: 'DELETE', headers: headersFor(admin) })
+  assert.equal(settingsRemove.status, 409)
 })
 
 test('an optional email allowlist restricts company accounts', () => {

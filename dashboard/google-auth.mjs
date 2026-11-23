@@ -77,7 +77,7 @@ export function authorizationUrl(config, { redirectUri, state, nonce }) {
  * Pure claim check. Returns { ok: true, email } or { ok: false, reason } where reason is a fixed code
  * (never the raw claim) so the page can say why sign-in was refused without leaking anything.
  */
-export function checkIdTokenClaims(claims, { config, nonce, now = Date.now() }) {
+export function checkIdTokenClaims(claims, { config, nonce, now = Date.now(), isAdmin = () => false }) {
   if (!claims || typeof claims !== 'object') return { ok: false, reason: 'invalid_token' }
   if (!ISSUERS.includes(claims.iss)) return { ok: false, reason: 'wrong_issuer' }
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
@@ -87,7 +87,8 @@ export function checkIdTokenClaims(claims, { config, nonce, now = Date.now() }) 
   if (claims.nonce !== nonce) return { ok: false, reason: 'nonce_mismatch' }
   if (typeof claims.email !== 'string' || claims.email_verified !== true) return { ok: false, reason: 'email_not_verified' }
   const email = claims.email.trim().toLowerCase()
-  if (config.anyAccount) return { ok: true, email }
+  // An administrator is an explicit grant, so an admin email may sign in whatever its domain.
+  if (config.anyAccount || isAdmin(email)) return { ok: true, email }
   // A listed personal account must be a consumer account (no hosted-domain claim); company accounts never use this path.
   if (claims.hd === undefined && config.personal.has(email)) return { ok: true, email }
   const emailDomain = email.split('@')[1] ?? ''

@@ -295,6 +295,53 @@ function deleteRunButton(run) {
   return button
 }
 
+// Administrators: add or remove people who can run tests, delete runs and create tickets. Admin view only.
+function adminsPanel() {
+  const admins = state.status?.admins
+  if (state.status?.role !== 'admin' || !admins) return null
+  const input = h('input', { type: 'email', name: 'email', required: true, placeholder: 'name@example.com', 'aria-label': 'Email address of the new administrator', autocomplete: 'off' })
+  const message = h('p', { class: 'hint', role: 'status' })
+  const form = h('form', { class: 'admin-add', onsubmit: async event => {
+    event.preventDefault()
+    const email = input.value.trim()
+    if (!email) return
+    message.textContent = 'Adding…'
+    try {
+      await post('/api/admins', { email })
+      await refresh()
+      await render()
+    } catch (error) {
+      message.textContent = error.message
+      message.className = 'msg bad'
+    }
+  } }, input, h('button', { class: 'primary', type: 'submit' }, 'Make administrator'))
+  return h('section', { class: 'panel', id: 'admins' }, h('h2', {}, 'Administrators'),
+    h('p', { class: 'hint' }, 'Administrators can run every test suite, delete runs, create Jira tickets and add or remove other administrators. Viewers can only read results.'),
+    form, message,
+    h('div', { class: 'tablewrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, 'Email'), h('th', {}, 'Added'), h('th', {}, 'By'), h('th', {}, ''))),
+      h('tbody', {}, admins.map(adminRow)))))
+}
+
+function adminRow(a) {
+  const remove = async () => {
+    if (!confirm(`Remove administrator access for ${a.email}?`)) return
+    try {
+      await api(`/api/admins/${encodeURIComponent(a.email)}`, { method: 'DELETE', headers: { 'x-qa-token': TOKEN } })
+      await refresh()
+      await render()
+    } catch (error) { alert(`Could not remove: ${error.message}`) }
+  }
+  const action = a.source === 'added'
+    ? h('button', { class: 'danger', type: 'button', 'aria-label': `Remove administrator ${a.email}`, onclick: remove }, 'Remove')
+    : h('span', { class: 'hint' }, 'Settings')
+  return h('tr', {},
+    h('td', {}, a.email),
+    h('td', {}, a.source === 'settings' ? 'Server settings' : when(a.addedAt)),
+    h('td', {}, a.source === 'settings' ? '—' : (a.addedBy ?? '—')),
+    h('td', {}, action))
+}
+
 // Recent Google sign-ins, newest first. Only shown to the admin view.
 function recentSignInsPanel() {
   const rows = state.status?.recentSignIns
@@ -348,7 +395,7 @@ function schedulePanel() {
 }
 
 function renderHome() {
-  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), trendsPanel(), runsTable(), recentSignInsPanel() ?? '', schedulePanel(), systemHealth())
+  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), trendsPanel(), runsTable(), recentSignInsPanel() ?? '', adminsPanel() ?? '', schedulePanel(), systemHealth())
   loadTrends()
 }
 
