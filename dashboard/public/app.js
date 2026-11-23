@@ -265,13 +265,45 @@ function liveLog() {
 
 function runsTable() {
   if (!state.runs.length) return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), emptyState('No runs yet', 'Runs started from this dashboard or by a schedule will be listed here.'))
+  const admin = state.status?.role === 'admin'
+  const headers = ['Started', 'Suite', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration', 'Slack', ...(admin ? [''] : [])]
   return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), h('div', { class: 'tablewrap' }, h('table', {},
-    h('thead', {}, h('tr', {}, ['Started', 'Suite', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration', 'Slack'].map(t => h('th', { class: ['Pass', 'Fail', 'Blocked', 'Duration'].includes(t) ? 'num' : null }, t)))),
+    h('thead', {}, h('tr', {}, headers.map(t => h('th', { class: ['Pass', 'Fail', 'Blocked', 'Duration'].includes(t) ? 'num' : null }, t)))),
     h('tbody', {}, state.runs.map(r => h('tr', { class: 'click', onclick: () => { location.hash = `#/runs/${r.runId}` } },
       h('td', {}, when(r.startedAt)), h('td', {}, r.suite, r.seededDefect ? ` · ${r.seededDefect}` : ''), h('td', {}, r.env), h('td', {}, badge(r.status)),
       h('td', { class: 'num' }, r.counts?.passed ?? 0), h('td', { class: 'num' }, r.counts?.failed ?? 0), h('td', { class: 'num' }, r.counts?.blocked ?? 0),
       h('td', { class: 'num' }, secs(r.durationMs)),
-      h('td', {}, r.slack?.length ? r.slack.map(n => h('span', { class: `badge ${n.ok ? 'ok' : 'warn'}` }, `${n.kind}: ${n.ok ? 'sent' : n.code}`)) : '—')))))))
+      h('td', {}, r.slack?.length ? r.slack.map(n => h('span', { class: `badge ${n.ok ? 'ok' : 'warn'}` }, `${n.kind}: ${n.ok ? 'sent' : n.code}`)) : '—'),
+      admin ? h('td', {}, deleteRunButton(r)) : null))))))
+}
+
+// Deletes one run only after the user confirms. Runs are never removed automatically.
+function deleteRunButton(run) {
+  const button = h('button', { class: 'danger', type: 'button', 'aria-label': `Delete run ${run.runId}`, onclick: async event => {
+    event.stopPropagation()
+    if (!confirm(`Delete this run permanently?\n\n${run.suite} · ${run.env} · ${when(run.startedAt)}\n\nThis cannot be undone.`)) return
+    button.disabled = true
+    try {
+      await api(`/api/runs/${encodeURIComponent(run.runId)}`, { method: 'DELETE', headers: { 'x-qa-token': TOKEN } })
+      state.runs = state.runs.filter(r => r.runId !== run.runId)
+      document.getElementById('run-history')?.replaceWith(runsTable())
+    } catch (error) {
+      button.disabled = false
+      alert(`Could not delete this run: ${error.message}`)
+    }
+  } }, 'Delete')
+  return button
+}
+
+// Recent Google sign-ins, newest first. Only shown to the admin view.
+function recentSignInsPanel() {
+  const rows = state.status?.recentSignIns
+  if (state.status?.role !== 'admin' || !rows) return null
+  return h('section', { class: 'panel', id: 'recent-signins' }, h('h2', {}, 'Recent sign-ins'),
+    rows.length ? h('div', { class: 'tablewrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, 'When'), h('th', {}, 'Email'))),
+      h('tbody', {}, rows.map(r => h('tr', {}, h('td', {}, when(r.at)), h('td', {}, r.email)))))) :
+      emptyState('No sign-ins yet', 'Viewers who sign in with Google will appear here.'))
 }
 
 /** A friendly placeholder for a section with nothing to show yet: a title, an optional next step, and no fake data. */
@@ -316,7 +348,7 @@ function schedulePanel() {
 }
 
 function renderHome() {
-  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), trendsPanel(), runsTable(), schedulePanel(), systemHealth())
+  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryResults(), trendsPanel(), runsTable(), recentSignInsPanel() ?? '', schedulePanel(), systemHealth())
   loadTrends()
 }
 
@@ -422,16 +454,25 @@ function signInError() {
   return SIGN_IN_ERRORS[match[1]] ?? SIGN_IN_ERRORS.default
 }
 
+// Google's multicolour "G" mark for the sign-in button (Google's sign-in branding uses the official logo).
+const GOOGLE_G = '<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true" focusable="false">'
+  + '<path fill="#EA4335" d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z"/>'
+  + '<path fill="#4285F4" d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.1.83-.64 2.08-1.84 2.92l2.84 2.2c1.7-1.57 2.68-3.88 2.68-6.62z"/>'
+  + '<path fill="#FBBC05" d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z"/>'
+  + '<path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.84-2.2c-.76.53-1.78.9-3.12.9-2.38 0-4.4-1.57-5.12-3.74L.97 13.04C2.45 15.98 5.48 18 9 18z"/>'
+  + '</svg>'
+
 function signInPanel() {
   const error = signInError()
+  const googleIcon = h('span', { class: 'g-icon' })
+  googleIcon.innerHTML = GOOGLE_G // constant markup above, never user input
   return h('section', { class: 'signin' },
     h('div', { class: 'signin-card' },
-      h('div', { class: 'signin-brand', 'aria-hidden': 'true' }, 'QA'),
-      h('h1', {}, 'Sign in to MPC QA'),
+      h('img', { class: 'signin-mark', src: '/assets/logo-mark.png', alt: '', width: 56, height: 56 }),
+      h('h1', {}, 'Sign in to MPC QA Dashboard'),
       h('p', { class: 'signin-lead' }, 'See test runs, failure evidence and trends with your Google account.'),
       error ? h('p', { class: 'signin-error', role: 'alert' }, error) : null,
-      h('a', { class: 'btn-google', href: '/auth/google/start' },
-        h('span', { class: 'g-mark', 'aria-hidden': 'true' }, 'G'), 'Continue with Google'),
+      h('a', { class: 'btn-google', href: '/auth/google/start' }, googleIcon, 'Continue with Google'),
       h('ul', { class: 'signin-points' },
         h('li', {}, 'Read runs, results, evidence and trends'),
         h('li', {}, 'Starting runs and creating tickets need an administrator')),

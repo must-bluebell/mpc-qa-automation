@@ -21,6 +21,9 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
   })
   await page.route('http://dashboard.test/**', async route => {
     const pathname = new URL(route.request().url()).pathname
+    if (/^\/assets\/[\w-]+\.(png|jpg)$/.test(pathname)) {
+      return route.fulfill({ contentType: pathname.endsWith('.png') ? 'image/png' : 'image/jpeg', body: await readFile(new URL(`../../dashboard/public${pathname}`, import.meta.url)) })
+    }
     if (pathname === '/' || pathname === '/app.js' || pathname === '/style.css') {
       const file = pathname === '/' ? 'index.html' : pathname.slice(1)
       return route.fulfill({

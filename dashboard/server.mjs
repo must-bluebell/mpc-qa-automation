@@ -6,7 +6,8 @@ import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSyn
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_ENV, HOSTED, ROOT, RUNS_DIR, config, knownSecrets, resolveEnvironment } from '../pipeline/lib/env.mjs'
-import { isRunId, newRunId, readIndex, readRun, runDir } from '../pipeline/lib/run-store.mjs'
+import { isRunId, newRunId, readIndex, readRun, runDir, removeRun } from '../pipeline/lib/run-store.mjs'
+import { recentSignIns, recordSignIn } from './signins.mjs'
 import { runStatus } from '../pipeline/lib/run-status.mjs'
 import { readLock } from '../pipeline/lib/lock.mjs'
 import { stackStatus } from '../pipeline/adapters/local-stack.mjs'
@@ -173,6 +174,7 @@ async function googleCallback(req, res, url) {
   const verdict = checkIdTokenClaims(decodeIdToken(idToken), { config: GOOGLE, nonce: pending.nonce })
   if (!verdict.ok) return refuse(verdict.reason)
   const session = signPayload({ role: 'viewer', email: verdict.email, exp: Math.floor(Date.now() / 1000) + VIEWER_SESSION_SECONDS }, SESSION_KEY)
+  try { recordSignIn(verdict.email) } catch (error) { console.warn(`Could not record sign-in: ${error.message}`) }
   redirect(res, '/', { 'Cache-Control': 'no-store', 'Set-Cookie': [cookie(VIEWER_COOKIE, session, VIEWER_SESSION_SECONDS), clearPending] })
 }
 
@@ -298,6 +300,7 @@ function status(role = 'admin', email = null) {
   const ai = aiConfig()
   return {
     role, viewerEmail: email, googleSignIn: GOOGLE_ON,
+    recentSignIns: role === 'admin' ? recentSignIns() : undefined,
     jira: jiraStatus(),
     hosted: HOSTED,
     defaultEnv: DEFAULT_ENV,
@@ -422,9 +425,13 @@ function serveArtifact(res, runId, rel) {
 
 function serveStatic(res, path) {
   const name = path === '/' ? 'index.html' : path.slice(1)
-  if (!/^[\w-]+\.(html|js|css|svg)$/.test(name)) return send(res, 404, { error: 'Not found' })
+  // Pages and scripts at the root, plus image assets under /assets/ only. No other paths or subfolders.
+  const isPage = /^[\w-]+\.(html|js|css|svg)$/.test(name)
+  const isImage = /^assets\/[\w-]+\.(png|jpg)$/.test(name)
+  if (!isPage && !isImage) return send(res, 404, { error: 'Not found' })
   const file = join(PUBLIC, name)
   if (!existsSync(file)) return send(res, 404, { error: 'Not found' })
+  if (isImage) return send(res, 200, readFileSync(file), { 'Content-Type': TYPES[extname(name)], 'Cache-Control': 'public, max-age=86400' })
   let body = readFileSync(file, 'utf8')
   if (name === 'index.html') body = body.replace('__QA_TOKEN__', TOKEN)
   send(res, 200, body, { 'Content-Type': TYPES[extname(name)] })
@@ -479,13 +486,21 @@ async function route(req, res) {
     setAutoCreate(body?.autoCreate)
     return send(res, 200, { jira: jiraStatus() })
   }
-  if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().slice(-200).reverse())
+  // Every saved run, newest first. Runs stay until someone with the admin key deletes them.
+  if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().slice().reverse())
   if (req.method === 'GET' && path === '/api/stack') {
     if (HOSTED) return send(res, 404, { error: 'No local Docker stack on a hosted deployment' })
     return send(res, 200, await stackStatus(resolveEnvironment('local-docker')))
   }
 
   let m = path.match(/^\/api\/runs\/([^/]+)$/)
+  // Deleting is explicit and admin-only (the write checks above already require the admin key).
+  if (req.method === 'DELETE' && m) {
+    if (!isRunId(m[1])) return send(res, 400, { error: 'Invalid run id' })
+    if (busy()?.runId === m[1] || [...jobs.values()].some(j => j.runId === m[1] && j.exitCode === undefined)) return send(res, 409, { error: 'This run is still running. Delete it after it finishes.' })
+    const removed = removeRun(m[1])
+    return removed ? send(res, 200, { ok: true, runId: m[1] }) : send(res, 404, { error: 'Run not found' })
+  }
   if (req.method === 'GET' && m) {
     const run = readRun(m[1])
     return run ? send(res, 200, JSON.parse(redact(JSON.stringify(run)))) : send(res, 404, { error: 'Run not found' })

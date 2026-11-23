@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { RUNS_DIR } from './env.mjs'
 import { redactValue } from './safe-output.mjs'
@@ -83,6 +83,17 @@ function updateIndex(run) {
   index.push(summarize(run))
   index.sort((a, b) => (a.startedAt ?? a.finishedAt).localeCompare(b.startedAt ?? b.finishedAt))
   writeJsonAtomic(join(RUNS_DIR, 'index.json'), index)
+}
+
+/** Deletes one saved run (its folder and its index entry). Returns false when no such run exists. Never touches other runs. */
+export function removeRun(runId) {
+  if (!isRunId(runId)) return false
+  const dir = runDir(runId)
+  if (!existsSync(dir)) return false
+  rmSync(dir, { recursive: true, force: true })
+  const index = readIndex().filter(r => r.runId !== runId)
+  writeJsonAtomic(join(RUNS_DIR, 'index.json'), index)
+  return true
 }
 
 /** Rebuilds the index from run folders (used after a crash or manual cleanup). */

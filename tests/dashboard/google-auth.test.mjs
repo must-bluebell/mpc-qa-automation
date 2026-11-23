@@ -168,6 +168,14 @@ test('dashboard routes: anonymous is asked to sign in, a viewer reads but cannot
   assert.equal(refused.status, 302)
   assert.equal(refused.headers.get('location'), '/#signin-error=expired_or_invalid_state')
 
+  // Brand images are served from /assets/ only; other paths and subfolders stay blocked.
+  const logo = await get('/assets/logo-mark.png')
+  assert.equal(logo.status, 200)
+  assert.equal(logo.headers.get('content-type'), 'image/png')
+  assert.equal((await get('/assets/../server.mjs')).status, 404)
+  assert.equal((await get('/assets/nested/logo-mark.png')).status, 404)
+  assert.equal((await get('/logo-mark.png')).status, 404)
+
   // A forged viewer cookie is not a session.
   const forged = await get('/api/status', { cookie: `mpc_qa_viewer_${port}=${signPayload({ role: 'viewer', email: 'x@company.example', exp: NOW / 1000 + 600 }, sessionKey('z'.repeat(40)))}` })
   assert.equal(forged.status, 403)
