@@ -155,7 +155,17 @@ async function googleCallback(req, res, url) {
   const state = url.searchParams.get('state') ?? ''
   const code = url.searchParams.get('code') ?? ''
   if (url.searchParams.get('error')) return refuse('google_declined')
-  if (!pending || !sameText(state, pending.state) || !code || code.length > 2048) return refuse('expired_or_invalid_state')
+  if (!pending || !sameText(state, pending.state) || !code || code.length > 2048) {
+    // Server-side reason only (no token or state values): shows whether the browser sent the cookie at all.
+    const cookieSent = readCookie(req, OAUTH_COOKIE) !== undefined
+    const why = !cookieSent ? 'state cookie not sent back by the browser'
+      : !pending ? 'state cookie invalid, expired, or signed with a different access key (restart or key change)'
+      : !code ? 'no authorization code in callback'
+      : code.length > 2048 ? 'authorization code too long'
+      : 'state in callback does not match the state cookie'
+    console.warn(`Google sign-in refused: ${why}`)
+    return refuse('expired_or_invalid_state')
+  }
   let idToken = null
   try { idToken = await exchangeCode(GOOGLE, { code, redirectUri: GOOGLE_REDIRECT }) } catch { idToken = null }
   if (!idToken) return refuse('token_exchange_failed')
