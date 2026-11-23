@@ -109,7 +109,7 @@ function runForm() {
   // Viewers see results only; the server refuses their writes, so this is guidance rather than a control.
   if (s.role === 'viewer') {
     return h('section', { class: 'panel' }, h('h2', {}, 'Run tests'),
-      h('p', { class: 'hint' }, `Signed in as ${s.viewerEmail}. Viewers can read results; starting runs and sending alerts needs the admin key.`))
+      h('p', { class: 'hint' }, `Signed in as ${s.viewerEmail}. You can read results. Starting runs, sending alerts and creating tickets needs an administrator.`))
   }
   const msg = h('div', { class: 'msg', role: 'status' })
   const suite = h('select', { name: 'suite' }, s.suites.map(x => h('option', { value: x.name, selected: x.name === s.defaultSuite }, x.name)))
