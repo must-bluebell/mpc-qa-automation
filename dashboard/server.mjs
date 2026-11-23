@@ -22,7 +22,7 @@ import { REPORT_CATEGORIES } from '../pipeline/lib/safe-output.mjs'
 import { scheduleReadiness } from '../pipeline/lib/placement.mjs'
 import { buildTrends } from '../pipeline/lib/test-history.mjs'
 import { runWatchdog } from '../pipeline/lib/watchdog.mjs'
-import { jiraStatus, listTickets, openTicketForTest } from '../pipeline/notify/jira.mjs'
+import { jiraStatus, listTickets, openTicketForTest, setAutoCreate } from '../pipeline/notify/jira.mjs'
 import { OAUTH_STATE_SECONDS, VIEWER_SESSION_SECONDS, authorizationUrl, checkIdTokenClaims, decodeIdToken, exchangeCode, googleConfig, newOauthState, sessionKey, signPayload, verifyPayload } from './google-auth.mjs'
 
 /**
@@ -461,6 +461,12 @@ async function route(req, res) {
     const body = await readBody(req)
     const ticket = await openTicketForTest(body?.runId, body?.testKey)
     return send(res, ticket.existing ? 200 : 201, { issueKey: ticket.issueKey, url: ticket.url, existing: !!ticket.existing, attachmentsFailed: ticket.attachmentsFailed ?? [] })
+  }
+  if (req.method === 'PUT' && path === '/api/jira/settings') {
+    // Admin only: viewers are refused above for any write. 0 = manual tickets, 1 = automatic tickets.
+    const body = await readBody(req)
+    setAutoCreate(body?.autoCreate)
+    return send(res, 200, { jira: jiraStatus() })
   }
   if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().slice(-200).reverse())
   if (req.method === 'GET' && path === '/api/stack') {

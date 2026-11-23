@@ -13,6 +13,27 @@ import { redactValue } from '../lib/safe-output.mjs'
  * and stored in runs/jira-tickets.json, so one failing test never gets two open tickets.
  */
 const STORE = () => resolve(RUNS_DIR, 'jira-tickets.json')
+const SETTINGS = () => resolve(RUNS_DIR, 'jira-settings.json')
+
+/**
+ * Automatic ticket creation: 1 = on, 0 = manual only. A value saved from the dashboard (stored on the runs disk,
+ * so it survives restarts) wins; without one, QA_JIRA_AUTO decides.
+ */
+export function autoCreateEnabled(env = process.env) {
+  try {
+    const saved = JSON.parse(readFileSync(SETTINGS(), 'utf8'))
+    if (typeof saved.autoCreate === 'boolean') return saved.autoCreate
+  } catch { /* no saved setting yet */ }
+  return env.QA_JIRA_AUTO === '1'
+}
+
+/** Saves the dashboard choice. Accepts only 0 or 1. */
+export function setAutoCreate(value) {
+  if (value !== 0 && value !== 1) throw Object.assign(new Error('Jira ticket creation must be 0 (manual) or 1 (automatic)'), { status: 400 })
+  const autoCreate = value === 1
+  writeJsonAtomic(SETTINGS(), { autoCreate, updatedAt: new Date().toISOString() })
+  return autoCreate
+}
 const ISSUE_KEY = /^[A-Z][A-Z0-9]+-\d+$/
 const MAX_SCREENSHOTS = 3
 
@@ -29,13 +50,15 @@ export function jiraConfig(env = process.env) {
   return {
     baseUrl: url.origin, email, token,
     projectKey: (env.JIRA_PROJECT_KEY || 'ME').trim(), issueType: (env.JIRA_ISSUE_TYPE || 'Bug').trim(),
+    // Optional: assign new tickets to this Atlassian account. Unset leaves the project's default assignee in place.
+    assigneeAccountId: (env.JIRA_ASSIGNEE_ACCOUNT_ID || '').trim() || null,
   }
 }
 
 /** Status for the dashboard. Never returns the token or the address, only whether they are set. */
 export function jiraStatus(env = process.env) {
   try {
-    return { configured: !!jiraConfig(env), auto: env.QA_JIRA_AUTO === '1' }
+    return { configured: !!jiraConfig(env), auto: autoCreateEnabled(env) }
   } catch (error) {
     return { configured: false, auto: false, reason: error.message }
   }
@@ -78,6 +101,7 @@ export function issueFields(run, test, config, { dashboardUrl = process.env.QA_D
       `Run record: ${runLink}`,
     ]),
     labels: ['mpc-qa'],
+    ...(config.assigneeAccountId ? { assignee: { accountId: config.assigneeAccountId } } : {}),
   }
 }
 
@@ -123,7 +147,7 @@ export async function createTicket(config, run, test, { mode = 'manual', fetchIm
   const created = await jiraCall(config, 'POST', '/rest/api/3/issue', { body: { fields: issueFields(run, test, config) }, fetchImpl })
   const issueKey = created?.key
   if (typeof issueKey !== 'string' || !ISSUE_KEY.test(issueKey)) throw new Error('Jira returned an unexpected response')
-  const ticket = { env: run.env, testKey: test.key, title: test.title, issueKey, url: `${config.baseUrl}/browse/${issueKey}`, runId: run.runId, mode, state: 'open', createdAt: new Date().toISOString() }
+  const ticket = { env: run.env, testKey: test.key, title: test.title, signature: test.signature ?? null, issueKey, url: `${config.baseUrl}/browse/${issueKey}`, runId: run.runId, mode, state: 'open', createdAt: new Date().toISOString() }
   store[storeKey] = ticket
   writeTickets(store)
   const attachmentsFailed = []
@@ -152,14 +176,22 @@ async function closeTicket(config, ticket, runId, fetchImpl) {
  * Runs after a run's outcomes are saved. Closes tickets whose test passed again, and, only when
  * QA_JIRA_AUTO=1, creates tickets for newly confirmed failures. Never changes the run's status.
  */
-export async function reconcileAfterRun(run, { config = jiraConfig(), fetchImpl = fetch, auto = process.env.QA_JIRA_AUTO === '1' } = {}) {
+/** New automatic tickets allowed per run. Defaults to 3; invalid values fall back to the default. */
+export function autoLimit(env = process.env) {
+  const n = Number.parseInt(env.JIRA_AUTO_MAX_PER_RUN ?? '3', 10)
+  return Number.isInteger(n) && n >= 0 ? n : 3
+}
+
+export async function reconcileAfterRun(run, { config = jiraConfig(), fetchImpl = fetch, env = process.env, auto = autoCreateEnabled(env) } = {}) {
   if (!config) return { configured: false }
-  const result = { configured: true, created: [], closed: [], errors: [] }
+  const result = { configured: true, created: [], closed: [], skipped: [], errors: [] }
   const store = readTickets()
   for (const [storeKey, ticket] of Object.entries(store)) {
     if (ticket.state !== 'open' || !ticket.env || ticket.env !== run.env) continue
     const test = run.tests?.find(t => t.key === ticket.testKey)
     if (test?.status !== 'passed' || test.flaky) continue
+    // Another test with the same cause still fails, so the shared ticket stays open.
+    if (ticket.signature && (run.tests ?? []).some(t => t.status === 'failed' && t.signature === ticket.signature)) continue
     try {
       await closeTicket(config, ticket, run.runId, fetchImpl)
       const current = readTickets()
@@ -169,14 +201,32 @@ export async function reconcileAfterRun(run, { config = jiraConfig(), fetchImpl 
     } catch (error) { result.errors.push({ issueKey: ticket.issueKey, code: error.code ?? 'jira_unavailable' }) }
   }
   if (auto) {
+    // Automatic rules: a confirmed product failure that is new in this run, or a critical requirement still failing
+    // from an earlier run. One ticket per failure cause, and at most JIRA_AUTO_MAX_PER_RUN new tickets per run.
+    const criticalIds = new Set((run.coverage?.requirements ?? []).filter(r => r.critical).map(r => r.id))
+    const cmp = run.comparison ?? { newFailures: [], newVariants: [], persisting: [] }
+    const newKeys = new Set([...cmp.newFailures, ...cmp.newVariants].map(i => i.key))
+    const persistingKeys = new Set(cmp.persisting.map(i => i.key))
+    const maxPerRun = autoLimit(env)
+    const ticketedCauses = new Set()
     for (const test of run.tests ?? []) {
       if (test.status !== 'failed' || test.classification?.kind !== 'product' || test.flaky || !(test.retries >= 1)) continue
+      const critical = (test.requirementIds ?? []).some(id => criticalIds.has(id))
+      if (!newKeys.has(test.key) && !(critical && persistingKeys.has(test.key))) { result.skipped.push({ testKey: test.key, reason: 'not_new_or_critical_persisting' }); continue }
+      if (test.signature && ticketedCauses.has(test.signature)) { result.skipped.push({ testKey: test.key, reason: 'same_cause_as_ticketed_test' }); continue }
+      if (test.signature) ticketedCauses.add(test.signature)
+      if (result.created.length >= maxPerRun) { result.skipped.push({ testKey: test.key, reason: 'over_run_limit' }); continue }
       try {
         const ticket = await createTicket(config, run, test, { mode: 'auto', fetchImpl })
         if (!ticket.existing) result.created.push(ticket.issueKey)
       } catch (error) { result.errors.push({ testKey: test.key, code: error.code ?? 'jira_unavailable' }) }
     }
   }
+  // Open tickets for this run's tests, so the Slack report can link each failing case to its ticket.
+  const runKeys = new Set((run.tests ?? []).map(t => t.key))
+  result.tickets = Object.values(readTickets())
+    .filter(t => t.state === 'open' && t.env === run.env && runKeys.has(t.testKey))
+    .map(t => ({ testKey: t.testKey, issueKey: t.issueKey, url: t.url }))
   return result
 }
 
