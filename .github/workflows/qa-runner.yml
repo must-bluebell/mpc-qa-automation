@@ -24,8 +24,6 @@ permissions:
 # One delivery-state writer. Each job gets a fresh, isolated Docker project.
 concurrency:
   group: mpc-qa-regression-and-schedules
-  # Retain queued PRs; the default single pending slot would cancel earlier PRs.
-  queue: max
   cancel-in-progress: false
 
 jobs:
