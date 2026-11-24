@@ -48,7 +48,9 @@ const DAY_OPTIONS = [7, 30, 90, 365]
 // ---- Routing. Pages are hash routes; the project and filters travel in the query string.
 function route() {
   const [path = '', query = ''] = location.hash.replace(/^#/, '').split('?')
-  return { path: path || '/', params: new URLSearchParams(query) }
+  // The former Dashboard page is now Home; its old links keep working.
+  const page = path || '/'
+  return { path: page === '/dashboard' ? '/' : page, params: new URLSearchParams(query) }
 }
 const onPage = name => route().path === name
 function currentProjectId() {
@@ -61,14 +63,14 @@ function go(path, params = {}) {
 }
 const projectQuery = project => (project ? `?project=${encodeURIComponent(project)}` : '')
 
-const PAGES = [{ path: '/', label: 'Home' }, { path: '/dashboard', label: 'Dashboard' }, { path: '/reports', label: 'Reports' }]
+const PAGES = [{ path: '/', label: 'Home' }, { path: '/reports', label: 'Reports' }]
 function renderNav() {
   const { path } = route()
   const project = currentProjectId()
   const current = path.startsWith('/runs/') ? '/reports' : path
   const switcher = state.projects.length
     ? h('label', { class: 'project-switch' }, h('span', {}, 'Project'),
-      h('select', { id: 'project-select', onchange: e => go(current === '/' ? '/dashboard' : current, { project: e.target.value }) },
+      h('select', { id: 'project-select', onchange: e => go(current, { project: e.target.value }) },
         state.projects.map(p => h('option', { value: p.id, selected: p.id === project }, p.id))))
     : null
   nav.replaceChildren(...PAGES.map(p => h('a', { href: `#${p.path}${projectQuery(project)}`, class: 'navlink', 'aria-current': current === p.path ? 'page' : null }, p.label)), switcher)
@@ -100,7 +102,7 @@ async function refresh() {
   if (status.stackAvailable !== false) api('/api/stack').then(stack => {
     state.stack = stack
     renderChips()
-    if (onPage('/dashboard')) document.getElementById('system-health')?.replaceWith(systemHealth())
+    if (onPage('/')) document.getElementById('system-health')?.replaceWith(systemHealth())
   }).catch(() => {})
 }
 
@@ -202,7 +204,10 @@ function liveLog() {
         pollTimer = null
         // Keep the completed output mounted. Re-rendering the home page here starts another poller for
         // state.watching, creating an endless completion/render loop and resetting scroll.
-        if (onPage('/')) document.getElementById('run-form')?.replaceWith(runForm())
+        if (onPage('/')) {
+          document.getElementById('run-form')?.replaceWith(runForm())
+          refreshHomeStats()
+        }
       }
     } catch (error) {
       if (cancelled || receivedLog) return
@@ -237,44 +242,57 @@ function liveLog() {
   return h('section', { class: 'panel' }, h('h2', {}, 'Live output'), head, connection, pre)
 }
 
-// ---- Mini landing page: project cards and the run launcher. Statistics live on the dashboard.
-function projectCard(p) {
-  const id = encodeURIComponent(p.id)
-  const latest = p.latest
-  return h('article', { class: 'project-card' },
-    h('div', { class: 'project-head' }, h('strong', {}, p.id), latest ? badge(latest.status) : h('span', { class: 'badge' }, 'No runs yet')),
-    h('p', { class: 'hint' }, `${p.envs.length ? p.envs.join(', ') : 'No environment'} · ${p.runs} run${p.runs === 1 ? '' : 's'}`),
-    h('p', { class: 'hint' }, latest ? `Last finished ${when(latest.finishedAt)} · ${latest.suite}` : 'Runs appear here after their first completed execution.'),
+// ---- Home: the QA dashboard. The selected project's card and the run launcher share one row of equal height.
+// Statistics are repainted into their own slots, so a timer never rebuilds the run form or the live output.
+const overviewFor = (project, days, env) => api(`/api/overview?${new URLSearchParams({ project, days: String(days), ...(env ? { env } : {}) })}`)
+function homeParams() {
+  const params = route().params
+  return { days: DAY_OPTIONS.includes(Number(params.get('days'))) ? Number(params.get('days')) : 30, env: params.get('env') || null }
+}
+
+function projectCard(o) {
+  const info = state.projects.find(p => p.id === o.project)
+  const id = encodeURIComponent(o.project)
+  const k = o.kpis
+  return h('article', { class: 'project-card', 'aria-label': `${o.project} project` },
+    h('div', { class: 'project-head' },
+      h('div', {}, h('p', { class: 'eyebrow' }, 'Project'), h('h2', {}, o.project)),
+      h('span', { class: `badge ${HEALTH_CLASS[o.health.state] ?? ''}`, title: o.health.rule }, o.health.label)),
+    h('p', { class: 'hint' }, `${o.envs.length ? o.envs.join(', ') : 'No environments'} · ${info?.runs ?? 0} run${info?.runs === 1 ? '' : 's'}`),
+    h('dl', { class: 'mini-stats' },
+      h('div', {}, h('dt', {}, 'Pass rate'), h('dd', {}, pct(k.passRate))),
+      h('div', {}, h('dt', {}, 'Failure rate'), h('dd', {}, pct(k.failureRate))),
+      h('div', {}, h('dt', {}, 'Latest'), h('dd', {}, o.latest ? badge(o.latest.status) : '—'))),
+    h('p', { class: 'hint' }, o.latest ? `Last finished ${when(o.latest.finishedAt)} · ${o.latest.suite}` : 'Runs appear here after their first completed execution.'),
     h('div', { class: 'actions' },
-      h('a', { class: 'btn primary-link', href: `#/dashboard?project=${id}` }, 'Dashboard'),
-      h('a', { class: 'btn', href: `#/reports?project=${id}` }, 'Reports')))
+      h('a', { class: 'btn', href: `#/reports?project=${id}` }, 'Reports'),
+      o.latest ? h('a', { class: 'btn', href: `#/runs/${encodeURIComponent(o.latest.runId)}` }, 'Latest run') : null),
+  )
 }
 
-function renderLanding() {
-  app.dataset.page = 'home'
-  const cards = state.projects.length ? state.projects.map(projectCard)
-    : [emptyState('No projects yet', 'Add a "project" to an environment in pipeline/config/environments.json.')]
-  app.replaceChildren(
-    h('section', { class: 'hero' }, h('h1', {}, 'QA overview'),
-      h('p', { class: 'hint' }, 'Open a project for its dashboard and reports. Start a run below when you need one.')),
-    h('section', { class: 'project-grid', 'aria-label': 'Projects' }, cards),
-    runForm(),
-    liveLog() ?? '')
+function otherProjectsPanel(o) {
+  const others = state.projects.filter(p => p.id !== o.project)
+  if (!others.length) return null
+  return h('section', { class: 'panel', id: 'other-projects' },
+    h('div', { class: 'panel-head' }, h('h2', {}, 'Other projects'), h('span', { class: 'hint' }, `${others.length} more`)),
+    h('div', { class: 'project-list' }, others.map(p => h('a', { class: 'project-row', href: `#/?project=${encodeURIComponent(p.id)}` },
+      h('span', {}, h('strong', {}, p.id), h('span', { class: 'hint' }, ` · ${p.envs.join(', ') || 'No environment'} · ${p.runs} run${p.runs === 1 ? '' : 's'}`)),
+      p.latest ? badge(p.latest.status) : h('span', { class: 'badge' }, 'No runs yet')))))
 }
 
-// ---- Dashboard: statistics for one project, in a single environment or across all of them.
-function tile(label, value, detail) {
-  return h('article', { class: 'kpi' }, h('p', { class: 'kpi-label' }, label), h('div', { class: 'kpi-value' }, value), detail ? h('p', { class: 'hint' }, detail) : null)
+// ---- Dashboard tiles: each figure is counted from executed cases (passed or failed), never from skipped or blocked ones.
+function tile(label, value, detail, tone) {
+  return h('article', { class: `kpi${tone ? ` kpi-${tone}` : ''}` }, h('p', { class: 'kpi-label' }, label), h('div', { class: 'kpi-value' }, value), detail ? h('p', { class: 'hint' }, detail) : null)
 }
 
 function kpiRow(o) {
-  const k = o.kpis, hl = o.health
+  const k = o.kpis, executed = k.passed + k.failed
   return h('section', { class: 'kpis', 'aria-label': 'Key figures' },
-    tile('Pass rate', pct(k.passRate), `${k.passed} passed · ${k.failed} failed executed cases`),
-    tile('Failure rate', pct(k.failureRate), `${k.flaky} case${k.flaky === 1 ? '' : 's'} passed only on retry`),
-    tile('Runs', String(k.runs), `${k.passedRuns} finished as passed`),
-    tile('Latest run', o.latest ? badge(o.latest.status) : '—', o.latest ? `${o.latest.suite} · ${when(o.latest.finishedAt)}` : 'No completed run'),
-    tile('Health', h('span', { class: `badge ${HEALTH_CLASS[hl.state] ?? ''}` }, hl.label), hl.rule))
+    tile('Pass rate', pct(k.passRate), `${k.passed} of ${executed} executed cases passed`, 'pass'),
+    tile('Failure rate', pct(k.failureRate), `${k.failed} executed case${k.failed === 1 ? '' : 's'} failed`, 'fail'),
+    tile('Executed cases', String(executed), `Last ${o.days} days, Seoul time`),
+    tile('Flaky cases', String(k.flaky), 'Passed only on retry'),
+    tile('Runs', String(k.runs), `${k.passedRuns} finished as passed`))
 }
 
 function passLine(daily) {
@@ -326,7 +344,7 @@ function dailyColumns(daily) {
   const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Passed and failed cases per day over ${n} days` }, ...grid, ...columns, ...dates)
   return h('figure', { class: 'chart' }, h('div', { class: 'chart-scroll' }, root),
     h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'swatch swatch-passed' }), 'Passed'), h('span', {}, h('i', { class: 'swatch swatch-failed' }), 'Failed')),
-    h('figcaption', { class: 'hint' }, 'Executed cases per day. Table view below.'))
+    h('figcaption', { class: 'hint' }, 'Executed cases per day. Table view under the pass rate chart.'))
 }
 
 function dayTable(daily) {
@@ -339,12 +357,16 @@ function dayTable(daily) {
         h('td', { class: 'num' }, d.failed), h('td', { class: 'num' }, d.flaky), h('td', { class: 'num' }, pct(d.passRate))))))))
 }
 
-function trendSection(o) {
-  return h('section', { class: 'panel', id: 'trends' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Pass rate and volume'),
-      h('span', { class: 'hint' }, o.window.from ? `${shortDate(o.window.from)} to ${shortDate(o.window.to)} (Seoul time)` : 'No completed runs in this window')),
-    h('h3', {}, 'Pass rate per day'), passLine(o.daily),
-    h('h3', {}, 'Executed cases per day'), dailyColumns(o.daily),
-    dayTable(o.daily))
+function passRatePanel(o) {
+  return h('section', { class: 'panel', id: 'trends' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Pass rate per day'),
+      h('span', { class: 'hint' }, o.window.from ? `${shortDate(o.window.from)} to ${shortDate(o.window.to)}` : 'No completed runs in this window')),
+    passLine(o.daily), dayTable(o.daily))
+}
+
+function volumePanel(o) {
+  return h('section', { class: 'panel', id: 'volume' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Executed cases per day'),
+      h('span', { class: 'hint' }, 'Passed and failed')),
+    dailyColumns(o.daily))
 }
 
 function suiteSection(o) {
@@ -389,34 +411,61 @@ function opsTabs() {
   return h('div', { class: 'ops' }, strip, ...tabs.map(t => h('div', { role: 'tabpanel', id: `tabpanel-${t.id}`, 'data-tab': t.id, 'aria-labelledby': `tab-${t.id}`, hidden: t.id !== activeOpsTab, class: 'tab-panel' }, t.content)))
 }
 
-async function renderDashboard(seq) {
-  app.dataset.page = 'dashboard'
+function homeHeader(o, days) {
+  const scope = o.env ?? 'all'
+  return h('section', { class: 'page-head' },
+    h('div', {}, h('p', { class: 'eyebrow' }, 'QA dashboard'), h('h1', {}, `${o.project} overview`),
+      h('p', { class: 'hint' }, `${o.envs.length ? o.envs.join(', ') : 'No environments'} · last ${days} days`)),
+    h('form', { class: 'filters', onsubmit: e => e.preventDefault() },
+      h('label', {}, 'Environment', h('select', { name: 'env', onchange: e => go('/', { project: o.project, env: e.target.value, days }) },
+        h('option', { value: 'all', selected: scope === 'all' }, 'All environments'),
+        o.envs.map(name => h('option', { value: name, selected: scope === name }, name)))),
+      h('label', {}, 'Window', h('select', { name: 'days', onchange: e => go('/', { project: o.project, env: scope, days: e.target.value }) },
+        DAY_OPTIONS.map(d => h('option', { value: d, selected: d === days }, `Last ${d} days`))))))
+}
+
+// Repaints the statistics only. The run form and live output are left alone.
+function paintHome(o) {
+  document.getElementById('kpi-slot')?.replaceChildren(kpiRow(o))
+  document.getElementById('project-slot')?.replaceChildren(projectCard(o))
+  document.getElementById('home-body')?.replaceChildren(
+    h('div', { class: 'grid2' }, passRatePanel(o), volumePanel(o)),
+    h('div', { class: 'grid2' }, suiteSection(o), failingSection(o)),
+    otherProjectsPanel(o) ?? '')
+}
+
+async function refreshHomeStats() {
+  if (!onPage('/') || !document.getElementById('kpi-slot')) return
+  const project = currentProjectId()
+  if (!project) return
+  const { days, env } = homeParams()
+  const hashAtStart = location.hash
+  let o
+  try { o = await overviewFor(project, days, env) } catch { return }
+  // Drop the answer if the user navigated while it was in flight.
+  if (location.hash !== hashAtStart || !onPage('/')) return
+  paintHome(o)
+}
+
+async function renderHome(seq) {
+  app.dataset.page = 'home'
   stopPolling()
   const project = currentProjectId()
   if (!project) return app.replaceChildren(emptyState('No projects yet', 'Add a "project" to an environment in pipeline/config/environments.json.'))
-  const params = route().params
-  const days = DAY_OPTIONS.includes(Number(params.get('days'))) ? Number(params.get('days')) : 30
-  const env = params.get('env') || null
-  let o
-  try {
-    o = await api(`/api/overview?${new URLSearchParams({ project, days: String(days), ...(env ? { env } : {}) })}`)
-  } catch (error) {
-    // Keep the last good render on screen when a refresh fails; only show the error when there is nothing else.
-    if (seq === renderSeq && !app.firstElementChild) app.replaceChildren(h('section', { class: 'panel' }, `Dashboard unavailable: ${error.message}`))
-    return
-  }
+  const { days, env } = homeParams()
+  let o = null
+  let failure = null
+  try { o = await overviewFor(project, days, env) } catch (error) { failure = error }
   if (seq !== renderSeq) return
-  const scope = o.env ?? 'all'
-  const header = h('section', { class: 'page-head' },
-    h('div', {}, h('h1', {}, `${o.project} dashboard`),
-      h('p', { class: 'hint' }, `${o.envs.length ? o.envs.join(', ') : 'No environments'} · last ${o.days} days`)),
-    h('form', { class: 'filters', onsubmit: e => e.preventDefault() },
-      h('label', {}, 'Environment', h('select', { name: 'env', onchange: e => go('/dashboard', { project: o.project, env: e.target.value, days }) },
-        h('option', { value: 'all', selected: scope === 'all' }, 'All environments'),
-        o.envs.map(name => h('option', { value: name, selected: scope === name }, name)))),
-      h('label', {}, 'Window', h('select', { name: 'days', onchange: e => go('/dashboard', { project: o.project, env: scope, days: e.target.value }) },
-        DAY_OPTIONS.map(d => h('option', { value: d, selected: d === days }, `Last ${d} days`))))))
-  app.replaceChildren(header, kpiRow(o), trendSection(o), suiteSection(o), failingSection(o), opsTabs())
+  app.replaceChildren(
+    o ? homeHeader(o, days) : h('section', { class: 'page-head' }, h('div', {}, h('p', { class: 'eyebrow' }, 'QA dashboard'), h('h1', {}, `${project} overview`))),
+    h('div', { id: 'kpi-slot' }),
+    h('div', { class: 'equal-row' }, h('div', { id: 'project-slot', class: 'slot' }), runForm()),
+    liveLog() ?? '',
+    h('div', { id: 'home-body', class: 'home-body' }),
+    opsTabs() ?? '')
+  if (o) paintHome(o)
+  else document.getElementById('home-body').replaceChildren(h('section', { class: 'panel' }, `Dashboard unavailable: ${failure.message}`))
 }
 
 // ---- Reports: every run for one project, newest first. Each row drills into the run.
@@ -833,15 +882,14 @@ async function render() {
   if (seq !== renderSeq) return
   renderNav()
   if (m) return renderRun(m[1], m[2])
-  if (path === '/dashboard') return renderDashboard(seq)
   if (path === '/reports') return renderReports(seq)
-  return renderLanding()
+  return renderHome(seq)
 }
 
 window.addEventListener('hashchange', () => render())
 setInterval(() => refresh().catch(() => {}), 10_000)
-// The dashboard recomputes once a minute; the render keeps the previous content until the new numbers arrive.
-setInterval(() => { if (onPage('/dashboard') && !document.hidden) render() }, 60_000)
+// The statistics recompute once a minute; only the stats are repainted, never the run form.
+setInterval(() => { if (!document.hidden) refreshHomeStats() }, 60_000)
 async function connectDashboard() {
   if (location.hash.startsWith('#access=')) {
     const access = location.hash.slice('#access='.length)

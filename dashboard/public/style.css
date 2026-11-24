@@ -1,27 +1,34 @@
+/* Visual language follows the MPC app: near-black navy surfaces, copper primary actions, Inter type.
+   Light mode keeps the same roles with lighter surfaces. Series colours come from the validated dataviz palette
+   (blue = passed, red = failed: a colour-blind-safe pair), and status colours always ship with a text label. */
 :root {
-  --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #5d6673; --line: #e2e5ea;
-  --accent: #2f5bd3; --pass: #1f8a4c; --fail: #c62f2f; --warn: #b26a00; --info: #4d5b70;
+  --bg: #f4f5f7; --panel: #ffffff; --panel-2: #f8f9fb; --ink: #0b1017; --muted: #5b636e; --line: #e3e6eb; --line-strong: #cfd4db;
+  --accent: #b8602c; --accent-ink: #ffffff; --pass: #1f7a4a; --fail: #b42323; --warn: #8a5a00; --info: #4d5b70;
   --pass-bg: #e6f4ec; --fail-bg: #fbe9e9; --warn-bg: #fdf1dc; --info-bg: #eceff4;
+  --series-passed: #2a78d6; --series-failed: #e34948; --chart-line: #2a78d6;
+  --font-display: "Space Grotesk", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f1216; --panel: #171b21; --ink: #e7eaee; --muted: #9aa3ae; --line: #272d36;
-    --accent: #7c9cff; --pass: #4cc38a; --fail: #ff6b6b; --warn: #f0b04a; --info: #a5b1c2;
-    --pass-bg: #12291d; --fail-bg: #2f1517; --warn-bg: #2d2311; --info-bg: #1d232c;
+    --bg: #04070f; --panel: #0b1017; --panel-2: #0f141d; --ink: #eff2f5; --muted: #899098; --line: rgba(255, 255, 255, .08); --line-strong: rgba(255, 255, 255, .16);
+    --accent: #de8f57; --accent-ink: #04070f; --pass: #50986b; --fail: #d8625c; --warn: #eabc6e; --info: #b8c0ca;
+    --pass-bg: rgba(80, 152, 107, .16); --fail-bg: rgba(197, 54, 55, .18); --warn-bg: rgba(234, 188, 110, .14); --info-bg: rgba(255, 255, 255, .06);
+    --series-passed: #3987e5; --series-failed: #e66767; --chart-line: #3987e5;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0f1216; --panel: #171b21; --ink: #e7eaee; --muted: #9aa3ae; --line: #272d36;
-  --accent: #7c9cff; --pass: #4cc38a; --fail: #ff6b6b; --warn: #f0b04a; --info: #a5b1c2;
-  --pass-bg: #12291d; --fail-bg: #2f1517; --warn-bg: #2d2311; --info-bg: #1d232c;
+  --bg: #04070f; --panel: #0b1017; --panel-2: #0f141d; --ink: #eff2f5; --muted: #899098; --line: rgba(255, 255, 255, .08); --line-strong: rgba(255, 255, 255, .16);
+  --accent: #de8f57; --accent-ink: #04070f; --pass: #50986b; --fail: #d8625c; --warn: #eabc6e; --info: #b8c0ca;
+  --pass-bg: rgba(80, 152, 107, .16); --fail-bg: rgba(197, 54, 55, .18); --warn-bg: rgba(234, 188, 110, .14); --info-bg: rgba(255, 255, 255, .06);
+  --series-passed: #3987e5; --series-failed: #e66767; --chart-line: #3987e5;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 /* Brand backdrop: the topographic artwork under a dark wash so panels and text stay readable in both themes. */
-body { margin: 0; background: linear-gradient(rgba(8, 6, 5, .8), rgba(8, 6, 5, .92)), url("/assets/bg-topo.jpg") center / cover no-repeat fixed, var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
+body { margin: 0; background: linear-gradient(rgba(4, 7, 15, .82), rgba(4, 7, 15, .94)), url("/assets/bg-topo.jpg") center / cover no-repeat fixed, var(--bg); color: var(--ink); font: 14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; -webkit-font-smoothing: antialiased; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .top { position: sticky; top: 0; z-index: 2; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -30,7 +37,7 @@ a:hover { text-decoration: underline; }
 .brand-mark { width: auto; height: 32px; border-radius: 6px; display: block; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
 .panel h2 { margin: 0 0 12px; font-size: 15px; }
 .panel h3 { margin: 16px 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .grid2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -49,10 +56,14 @@ form.run { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, min
 form.run > * { min-width: 0; }
 form.run select { width: 100%; min-width: 0; }
 label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
-select, button { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+select, button { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--ink); }
+/* Action buttons are square-cornered, as on the MPC app. Pills (chips) keep their rounding. */
+button, .btn { border-radius: 0; transition: filter .2s cubic-bezier(.25, 1, .5, 1), transform .15s cubic-bezier(.25, 1, .5, 1); }
+button:not(:disabled):hover, .btn:hover { filter: brightness(1.06); }
+button:not(:disabled):active, .btn:active { filter: brightness(.93); transform: translateY(1px); }
 label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); }
 button { cursor: pointer; font-weight: 600; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 button.danger { color: var(--fail); border-color: var(--fail-bg); background: var(--fail-bg); padding: 4px 10px; font-size: 12px; }
 button.danger:hover { border-color: var(--fail); }
@@ -99,9 +110,6 @@ pre.log { margin: 0; max-height: 360px; overflow: auto; background: var(--bg); b
 .callout { margin: 10px 0 0; padding: 8px 10px; border-radius: 6px; font-size: 12px; background: var(--fail-bg); color: var(--fail); overflow-wrap: anywhere; }
 
 /* Trend chart. The line colour is a validated series colour (dataviz palette check), separate from --accent. */
-:root { --chart-line: #2f5bd3; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --chart-line: #6a8be6; } }
-:root[data-theme="dark"] { --chart-line: #6a8be6; }
 .chart { margin: 0 0 8px; }
 .chart-scroll { overflow-x: auto; }
 .chart svg { display: block; width: 100%; min-width: 520px; height: auto; }
@@ -158,30 +166,52 @@ pre.log { margin: 0; max-height: 360px; overflow: auto; background: var(--bg); b
 
 /* ---- Mini landing: one card per project. */
 .project-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-.project-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
-.project-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 16px; }
 .project-card p { margin: 0; }
-.actions .btn, .btn { display: inline-flex; align-items: center; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-weight: 600; font-size: 13px; text-decoration: none; }
+.actions .btn, .btn { display: inline-flex; align-items: center; padding: 7px 12px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--ink); font-weight: 600; font-size: 13px; text-decoration: none; }
 .btn:hover { text-decoration: none; border-color: var(--accent); }
-.btn.primary-link { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary-link { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .more { margin-top: 12px; }
 
-/* ---- KPI tiles on the dashboard. */
+/* ---- Home dashboard: the project card and the run launcher share one row, at equal height. */
+.equal-row { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.equal-row > .panel, .equal-row > .slot { min-width: 0; display: flex; flex-direction: column; }
+@media (max-width: 860px) { .equal-row { grid-template-columns: minmax(0, 1fr); } }
+.slot { display: flex; }
+.slot > .project-card { flex: 1; }
+.home-body { display: grid; gap: 16px; min-width: 0; }
+.eyebrow { margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.page-head .eyebrow { color: #c9ced6; }
+.project-card { background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--accent); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.project-card h2 { margin: 0; font-family: var(--font-display); font-size: 26px; line-height: 1.1; letter-spacing: -.01em; }
+.project-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.project-card .actions { margin-top: auto; padding-top: 4px; }
+.mini-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.mini-stats dt { color: var(--muted); font-size: 12px; }
+.mini-stats dd { margin: 4px 0 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.mini-stats dd .badge { font-family: inherit; font-size: 12px; }
+.project-list { display: grid; gap: 8px; }
+.project-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 10px 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); }
+.project-row:hover { border-color: var(--accent); text-decoration: none; }
+
+/* ---- KPI tiles on the dashboard. A coloured top rule marks pass and fail, matching their chart series. */
 .kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
-.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--line-strong); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.kpi-pass { border-top-color: var(--series-passed); }
+.kpi-fail { border-top-color: var(--series-failed); }
 .kpi-label { margin: 0; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-.kpi-value { margin: 6px 0 2px; font-size: 28px; font-weight: 700; line-height: 1.15; font-variant-numeric: normal; }
+.kpi-value { margin: 6px 0 2px; font-family: var(--font-display); font-size: 30px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .kpi .badge { font-size: 13px; }
 .kpi .hint { margin: 2px 0 0; }
 
 /* ---- Charts: stacked columns and the legend beneath them. */
-.bar-passed { fill: var(--pass); stroke: var(--panel); stroke-width: 1; }
-.bar-failed { fill: var(--fail); stroke: var(--panel); stroke-width: 1; }
+/* Stroke in the panel colour leaves a 2px surface gap between stacked segments. */
+.bar-passed { fill: var(--series-passed); stroke: var(--panel); stroke-width: 2; }
+.bar-failed { fill: var(--series-failed); stroke: var(--panel); stroke-width: 2; }
 .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 4px 0 0; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
-.swatch-passed { background: var(--pass); }
-.swatch-failed { background: var(--fail); }
+.swatch-passed { background: var(--series-passed); }
+.swatch-failed { background: var(--series-failed); }
 .table-view { margin-top: 10px; }
 .table-view summary { cursor: pointer; }
 

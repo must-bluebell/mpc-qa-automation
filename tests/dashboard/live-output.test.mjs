@@ -94,7 +94,7 @@ test('dashboard lists the latest result per suite, and run details keep system h
     health:{ok:false,stack:{healthy:false,unhealthyServices:['web'],missingServices:[],services:[{service:'web',state:'exited'}]}}}
   const categoryResults=['regression','api','load'].map(suite=>({suite,runId:'ui-completion-regression',env:'local-docker',status:'failed',finishedAt:'2026-10-23T07:00:00Z',counts:{passed:2,failed:1,skipped:0,blocked:0}}))
   const {page}=await dashboard(t,{scheduled:true,runDetail:detail,categoryResults})
-  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Dashboard',exact:true}).click()
+  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Home',exact:true}).click()
   await expect(page.locator('#suites tbody tr')).toHaveCount(3)
   await expect(page.locator('#suites tbody tr')).toContainText(['regression','api','load'])
   await openRoute(page,'#/runs/ui-completion-regression')
@@ -107,7 +107,7 @@ test('dashboard lists the latest result per suite, and run details keep system h
 
 test('a run without recorded health never borrows current stack health',async t=>{
   const {page,runId}=await dashboard(t,{scheduled:true})
-  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Dashboard',exact:true}).click()
+  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Home',exact:true}).click()
   await expect(page.locator('#system-health')).toContainText('healthy')
   await openRoute(page,`#/runs/${runId}`)
   await expect(page.locator('#system-health')).toContainText('not recorded')
@@ -116,7 +116,7 @@ test('a run without recorded health never borrows current stack health',async t=
 
 test('empty category summaries do not fall back to executions without recorded checks',async t=>{
   const {page}=await dashboard(t,{scheduled:true,categoryResults:[]})
-  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Dashboard',exact:true}).click()
+  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Home',exact:true}).click()
   await expect(page.locator('#suites')).toContainText('No suite results yet')
 })
 
@@ -309,4 +309,19 @@ test('run details expose evidence from both attempts beyond the old four-link li
   await page.locator(`a[href="#/runs/${runId}"]`).first().click()
   await expect(page.locator('#test-results a')).toHaveCount(6)
   await expect(page.getByRole('link', { name: 'evidence 6', exact: true })).toHaveAttribute('href', /attempt-2/)
+})
+
+test('home is the dashboard: the project card and run form share one row at equal size, and there is no separate Dashboard tab', async t => {
+  const { page } = await dashboard(t)
+  const card = page.locator('.project-card')
+  const form = page.locator('#run-form')
+  await expect(card).toBeVisible()
+  await expect(form).toBeVisible()
+  const [cardBox, formBox] = await Promise.all([card.boundingBox(), form.boundingBox()])
+  assert.ok(Math.abs(cardBox.height - formBox.height) < 1, `card ${cardBox.height}px vs run form ${formBox.height}px`)
+  assert.ok(Math.abs(cardBox.width - formBox.width) < 1, `card ${cardBox.width}px vs run form ${formBox.width}px`)
+  assert.ok(Math.abs(cardBox.y - formBox.y) < 1, 'both panels start on the same row')
+  await expect(page.locator('.kpi')).toHaveCount(5)
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Reports', exact: true })).toBeVisible()
 })
