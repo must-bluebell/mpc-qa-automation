@@ -3,9 +3,12 @@
 const TOKEN = document.querySelector('meta[name="qa-token"]').content
 const app = document.getElementById('app')
 const chips = document.getElementById('chips')
-let state = { status: null, stack: null, runs: [], watching: null, notify: true, productionApiWrites: false }
+const nav = document.getElementById('nav')
+let state = { status: null, stack: null, projects: [], watching: null, notify: true, productionApiWrites: false }
 let pollTimer = null
 let stopPolling = () => {}
+let renderSeq = 0 // Each navigation gets a number; slower responses for an earlier page are dropped.
+let reportLimit = 50
 
 function h(tag, props = {}, ...children) {
   const el = document.createElement(tag)
@@ -31,47 +34,45 @@ async function api(path, options = {}) {
 const post = (path, body = {}) => api(path, { method: 'POST', body: JSON.stringify(body) })
 
 const STATUS_CLASS = { passed: 'ok', failed: 'bad', 'infra-failed': 'warn', timeout: 'warn', blocked: 'warn', crashed: 'bad', running: '' }
+const HEALTH_CLASS = { healthy: 'ok', 'at-risk': 'warn', failing: 'bad', 'no-data': '' }
 const badge = s => h('span', { class: `badge ${STATUS_CLASS[s] ?? ''}` }, s)
 const secs = ms => (ms == null ? '—' : ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`)
 const when = iso => (iso ? `${new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Seoul', hourCycle: 'h23' })} KST` : '—')
+const shortDate = iso => (iso ? new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Seoul', day: '2-digit', month: 'short' }) : '—')
+const pct = v => (v == null ? '—' : `${Math.round(v * 100)}%`)
+const plain = text => String(text ?? '').replace(/\u001b\[[0-9;]*m/g, '')
 const fileUrl = (runId, rel) => `/api/runs/${encodeURIComponent(runId)}/files/${rel.split('/').map(encodeURIComponent).join('/')}`
 const REPORT_CATEGORIES = [{ suite: 'regression', label: 'Regression testing' }, { suite: 'api', label: 'API testing' }, { suite: 'load', label: 'Load testing' }]
+const DAY_OPTIONS = [7, 30, 90, 365]
 
-// Load runs only on the local Docker stack, so hosted deployments do not show a load panel.
-const reportCategories = () => REPORT_CATEGORIES.filter(c => !(state.status?.hosted && c.suite === 'load'))
-
-function systemHealth(health, recorded = false) {
-  if (!recorded && state.status?.hosted === true) {
-    return h('section', { class: 'panel', id: 'system-health' }, h('h2', {}, 'Target environment'),
-      h('p', {}, `Runs target ${state.status.defaultEnv} on this hosted deployment. Local Docker is not available here.`))
-  }
-  if (!recorded) health = state.stack
-  const stack = recorded ? health?.stack : health
-  const healthy = recorded ? health?.ok === true && stack?.healthy !== false : stack?.healthy
-  return h('section', { class: 'panel', id: 'system-health' }, h('h2', {}, 'System health'),
-    h('p', {}, recorded ? 'Health recorded with this run: ' : 'Current local stack: ',
-      badge(health ? healthy ? 'healthy' : 'unhealthy' : 'not recorded')),
-    stack?.project ? h('p', {}, `Stack: ${stack.project}`) : '',
-    stack?.services?.length ? h('ul', {}, stack.services.map(s => h('li', {}, `${s.service}: ${s.state}${s.health ? ` · ${s.health}` : ''}`))) : '',
-    stack?.missingServices?.length ? h('p', {}, `Missing services: ${stack.missingServices.join(', ')}`) : '',
-    recorded ? h('p', { class: 'hint' }, 'Recorded infrastructure health; assertion results are shown above.') :
-      h('p', { class: 'hint' }, 'Current infrastructure health; the results above are recorded executions.'))
+// ---- Routing. Pages are hash routes; the project and filters travel in the query string.
+function route() {
+  const [path = '', query = ''] = location.hash.replace(/^#/, '').split('?')
+  return { path: path || '/', params: new URLSearchParams(query) }
 }
-
-function categoryPanel(suite) {
-  const { label } = REPORT_CATEGORIES.find(c => c.suite === suite)
-  const run = Array.isArray(state.status.categoryResults) ? state.status.categoryResults.find(r => r.suite === suite) : state.runs.filter(r => r.suite === suite && r.env === (state.status.defaultEnv ?? 'local-docker') && r.finishedAt && !r.seededDefect && !r.reportOnly && r.status !== 'skipped-overlap')
-    .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))[0]
-  const c = run?.counts
-  return h('section', { class: 'panel', id: `results-${suite}` }, h('h2', {}, label),
-    run ? h('div', {}, badge(run.status), h('p', {}, `${c?.passed ?? 0} passed · ${c?.failed ?? 0} failed · ${c?.skipped ?? 0} skipped · ${c?.blocked ?? 0} blocked`),
-      h('p', { class: 'hint' }, `Recorded execution · ${when(run.finishedAt)}`),
-      run.errors?.length ? h('p', { class: 'hint' }, run.errors.join(' ')) : '',
-      h('a', { href: `#/runs/${run.runId}` }, 'View cases and evidence')) : emptyState(`No completed ${state.status.hosted ? state.status.defaultEnv : 'local'} run recorded.`, 'Start a run from the form above, or wait for the next scheduled check.'))
+const onPage = name => route().path === name
+function currentProjectId() {
+  const want = route().params.get('project')
+  return state.projects.find(p => p.id === want)?.id ?? state.projects[0]?.id ?? null
 }
+function go(path, params = {}) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+  location.hash = `${path}${[...query].length ? `?${query}` : ''}`
+}
+const projectQuery = project => (project ? `?project=${encodeURIComponent(project)}` : '')
 
-/** Result cards for the named suites, skipping any category this deployment does not run (load on hosted). */
-const categoryPanels = suites => reportCategories().filter(c => suites.includes(c.suite)).map(c => categoryPanel(c.suite))
+const PAGES = [{ path: '/', label: 'Home' }, { path: '/dashboard', label: 'Dashboard' }, { path: '/reports', label: 'Reports' }]
+function renderNav() {
+  const { path } = route()
+  const project = currentProjectId()
+  const current = path.startsWith('/runs/') ? '/reports' : path
+  const switcher = state.projects.length
+    ? h('label', { class: 'project-switch' }, h('span', {}, 'Project'),
+      h('select', { id: 'project-select', onchange: e => go(current === '/' ? '/dashboard' : current, { project: e.target.value }) },
+        state.projects.map(p => h('option', { value: p.id, selected: p.id === project }, p.id))))
+    : null
+  nav.replaceChildren(...PAGES.map(p => h('a', { href: `#${p.path}${projectQuery(project)}`, class: 'navlink', 'aria-current': current === p.path ? 'page' : null }, p.label)), switcher)
+}
 
 function renderChips() {
   const s = state.status
@@ -91,25 +92,23 @@ function renderChips() {
 }
 
 async function refresh() {
-  const [status, runs] = await Promise.all([api('/api/status'), api('/api/runs')])
+  const [status, projects] = await Promise.all([api('/api/status'), api('/api/projects')])
   state.status = status
-  state.runs = runs
+  state.projects = projects
   renderChips()
+  renderNav()
   if (status.stackAvailable !== false) api('/api/stack').then(stack => {
     state.stack = stack
     renderChips()
-    if (location.hash === '' || location.hash === '#/') document.getElementById('system-health')?.replaceWith(systemHealth())
+    if (onPage('/dashboard')) document.getElementById('system-health')?.replaceWith(systemHealth())
   }).catch(() => {})
-  if (location.hash === '' || location.hash === '#/') {
-    for (const { suite } of reportCategories()) document.getElementById(`results-${suite}`)?.replaceWith(categoryPanel(suite))
-  }
 }
 
 function runForm() {
   const s = state.status
   // Viewers see results only; the server refuses their writes, so this is guidance rather than a control.
   if (s.role === 'viewer') {
-    return h('section', { class: 'panel' }, h('h2', {}, 'Run tests'),
+    return h('section', { class: 'panel', id: 'run-form' }, h('h2', {}, 'Run tests'),
       h('p', { class: 'hint' }, `Signed in as ${s.viewerEmail}. You can read results. Starting runs, sending alerts and creating tickets needs an administrator.`))
   }
   const msg = h('div', { class: 'msg', role: 'status' })
@@ -146,7 +145,7 @@ function runForm() {
     } catch (error) { msg.className = 'msg badge bad'; msg.textContent = error.message }
   }
   const running = !!s.running
-  return h('section', { class: 'panel' },
+  return h('section', { class: 'panel', id: 'run-form' },
     h('h2', {}, 'Run tests'),
       h('form', { class: 'run', onsubmit: e => { e.preventDefault(); start({ suite: suite.value, env: env.value, seedDefect: defect.value || null, ai: ai.checked, notify: notify.checked, productionApiWrites: env.value === 'production' && productionWrites.checked }) } },
       h('label', {}, 'Suite', suite), h('label', {}, 'Environment', env), h('label', {}, 'Seeded defect', defect),
@@ -201,12 +200,9 @@ function liveLog() {
         if (cancelled) return
         clearInterval(pollTimer)
         pollTimer = null
-        // Keep the completed output mounted. Rebuilding home here starts another poller for
+        // Keep the completed output mounted. Re-rendering the home page here starts another poller for
         // state.watching, creating an endless completion/render loop and resetting scroll.
-        if (location.hash === '' || location.hash === '#/') {
-          app.firstElementChild.replaceWith(runForm())
-          document.getElementById('run-history')?.replaceWith(runsTable())
-        }
+        if (onPage('/')) document.getElementById('run-form')?.replaceWith(runForm())
       }
     } catch (error) {
       if (cancelled || receivedLog) return
@@ -229,8 +225,7 @@ function liveLog() {
             state.watching = null
             pre.textContent = 'This run is no longer available on the server. Start a new run to collect fresh results.'
             head.replaceChildren(document.createTextNode(id))
-            app.firstElementChild.replaceWith(runForm())
-            document.getElementById('run-history')?.replaceWith(runsTable())
+            if (onPage('/')) document.getElementById('run-form')?.replaceWith(runForm())
           }
         } catch { /* Keep retrying until server status can be confirmed. */ }
       }
@@ -242,18 +237,242 @@ function liveLog() {
   return h('section', { class: 'panel' }, h('h2', {}, 'Live output'), head, connection, pre)
 }
 
-function runsTable() {
-  if (!state.runs.length) return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), emptyState('No runs yet', 'Runs started from this dashboard or by a schedule will be listed here.'))
+// ---- Mini landing page: project cards and the run launcher. Statistics live on the dashboard.
+function projectCard(p) {
+  const id = encodeURIComponent(p.id)
+  const latest = p.latest
+  return h('article', { class: 'project-card' },
+    h('div', { class: 'project-head' }, h('strong', {}, p.id), latest ? badge(latest.status) : h('span', { class: 'badge' }, 'No runs yet')),
+    h('p', { class: 'hint' }, `${p.envs.length ? p.envs.join(', ') : 'No environment'} · ${p.runs} run${p.runs === 1 ? '' : 's'}`),
+    h('p', { class: 'hint' }, latest ? `Last finished ${when(latest.finishedAt)} · ${latest.suite}` : 'Runs appear here after their first completed execution.'),
+    h('div', { class: 'actions' },
+      h('a', { class: 'btn primary-link', href: `#/dashboard?project=${id}` }, 'Dashboard'),
+      h('a', { class: 'btn', href: `#/reports?project=${id}` }, 'Reports')))
+}
+
+function renderLanding() {
+  app.dataset.page = 'home'
+  const cards = state.projects.length ? state.projects.map(projectCard)
+    : [emptyState('No projects yet', 'Add a "project" to an environment in pipeline/config/environments.json.')]
+  app.replaceChildren(
+    h('section', { class: 'hero' }, h('h1', {}, 'QA overview'),
+      h('p', { class: 'hint' }, 'Open a project for its dashboard and reports. Start a run below when you need one.')),
+    h('section', { class: 'project-grid', 'aria-label': 'Projects' }, cards),
+    runForm(),
+    liveLog() ?? '')
+}
+
+// ---- Dashboard: statistics for one project, in a single environment or across all of them.
+function tile(label, value, detail) {
+  return h('article', { class: 'kpi' }, h('p', { class: 'kpi-label' }, label), h('div', { class: 'kpi-value' }, value), detail ? h('p', { class: 'hint' }, detail) : null)
+}
+
+function kpiRow(o) {
+  const k = o.kpis, hl = o.health
+  return h('section', { class: 'kpis', 'aria-label': 'Key figures' },
+    tile('Pass rate', pct(k.passRate), `${k.passed} passed · ${k.failed} failed executed cases`),
+    tile('Failure rate', pct(k.failureRate), `${k.flaky} case${k.flaky === 1 ? '' : 's'} passed only on retry`),
+    tile('Runs', String(k.runs), `${k.passedRuns} finished as passed`),
+    tile('Latest run', o.latest ? badge(o.latest.status) : '—', o.latest ? `${o.latest.suite} · ${when(o.latest.finishedAt)}` : 'No completed run'),
+    tile('Health', h('span', { class: `badge ${HEALTH_CLASS[hl.state] ?? ''}` }, hl.label), hl.rule))
+}
+
+function passLine(daily) {
+  const pts = daily.filter(d => d.passRate != null)
+  if (!pts.length) return emptyState('No pass rate yet', 'Passed and failed cases in this window draw the line.')
+  const W = 640, H = 220, L = 44, R = 56, T = 12, B = 30
+  const pw = W - L - R, ph = H - T - B, n = pts.length
+  const x = i => (n === 1 ? L + pw / 2 : L + (i * pw) / (n - 1))
+  const y = v => T + (1 - v) * ph
+  const grid = [0, 0.5, 1].map(v => svg('g', {},
+    svg('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'chart-grid' }),
+    svg('text', { x: L - 8, y: y(v) + 4, class: 'chart-axis', 'text-anchor': 'end' }, pct(v))))
+  const line = svg('polyline', { points: pts.map((p, i) => `${x(i)},${y(p.passRate)}`).join(' '), class: 'chart-line', fill: 'none' })
+  const dots = pts.map((p, i) => svg('g', {},
+    svg('circle', { cx: x(i), cy: y(p.passRate), r: 3.5, class: 'chart-dot' }),
+    svg('circle', { cx: x(i), cy: y(p.passRate), r: 11, class: 'chart-hit' },
+      svg('title', {}, `${shortDate(p.date)} · ${pct(p.passRate)} pass · ${p.passed} passed, ${p.failed} failed`))))
+  const last = pts.at(-1)
+  const endLabel = svg('text', { x: x(n - 1) + 8, y: y(last.passRate) + 4, class: 'chart-end' }, pct(last.passRate))
+  const dates = [svg('text', { x: x(0), y: H - 8, class: 'chart-axis', 'text-anchor': n === 1 ? 'middle' : 'start' }, shortDate(pts[0].date))]
+  if (n > 1) dates.push(svg('text', { x: x(n - 1), y: H - 8, class: 'chart-axis', 'text-anchor': 'end' }, shortDate(last.date)))
+  const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Daily pass rate over ${n} days; latest ${pct(last.passRate)}` }, ...grid, line, ...dots, endLabel, ...dates)
+  return h('figure', { class: 'chart' }, h('div', { class: 'chart-scroll' }, root),
+    h('figcaption', { class: 'hint' }, 'Pass rate per day = passed ÷ (passed + failed). Hover a point for its day. The table view below has every value.'))
+}
+
+// Stacked columns: passed under failed, one column per day. The legend names both series.
+function dailyColumns(daily) {
+  if (!daily.length) return emptyState('No executed cases yet', 'Columns appear after the first completed run in this window.')
+  const W = 640, H = 200, L = 44, R = 12, T = 12, B = 30
+  const pw = W - L - R, ph = H - T - B, n = daily.length
+  const max = Math.max(1, ...daily.map(d => d.passed + d.failed))
+  const step = pw / n, bw = Math.max(6, Math.min(36, step * 0.6))
+  const base = T + ph
+  const y = v => base - (v / max) * ph
+  const grid = [0, max / 2, max].map(v => svg('g', {},
+    svg('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'chart-grid' }),
+    svg('text', { x: L - 8, y: y(v) + 4, class: 'chart-axis', 'text-anchor': 'end' }, Math.round(v))))
+  const columns = daily.map((d, i) => {
+    const cx = L + step * (i + 0.5)
+    const passedH = (d.passed / max) * ph, failedH = (d.failed / max) * ph
+    return svg('g', {},
+      svg('rect', { x: cx - bw / 2, y: base - passedH, width: bw, height: passedH, rx: 2, class: 'bar-passed' }),
+      failedH ? svg('rect', { x: cx - bw / 2, y: base - passedH - failedH, width: bw, height: failedH, rx: 2, class: 'bar-failed' }) : null,
+      svg('title', {}, `${shortDate(d.date)} · ${d.passed} passed, ${d.failed} failed`))
+  })
+  const dates = [svg('text', { x: L, y: H - 8, class: 'chart-axis', 'text-anchor': 'start' }, shortDate(daily[0].date))]
+  if (n > 1) dates.push(svg('text', { x: W - R, y: H - 8, class: 'chart-axis', 'text-anchor': 'end' }, shortDate(daily.at(-1).date)))
+  const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Passed and failed cases per day over ${n} days` }, ...grid, ...columns, ...dates)
+  return h('figure', { class: 'chart' }, h('div', { class: 'chart-scroll' }, root),
+    h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'swatch swatch-passed' }), 'Passed'), h('span', {}, h('i', { class: 'swatch swatch-failed' }), 'Failed')),
+    h('figcaption', { class: 'hint' }, 'Executed cases per day. Table view below.'))
+}
+
+function dayTable(daily) {
+  if (!daily.length) return null
+  return h('details', { class: 'hint table-view' }, h('summary', {}, 'Table view · daily values'),
+    h('div', { class: 'tablewrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, ['Day (KST)', 'Runs', 'Passed', 'Failed', 'Flaky', 'Pass rate'].map(t => h('th', { class: t === 'Day (KST)' ? null : 'num' }, t)))),
+      h('tbody', {}, daily.map(d => h('tr', {},
+        h('td', {}, shortDate(d.date)), h('td', { class: 'num' }, d.runs), h('td', { class: 'num' }, d.passed),
+        h('td', { class: 'num' }, d.failed), h('td', { class: 'num' }, d.flaky), h('td', { class: 'num' }, pct(d.passRate))))))))
+}
+
+function trendSection(o) {
+  return h('section', { class: 'panel', id: 'trends' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Pass rate and volume'),
+      h('span', { class: 'hint' }, o.window.from ? `${shortDate(o.window.from)} to ${shortDate(o.window.to)} (Seoul time)` : 'No completed runs in this window')),
+    h('h3', {}, 'Pass rate per day'), passLine(o.daily),
+    h('h3', {}, 'Executed cases per day'), dailyColumns(o.daily),
+    dayTable(o.daily))
+}
+
+function suiteSection(o) {
+  return h('section', { class: 'panel', id: 'suites' }, h('h2', {}, 'Latest result by suite'),
+    o.suites.length ? h('div', { class: 'tablewrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, 'Suite'), h('th', {}, 'Latest'), h('th', { class: 'num' }, 'Passed'), h('th', { class: 'num' }, 'Failed'),
+        h('th', { class: 'num' }, 'Blocked'), h('th', {}, 'Finished'), h('th', {}, ''))),
+      h('tbody', {}, o.suites.map(s => h('tr', {},
+        h('td', {}, s.suite, s.env ? h('div', { class: 'hint' }, s.env) : ''), h('td', {}, badge(s.status)),
+        h('td', { class: 'num' }, s.counts.passed), h('td', { class: 'num' }, s.counts.failed), h('td', { class: 'num' }, s.counts.blocked),
+        h('td', {}, when(s.finishedAt)), h('td', {}, h('a', { href: `#/runs/${s.runId}` }, 'Open run'))))))) :
+      emptyState('No suite results yet', 'Each suite appears here after its first completed run.'))
+}
+
+function failingSection(o) {
+  return h('section', { class: 'panel', id: 'failing' }, h('h2', {}, 'Tests that fail most'),
+    o.topFailing.length ? failingTable(o.topFailing) : emptyState('No failures in this window', 'Failing tests are listed here with their latest failure.'))
+}
+
+// Lower part of the dashboard: operations detail and administration, behind tabs so the main view stays short.
+let activeOpsTab = 'operations'
+const OPS_TABS = [
+  { id: 'operations', label: 'Schedules & system health', panels: () => [schedulePanel(), systemHealth()] },
+  { id: 'administration', label: 'Administration', panels: () => [adminsPanel(), recentSignInsPanel()] },
+]
+function selectOpsTab(id) {
+  activeOpsTab = id
+  document.querySelectorAll('#ops-tabs [role="tab"]').forEach(tab => {
+    const selected = tab.dataset.tab === id
+    tab.setAttribute('aria-selected', String(selected))
+    tab.tabIndex = selected ? 0 : -1
+  })
+  document.querySelectorAll('[role="tabpanel"][data-tab]').forEach(panel => { panel.hidden = panel.dataset.tab !== id })
+}
+function opsTabs() {
+  const tabs = OPS_TABS.map(t => ({ ...t, content: t.panels().filter(Boolean) })).filter(t => t.content.length)
+  if (!tabs.length) return null
+  if (!tabs.some(t => t.id === activeOpsTab)) activeOpsTab = tabs[0].id
+  const strip = h('div', { id: 'ops-tabs', class: 'tabs', role: 'tablist', 'aria-label': 'More dashboard sections' },
+    tabs.map(t => h('button', { type: 'button', role: 'tab', class: 'tab', id: `tab-${t.id}`, 'data-tab': t.id, 'aria-controls': `tabpanel-${t.id}`,
+      'aria-selected': String(t.id === activeOpsTab), tabIndex: t.id === activeOpsTab ? 0 : -1, onclick: () => selectOpsTab(t.id) }, t.label)))
+  return h('div', { class: 'ops' }, strip, ...tabs.map(t => h('div', { role: 'tabpanel', id: `tabpanel-${t.id}`, 'data-tab': t.id, 'aria-labelledby': `tab-${t.id}`, hidden: t.id !== activeOpsTab, class: 'tab-panel' }, t.content)))
+}
+
+async function renderDashboard(seq) {
+  app.dataset.page = 'dashboard'
+  stopPolling()
+  const project = currentProjectId()
+  if (!project) return app.replaceChildren(emptyState('No projects yet', 'Add a "project" to an environment in pipeline/config/environments.json.'))
+  const params = route().params
+  const days = DAY_OPTIONS.includes(Number(params.get('days'))) ? Number(params.get('days')) : 30
+  const env = params.get('env') || null
+  let o
+  try {
+    o = await api(`/api/overview?${new URLSearchParams({ project, days: String(days), ...(env ? { env } : {}) })}`)
+  } catch (error) {
+    // Keep the last good render on screen when a refresh fails; only show the error when there is nothing else.
+    if (seq === renderSeq && !app.firstElementChild) app.replaceChildren(h('section', { class: 'panel' }, `Dashboard unavailable: ${error.message}`))
+    return
+  }
+  if (seq !== renderSeq) return
+  const scope = o.env ?? 'all'
+  const header = h('section', { class: 'page-head' },
+    h('div', {}, h('h1', {}, `${o.project} dashboard`),
+      h('p', { class: 'hint' }, `${o.envs.length ? o.envs.join(', ') : 'No environments'} · last ${o.days} days`)),
+    h('form', { class: 'filters', onsubmit: e => e.preventDefault() },
+      h('label', {}, 'Environment', h('select', { name: 'env', onchange: e => go('/dashboard', { project: o.project, env: e.target.value, days }) },
+        h('option', { value: 'all', selected: scope === 'all' }, 'All environments'),
+        o.envs.map(name => h('option', { value: name, selected: scope === name }, name)))),
+      h('label', {}, 'Window', h('select', { name: 'days', onchange: e => go('/dashboard', { project: o.project, env: scope, days: e.target.value }) },
+        DAY_OPTIONS.map(d => h('option', { value: d, selected: d === days }, `Last ${d} days`))))))
+  app.replaceChildren(header, kpiRow(o), trendSection(o), suiteSection(o), failingSection(o), opsTabs())
+}
+
+// ---- Reports: every run for one project, newest first. Each row drills into the run.
+function outcomeMatches(run, outcome) {
+  if (outcome === 'passed') return run.status === 'passed'
+  if (outcome === 'not-passed') return !['passed', 'running'].includes(run.status)
+  if (outcome === 'running') return run.status === 'running'
+  return true
+}
+
+async function renderReports(seq) {
+  app.dataset.page = 'reports'
+  stopPolling()
+  const project = currentProjectId()
+  if (!project) return app.replaceChildren(emptyState('No projects yet', 'Add a "project" to an environment in pipeline/config/environments.json.'))
+  const params = route().params
+  const env = params.get('env') || 'all'
+  const outcome = params.get('outcome') || 'all'
+  let runs
+  try {
+    runs = await api(`/api/runs?${new URLSearchParams({ project, ...(env !== 'all' ? { env } : {}) })}`)
+  } catch (error) {
+    if (seq === renderSeq) app.replaceChildren(h('section', { class: 'panel' }, `Reports unavailable: ${error.message}`))
+    return
+  }
+  if (seq !== renderSeq) return
+  const info = state.projects.find(p => p.id === project)
+  const filtered = runs.filter(r => outcomeMatches(r, outcome))
+  const shown = filtered.slice(0, reportLimit)
+  app.replaceChildren(
+    h('section', { class: 'page-head' },
+      h('div', {}, h('h1', {}, `${project} reports`), h('p', { class: 'hint' }, `${runs.length} run${runs.length === 1 ? '' : 's'} in this project · newest first`)),
+      h('form', { class: 'filters', onsubmit: e => e.preventDefault() },
+        h('label', {}, 'Environment', h('select', { name: 'env', onchange: e => { reportLimit = 50; go('/reports', { project, env: e.target.value, outcome }) } },
+          h('option', { value: 'all', selected: env === 'all' }, 'All environments'),
+          (info?.envs ?? []).map(name => h('option', { value: name, selected: env === name }, name)))),
+        h('label', {}, 'Outcome', h('select', { name: 'outcome', onchange: e => { reportLimit = 50; go('/reports', { project, env, outcome: e.target.value }) } },
+          [['all', 'All'], ['passed', 'Passed'], ['not-passed', 'Not passed'], ['running', 'Running']].map(([v, label]) => h('option', { value: v, selected: outcome === v }, label)))))),
+    h('section', { class: 'panel', id: 'run-history' },
+      h('div', { class: 'panel-head' }, h('h2', {}, 'Runs'), h('span', { class: 'hint' }, `Showing ${shown.length} of ${filtered.length}`)),
+      filtered.length ? runsTable(shown) : emptyState(runs.length ? 'No runs match these filters' : 'No runs yet', runs.length ? 'Change the environment or outcome filter.' : 'Runs started from this dashboard or by a schedule appear here.'),
+      filtered.length > shown.length ? h('button', { type: 'button', class: 'more', onclick: () => { reportLimit += 50; render() } }, 'Show 50 more') : null))
+}
+
+function runsTable(rows) {
   const admin = state.status?.role === 'admin'
   const headers = ['Started', 'Suite', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration', 'Slack', ...(admin ? [''] : [])]
-  return h('section', { class: 'panel', id: 'run-history' }, h('h2', {}, 'Run history'), h('div', { class: 'tablewrap' }, h('table', {},
+  return h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, headers.map(t => h('th', { class: ['Pass', 'Fail', 'Blocked', 'Duration'].includes(t) ? 'num' : null }, t)))),
-    h('tbody', {}, state.runs.map(r => h('tr', { class: 'click', onclick: () => { location.hash = `#/runs/${r.runId}` } },
-      h('td', {}, when(r.startedAt)), h('td', {}, r.suite, r.seededDefect ? ` · ${r.seededDefect}` : ''), h('td', {}, r.env), h('td', {}, badge(r.status)),
+    h('tbody', {}, rows.map(r => h('tr', { class: 'click', onclick: () => { location.hash = `#/runs/${r.runId}` } },
+      h('td', {}, when(r.startedAt)), h('td', {}, h('a', { href: `#/runs/${r.runId}`, onclick: e => e.stopPropagation() }, r.suite), r.seededDefect ? ` · ${r.seededDefect}` : ''),
+      h('td', {}, r.env), h('td', {}, badge(r.status)),
       h('td', { class: 'num' }, r.counts?.passed ?? 0), h('td', { class: 'num' }, r.counts?.failed ?? 0), h('td', { class: 'num' }, r.counts?.blocked ?? 0),
       h('td', { class: 'num' }, secs(r.durationMs)),
       h('td', {}, r.slack?.length ? r.slack.map(n => h('span', { class: `badge ${n.ok ? 'ok' : 'warn'}` }, `${n.kind}: ${n.ok ? 'sent' : n.code}`)) : '—'),
-      admin ? h('td', {}, deleteRunButton(r)) : null))))))
+      admin ? h('td', {}, deleteRunButton(r)) : null)))))
 }
 
 // Deletes one run only after the user confirms. Runs are never removed automatically.
@@ -264,8 +483,8 @@ function deleteRunButton(run) {
     button.disabled = true
     try {
       await api(`/api/runs/${encodeURIComponent(run.runId)}`, { method: 'DELETE', headers: { 'x-qa-token': TOKEN } })
-      state.runs = state.runs.filter(r => r.runId !== run.runId)
-      document.getElementById('run-history')?.replaceWith(runsTable())
+      await refresh()
+      render()
     } catch (error) {
       button.disabled = false
       alert(`Could not delete this run: ${error.message}`)
@@ -373,39 +592,25 @@ function schedulePanel() {
       : emptyState('No schedules configured', 'Add a schedule to pipeline/config/schedules.hosted.json.'))
 }
 
-// Sections behind the tab strip below the main screen. A tab with no visible content for this user is left out.
-const HOME_TABS = [
-  { id: 'history', label: 'History & health', panels: () => [trendsPanel(), ...categoryPanels(['load']), runsTable(), systemHealth()] },
-  { id: 'administration', label: 'Administration', panels: () => [adminsPanel(), recentSignInsPanel()] },
-]
-let activeHomeTab = 'history'
-
-function selectHomeTab(id) {
-  activeHomeTab = id
-  document.querySelectorAll('#home-tabs [role="tab"]').forEach(tab => {
-    const selected = tab.dataset.tab === id
-    tab.setAttribute('aria-selected', String(selected))
-    tab.tabIndex = selected ? 0 : -1
-  })
-  document.querySelectorAll('[role="tabpanel"][data-tab]').forEach(panel => { panel.hidden = panel.dataset.tab !== id })
+function systemHealth(health, recorded = false) {
+  if (!recorded && state.status?.hosted === true) {
+    return h('section', { class: 'panel', id: 'system-health' }, h('h2', {}, 'Target environment'),
+      h('p', {}, `Runs target ${state.status.defaultEnv} on this hosted deployment. Local Docker is not available here.`))
+  }
+  if (!recorded) health = state.stack
+  const stack = recorded ? health?.stack : health
+  const healthy = recorded ? health?.ok === true && stack?.healthy !== false : stack?.healthy
+  return h('section', { class: 'panel', id: 'system-health' }, h('h2', {}, 'System health'),
+    h('p', {}, recorded ? 'Health recorded with this run: ' : 'Current local stack: ',
+      badge(health ? healthy ? 'healthy' : 'unhealthy' : 'not recorded')),
+    stack?.project ? h('p', {}, `Stack: ${stack.project}`) : '',
+    stack?.services?.length ? h('ul', {}, stack.services.map(s => h('li', {}, `${s.service}: ${s.state}${s.health ? ` · ${s.health}` : ''}`))) : '',
+    stack?.missingServices?.length ? h('p', {}, `Missing services: ${stack.missingServices.join(', ')}`) : '',
+    recorded ? h('p', { class: 'hint' }, 'Recorded infrastructure health; assertion results are shown above.') :
+      h('p', { class: 'hint' }, 'Current infrastructure health; the results above are recorded executions.'))
 }
 
-function homeTabs() {
-  const tabs = HOME_TABS.map(t => ({ ...t, content: t.panels().filter(Boolean) }))
-  if (!tabs.some(t => t.id === activeHomeTab)) activeHomeTab = tabs[0].id
-  const strip = h('div', { id: 'home-tabs', class: 'tabs', role: 'tablist', 'aria-label': 'More dashboard sections' },
-    tabs.map(t => h('button', { type: 'button', role: 'tab', class: 'tab', id: `tab-${t.id}`, 'data-tab': t.id, 'aria-controls': `tabpanel-${t.id}`,
-      'aria-selected': String(t.id === activeHomeTab), tabIndex: t.id === activeHomeTab ? 0 : -1, onclick: () => selectHomeTab(t.id) }, t.label)))
-  return [strip, ...tabs.map(t => h('div', { role: 'tabpanel', id: `tabpanel-${t.id}`, 'data-tab': t.id, 'aria-labelledby': `tab-${t.id}`, hidden: t.id !== activeHomeTab, class: 'tab-panel' }, t.content))]
-}
-
-function renderHome() {
-  app.replaceChildren(runForm(), liveLog() ?? '', ...categoryPanels(['regression', 'api']), schedulePanel(), ...homeTabs())
-  loadTrends()
-}
-
-// Trend charts: inline SVG, no library. Values come from the server as data and are written with textContent or
-// setAttribute only. The line colour is --chart-line (validated per theme); text uses ink and muted tokens.
+// ---- Shared chart helpers. Inline SVG, no library. Values are written with textContent or setAttribute only.
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const svg = (tag, attrs = {}, ...children) => {
   const el = document.createElementNS(SVG_NS, tag)
@@ -413,69 +618,11 @@ const svg = (tag, attrs = {}, ...children) => {
   el.append(...children.filter(c => c != null))
   return el
 }
-const pct = v => `${Math.round(v * 100)}%`
-const shortDate = iso => (iso ? new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Seoul', day: '2-digit', month: 'short' }) : '—')
 // Only https links are made clickable; anything else is shown as plain text.
 function externalLink(url, text) {
   const a = h('a', { target: '_blank', rel: 'noopener noreferrer' }, text)
   try { if (new URL(url).protocol === 'https:') a.setAttribute('href', url) } catch { /* not a link */ }
   return a
-}
-
-let trendsLoadedAt = 0
-async function loadTrends(force = false) {
-  if (!force && Date.now() - trendsLoadedAt < 60_000) return
-  trendsLoadedAt = Date.now()
-  try { state.trends = await api('/api/trends') } catch { return }
-  document.getElementById('trends')?.replaceWith(trendsPanel())
-}
-
-function trendsPanel() {
-  const t = state.trends
-  if (!t) return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'), h('p', { class: 'empty' }, 'Loading trends…'))
-  if (!t.series.length) return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'), emptyState('No completed runs yet', 'Pass rate and the most-failing tests appear after the first completed run.'))
-  return h('section', { class: 'panel', id: 'trends' }, h('h2', {}, 'Trends'),
-    h('p', { class: 'hint' }, `Last ${t.window.runs} completed runs · ${shortDate(t.window.from)} to ${shortDate(t.window.to)}`),
-    passRateChart(t.series),
-    h('h3', {}, 'Tests that fail most'),
-    t.topFailing.length ? failingTable(t.topFailing) : h('p', { class: 'empty' }, 'No failures in this window.'))
-}
-
-function passRateChart(series) {
-  const pts = series.filter(p => p.passRate != null)
-  if (!pts.length) return h('p', { class: 'empty' }, 'No passed or failed tests to chart yet.')
-  const W = 640, H = 220, L = 44, R = 56, T = 12, B = 30
-  const pw = W - L - R, ph = H - T - B
-  const n = pts.length
-  const x = i => (n === 1 ? L + pw / 2 : L + (i * pw) / (n - 1))
-  const y = v => T + (1 - v) * ph
-  const grid = [0, 0.5, 1].map(v => svg('g', {},
-    svg('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'chart-grid' }),
-    svg('text', { x: L - 8, y: y(v) + 4, class: 'chart-axis', 'text-anchor': 'end' }, pct(v))))
-  const line = svg('polyline', { points: pts.map((p, i) => `${x(i)},${y(p.passRate)}`).join(' '), class: 'chart-line', fill: 'none' })
-  // Each point has a larger invisible hit target, so the tooltip is easy to reach with a pointer.
-  const points = pts.map((p, i) => svg('g', {},
-    svg('circle', { cx: x(i), cy: y(p.passRate), r: 3.5, class: 'chart-dot' }),
-    svg('circle', { cx: x(i), cy: y(p.passRate), r: 11, class: 'chart-hit' },
-      svg('title', {}, `${shortDate(p.finishedAt)} · ${pct(p.passRate)} pass · ${p.passed} passed, ${p.failed} failed · ${p.runId}`))))
-  const last = pts[n - 1]
-  const endLabel = svg('text', { x: x(n - 1) + 8, y: y(last.passRate) + 4, class: 'chart-end' }, pct(last.passRate))
-  const dates = [svg('text', { x: x(0), y: H - 8, class: 'chart-axis', 'text-anchor': n === 1 ? 'middle' : 'start' }, shortDate(pts[0].finishedAt))]
-  if (n > 1) dates.push(svg('text', { x: x(n - 1), y: H - 8, class: 'chart-axis', 'text-anchor': 'end' }, shortDate(last.finishedAt)))
-  const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Pass rate over ${n} runs; latest ${pct(last.passRate)}` }, ...grid, line, ...points, endLabel, ...dates)
-  return h('figure', { class: 'chart' }, h('div', { class: 'chart-scroll' }, root),
-    h('figcaption', { class: 'hint' }, `Latest ${pct(last.passRate)}. Pass rate = passed ÷ (passed + failed) in each run. Hover a point for its run. Table view below.`),
-    runTable(series))
-}
-
-function runTable(series) {
-  return h('details', { class: 'hint' }, h('summary', {}, 'Table view'),
-    h('div', { class: 'tablewrap' }, h('table', {},
-      h('thead', {}, h('tr', {}, ['Finished', 'Suite', 'Passed', 'Failed', 'Flaky', 'Pass rate'].map(t => h('th', { class: t === 'Finished' || t === 'Suite' ? null : 'num' }, t)))),
-      h('tbody', {}, series.map(p => h('tr', {},
-        h('td', {}, when(p.finishedAt)), h('td', {}, p.suite),
-        h('td', { class: 'num' }, p.passed), h('td', { class: 'num' }, p.failed), h('td', { class: 'num' }, p.flaky),
-        h('td', { class: 'num' }, p.passRate == null ? '—' : pct(p.passRate))))))))
 }
 
 function failingTable(rows) {
@@ -486,7 +633,7 @@ function failingTable(rows) {
         r.failures ? h('details', {}, h('summary', {}, 'Latest failure details'),
           h('p', { class: 'hint' }, r.lastFailure ? `${r.lastFailure.classification}${r.lastFailure.reason ? ` · ${r.lastFailure.reason}` : ''}` : ''),
           h('pre', { class: 'log' }, r.lastFailure?.message ?? 'No failure details recorded.'),
-          r.lastFailure?.runId ? h('a', { href: `#/runs/${encodeURIComponent(r.lastFailure.runId)}/failures` }, 'View failing run and evidence') : '') : ''),
+          r.lastFailure?.runId ? h('a', { href: `#/runs/${encodeURIComponent(r.lastFailure.runId)}/failures` }, 'View failing run and evidence') : null) : ''),
       h('td', { class: 'num' }, r.failures), h('td', { class: 'num' }, r.flaky), h('td', { class: 'num' }, r.executions),
       h('td', {}, when(r.firstFailedAt)), h('td', {}, when(r.lastFailedAt)))))))
 }
@@ -549,20 +696,79 @@ function ticketControl(run, t, tickets) {
   return h('span', {}, ' ', button, ' ', message)
 }
 
+// Which report category a test belongs to. Used by the run drill-down.
+function categoryOf(run, t) {
+  const suite = run.steps.find(s => s.name === t.step)?.fromSuite
+  if (suite != null) return [...REPORT_CATEGORIES.map(c => c.suite), 'uat'].includes(suite) ? suite : 'other'
+  return t.adapter === 'k6' ? 'load' : t.project === 'api' ? 'api' : t.project === 'uat' || t.adapter === 'webmpc-scenarios' ? 'uat' : t.project === 'chromium' ? 'regression' : 'other'
+}
+
+// Drill-down: outcome filter chips and a search box narrow the list; each failing case opens its own details.
+function testsPanel(run) {
+  const FILTERS = [['all', 'All'], ['failed', 'Failed'], ['passed', 'Passed'], ['blocked', 'Blocked'], ['skipped', 'Skipped'], ['flaky', 'Flaky']]
+  const countOf = key => (key === 'all' ? run.tests.length : key === 'flaky' ? run.tests.filter(t => t.flaky).length : run.tests.filter(t => t.status === key).length)
+  let filter = 'all', query = ''
+  const buttons = FILTERS.map(([key, label]) => ({ key, el: h('button', { type: 'button', class: 'chip-button', 'aria-pressed': 'false', onclick: () => { filter = key; draw() } }, `${label} ${countOf(key)}`) }))
+  const search = h('input', { type: 'search', class: 'search', placeholder: 'Search test or step', 'aria-label': 'Search tests', autocomplete: 'off',
+    oninput: e => { query = e.target.value.trim().toLowerCase(); draw() } })
+  const body = h('div', { class: 'test-body' })
+  const matches = t => {
+    if (filter === 'flaky' ? !t.flaky : filter !== 'all' && t.status !== filter) return false
+    return !query || `${t.title} ${t.step ?? ''}`.toLowerCase().includes(query)
+  }
+  function draw() {
+    for (const b of buttons) b.el.setAttribute('aria-pressed', String(b.key === filter))
+    const list = run.tests.filter(matches)
+    const sections = [...REPORT_CATEGORIES, { suite: 'uat', label: 'UAT scenarios' }, { suite: 'other', label: 'Other checks' }].flatMap(({ suite, label }) => {
+      const rows = list.filter(t => categoryOf(run, t) === suite)
+      return rows.length ? [h('h3', {}, label), testTable(run.runId, rows)] : []
+    })
+    body.replaceChildren(...(list.length ? sections : [emptyState('No tests match', 'Clear the filter or the search to see every case.')]))
+  }
+  draw()
+  return h('section', { class: 'panel', id: 'test-results' }, h('h2', {}, `Tests (${run.tests.length})`),
+    h('div', { class: 'test-tools' }, h('div', { class: 'filter-chips', role: 'group', 'aria-label': 'Filter tests by outcome' }, buttons.map(b => b.el)), search),
+    body)
+}
+
+function testTable(runId, list) {
+  return h('div', { class: 'tablewrap' }, h('table', {},
+    h('thead', {}, h('tr', {}, h('th', {}, 'Test'), h('th', {}, 'Status'), h('th', { class: 'num' }, 'Duration'), h('th', {}, 'Evidence'))),
+    h('tbody', {}, list.map(t => {
+      const errors = (t.errors ?? []).map(plain).filter(Boolean)
+      const classification = [t.classification?.kind, t.classification?.reason].filter(Boolean).join(' · ')
+      return h('tr', {},
+        h('td', {}, t.title, h('div', { class: 'hint' }, t.step), t.skipReason ? h('div', { class: 'hint' }, t.skipReason) : null,
+          errors.length || classification || t.infra ? h('details', { class: 'detail' }, h('summary', {}, 'Failure details'),
+            h('dl', { class: 'kv' },
+              h('dt', {}, 'Classification'), h('dd', {}, classification || '—'),
+              h('dt', {}, 'Infrastructure'), h('dd', {}, t.infra ?? '—'),
+              h('dt', {}, 'Retries'), h('dd', {}, String(t.retries ?? 0))),
+            errors.length ? h('pre', { class: 'log' }, errors.join('\n\n')) : null) : null),
+        h('td', {}, badge(t.status), t.flaky ? h('span', { class: 'badge warn' }, 'flaky') : null),
+        h('td', { class: 'num' }, secs(t.durationMs)),
+        h('td', { class: 'links' }, (t.evidence ?? []).map(e => h('a', { href: fileUrl(runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name))))
+    }))))
+}
+
 async function renderRun(runId, anchor) {
   stopPolling()
+  app.dataset.page = 'run'
   app.replaceChildren(h('section', { class: 'panel' }, 'Loading…'))
   let run
   try { run = await api(`/api/runs/${encodeURIComponent(runId)}`) } catch (error) {
-    app.replaceChildren(h('section', { class: 'panel' }, h('a', { href: '#/' }, '← All runs'), h('p', {}, error.message))); return
+    app.replaceChildren(h('section', { class: 'panel' }, h('a', { href: '#/reports' }, '← Reports'), h('p', {}, error.message))); return
   }
   const c = run.counts
   const tickets = await api('/api/jira/tickets').catch(() => [])
+  const project = state.projects.find(p => p.envs.includes(run.env))?.id ?? run.project ?? 'unassigned'
+  const crumbs = h('nav', { class: 'crumbs', 'aria-label': 'Breadcrumb' },
+    h('a', { href: '#/' }, 'Home'), ' / ', h('a', { href: `#/reports?project=${encodeURIComponent(project)}` }, `${project} reports`), ' / ', h('span', {}, run.runId))
   const overview = h('section', { class: 'panel' },
-    h('a', { href: '#/' }, '← All runs'),
     h('h2', {}, `${run.suite} on ${run.env} `, badge(run.status)),
     h('dl', { class: 'kv' },
       h('dt', {}, 'Run'), h('dd', {}, run.runId),
+      h('dt', {}, 'Project'), h('dd', {}, project),
       h('dt', {}, 'Target'), h('dd', {}, run.baseUrl),
       h('dt', {}, 'Trigger'), h('dd', {}, run.trigger, run.seededDefect ? ` · seeded defect ${run.seededDefect}` : ''),
       h('dt', {}, 'Started'), h('dd', {}, when(run.startedAt), ' · ', secs(run.durationMs)),
@@ -591,23 +797,6 @@ async function renderRun(runId, anchor) {
       h('div', { class: 'err' }, g.message),
       h('ul', {}, g.tests.map(t => h('li', {}, t.title, g.classification === 'product' ? ticketControl(run, t, tickets) : ''))))) : h('p', { class: 'empty' }, 'No failures.'))
 
-  const categoryOf = t => {
-    const suite = run.steps.find(s => s.name === t.step)?.fromSuite
-    if (suite != null) return [...REPORT_CATEGORIES.map(c => c.suite), 'uat'].includes(suite) ? suite : 'other'
-    return t.adapter === 'k6' ? 'load' : t.project === 'api' ? 'api' : t.project === 'uat' || t.adapter === 'webmpc-scenarios' ? 'uat' : t.project === 'chromium' ? 'regression' : 'other'
-  }
-  const testTable = list => h('div', { class: 'tablewrap' }, h('table', {},
-    h('thead', {}, h('tr', {}, h('th', {}, 'Test'), h('th', {}, 'Status'), h('th', { class: 'num' }, 'Duration'), h('th', {}, 'Evidence'))),
-    h('tbody', {}, list.map(t => h('tr', {},
-      h('td', {}, t.title, h('div', { class: 'hint' }, t.step), t.skipReason ? h('div', { class: 'hint' }, t.skipReason) : ''), h('td', {}, badge(t.status), t.flaky ? h('span', { class: 'badge warn' }, 'flaky') : ''),
-      h('td', { class: 'num' }, secs(t.durationMs)),
-      h('td', { class: 'links' }, (t.evidence ?? []).map(e => h('a', { href: fileUrl(run.runId, e.path), target: '_blank', rel: 'noopener noreferrer' }, e.name))))))))
-  const tests = h('section', { class: 'panel', id: 'test-results' }, h('h2', {}, `Tests (${run.tests.length})`),
-    [...REPORT_CATEGORIES, { suite: 'uat', label: 'UAT scenarios' }, { suite: 'other', label: 'Other checks' }].flatMap(({ suite, label }) => {
-      const list = run.tests.filter(t => categoryOf(t) === suite)
-      return list.length ? [h('h3', {}, label), testTable(list)] : []
-    }))
-
   const extra = []
   if (run.load) {
     extra.push(h('section', { class: 'panel' }, h('h2', {}, `Performance (${run.load.profile})`),
@@ -630,19 +819,29 @@ async function renderRun(runId, anchor) {
     extra.push(h('section', { class: 'panel' }, h('h2', {}, 'Compared with previous run'),
       h('p', {}, `Previous: ${cmp.previousRunId ?? 'none'} · new ${cmp.newFailures.length} · recurring ${cmp.persisting.length} · new variants ${cmp.newVariants.length} · recovered ${cmp.recovered.length}`)))
   }
-  app.replaceChildren(overview, tests, h('div', { class: 'grid2' }, ...extra.slice(0, 2)), failures, steps, ...extra.slice(2), systemHealth(run.health, true))
+  app.replaceChildren(crumbs, overview, testsPanel(run), h('div', { class: 'grid2' }, ...extra.slice(0, 2)), failures, steps, ...extra.slice(2), systemHealth(run.health, true))
   if (anchor === 'failures') document.getElementById('failures')?.scrollIntoView()
 }
 
 async function render() {
-  const m = location.hash.match(/^#\/runs\/([\w-]+)(?:\/(failures))?$/)
+  const seq = ++renderSeq
+  const { path } = route()
+  const m = path.match(/^\/runs\/([\w-]+)(?:\/(failures))?$/)
+  if (!state.status) {
+    try { await refresh() } catch (error) { app.replaceChildren(error.signIn ? signInPanel() : h('section', { class: 'panel' }, `Dashboard API unavailable: ${error.message}`)); return }
+  }
+  if (seq !== renderSeq) return
+  renderNav()
   if (m) return renderRun(m[1], m[2])
-  if (!state.status) await refresh()
-  renderHome()
+  if (path === '/dashboard') return renderDashboard(seq)
+  if (path === '/reports') return renderReports(seq)
+  return renderLanding()
 }
 
 window.addEventListener('hashchange', () => render())
 setInterval(() => refresh().catch(() => {}), 10_000)
+// The dashboard recomputes once a minute; the render keeps the previous content until the new numbers arrive.
+setInterval(() => { if (onPage('/dashboard') && !document.hidden) render() }, 60_000)
 async function connectDashboard() {
   if (location.hash.startsWith('#access=')) {
     const access = location.hash.slice('#access='.length)

@@ -23,6 +23,7 @@ import { outputRedactor } from '../pipeline/lib/output-redactor.mjs'
 import { REPORT_CATEGORIES } from '../pipeline/lib/safe-output.mjs'
 import { scheduleReadiness } from '../pipeline/lib/placement.mjs'
 import { buildTrends } from '../pipeline/lib/test-history.mjs'
+import { buildOverview, buildProjects, projectOf } from '../pipeline/lib/overview.mjs'
 import { runWatchdog } from '../pipeline/lib/watchdog.mjs'
 import { jiraStatus, listTickets, openTicketForTest } from '../pipeline/notify/jira.mjs'
 import { OAUTH_STATE_SECONDS, VIEWER_SESSION_SECONDS, authorizationUrl, checkIdTokenClaims, decodeIdToken, exchangeCode, googleConfig, newOauthState, sessionKey, signPayload, verifyPayload } from './google-auth.mjs'
@@ -186,6 +187,11 @@ async function googleCallback(req, res, url) {
 /** Recent runs in the default environment, for trend charts. Reads at most the last 120 saved records. */
 function recentRuns() {
   return readIndex().filter(r => r.env === DEFAULT_ENV).slice(-120).map(r => readRun(r.runId)).filter(Boolean)
+}
+
+/** Saved records for one project, newest 400 index entries only, so a long history stays cheap to read. */
+function projectRuns(project, envs) {
+  return readIndex().filter(r => projectOf(r, envs) === project).slice(-400).map(r => readRun(r.runId)).filter(Boolean)
 }
 
 async function readBody(req) {
@@ -495,6 +501,26 @@ async function route(req, res) {
   }
   if (req.method === 'GET' && path === '/api/status') return send(res, 200, status(role, viewerEmail(req)))
   if (req.method === 'GET' && path === '/api/trends') return send(res, 200, buildTrends(recentRuns()))
+  if (req.method === 'GET' && path === '/api/projects') return send(res, 200, buildProjects(readIndex(), config.environments()))
+  if (req.method === 'GET' && path === '/api/overview') {
+    const envs = config.environments()
+    const projects = buildProjects(readIndex(), envs)
+    const requested = url.searchParams.get('project')
+    if (!projects.length) return send(res, 200, { project: null, projects: [] })
+    const project = requested || projects[0].id
+    if (!projects.some(p => p.id === project)) return send(res, 404, { error: 'Unknown project' })
+    const days = Number(url.searchParams.get('days') ?? 30)
+    if (![7, 30, 90, 365].includes(days)) return send(res, 400, { error: 'Days must be 7, 30, 90 or 365' })
+    const runs = projectRuns(project, envs)
+    const available = [...new Set(runs.map(r => r.env).filter(Boolean))].sort()
+    const asked = url.searchParams.get('env')
+    if (asked && asked !== 'all' && !available.includes(asked)) return send(res, 400, { error: 'Unknown environment for this project' })
+    // Default to the deployment's own environment when the project has it, otherwise the first one available.
+    // 'all' mixes environments on purpose; the caller labels it so it is never mistaken for one target.
+    const env = asked === 'all' ? null : (asked || (available.includes(DEFAULT_ENV) ? DEFAULT_ENV : available[0] ?? null))
+    return send(res, 200, { project, projects: projects.map(p => ({ id: p.id, latest: p.latest, runs: p.runs, envs: p.envs })),
+      ...buildOverview(runs, { env, days }) })
+  }
   if (req.method === 'GET' && path === '/api/jira/tickets') return send(res, 200, listTickets())
   if (req.method === 'POST' && path === '/api/jira/tickets') {
     const body = await readBody(req)
@@ -502,7 +528,13 @@ async function route(req, res) {
     return send(res, ticket.existing ? 200 : 201, { issueKey: ticket.issueKey, url: ticket.url, existing: !!ticket.existing, attachmentsFailed: ticket.attachmentsFailed ?? [] })
   }
   // Every saved run, newest first. Runs stay until someone with the admin key deletes them.
-  if (req.method === 'GET' && path === '/api/runs') return send(res, 200, readIndex().slice().reverse())
+  if (req.method === 'GET' && path === '/api/runs') {
+    const envs = config.environments()
+    const project = url.searchParams.get('project'), env = url.searchParams.get('env')
+    const rows = readIndex().map(r => ({ ...r, project: projectOf(r, envs) }))
+      .filter(r => (!project || r.project === project) && (!env || r.env === env))
+    return send(res, 200, rows.reverse())
+  }
   if (req.method === 'GET' && path === '/api/stack') {
     if (HOSTED) return send(res, 404, { error: 'No local Docker stack on a hosted deployment' })
     return send(res, 200, await stackStatus(resolveEnvironment('local-docker')))

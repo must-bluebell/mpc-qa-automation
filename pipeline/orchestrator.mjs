@@ -101,7 +101,7 @@ export async function runPipeline({ suite: suiteName, env: envName, trigger = 'm
     const started = Date.now()
     const timeoutMs = suites[suiteName].timeoutMs ?? 3_600_000
     const run = {
-      schemaVersion: 1, productionApiWrites, runId: id, suite: suiteName, env: env.name, envDescription: env.description, baseUrl: env.baseUrl, trigger, scheduleId, seededDefect,
+      schemaVersion: 1, productionApiWrites, runId: id, suite: suiteName, env: env.name, project: env.project ?? null, envDescription: env.description, baseUrl: env.baseUrl, trigger, scheduleId, seededDefect,
       status: 'running', startedAt: new Date(started).toISOString(), finishedAt: null, durationMs: null, timeoutMs,
       versions: { app: await appVersion(env), testSuite: testSuiteVersion(), pipeline: 'v1' },
       host: { node: process.version, platform: process.platform, pid: process.pid }, lock: { tookOverFrom: lock.tookOverFrom }, recoveredCrashedRuns: crashed,

@@ -37,6 +37,10 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
     else if (pathname === '/api/stack') data = { project: 'ui-test', healthy: true }
     else if (pathname === '/api/jira/tickets') data = []
     else if (pathname === '/api/trends') data = { window: { runs: 0, from: null, to: null }, series: [], topFailing: [] }
+    else if (pathname === '/api/projects') data = [{ id: 'mpc', envs: ['local-docker'], runs: history.length, latest: null }]
+    else if (pathname === '/api/overview') data = { project: 'mpc', projects: [], envs: ['local-docker'], env: 'local-docker', days: 30, window: { from: null, to: null },
+      kpis: { runs: 0, passedRuns: 0, passed: 0, failed: 0, flaky: 0, passRate: null, failureRate: null }, health: { state: 'no-data', label: 'No runs yet', rule: 'Health appears after the first completed run.' },
+      latest: null, suites: categoryResults ?? [], daily: [], topFailing: [] }
     else if (pathname === '/api/runs' && route.request().method() === 'POST') { fixture.startRequests++; fixture.lastStart = route.request().postDataJSON(); fixture.started = true; data = { runId } }
     else if (pathname === '/api/runs') data = fixture.complete ? [{ runId, suite: 'regression', status: 'passed', counts: { passed: 22 } }] : history
     else if (pathname === `/api/jobs/${runId}/log`) {
@@ -63,6 +67,9 @@ async function dashboard(t, { scheduled = false, aiAuto = false, aiChecked, noti
   return { page, fixture, runId }
 }
 
+// Moves the open page to another hash route without reloading, as a user clicking a link would.
+const openRoute = (page, hash) => page.evaluate(target => { location.hash = target }, hash)
+
 test('completion keeps the output panel and scroll position, refreshes results, and stops polling', async t => {
   const { page, fixture } = await dashboard(t)
   await page.locator('pre.log').evaluate(pre => { window.originalLog = pre; pre.scrollTop = 80 })
@@ -70,28 +77,27 @@ test('completion keeps the output panel and scroll position, refreshes results, 
   await page.clock.runFor(2100)
   await expect(page.locator('pre.log')).toContainText('Finished: 22 passed')
   await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeEnabled()
-  await expect(page.locator('tbody')).toContainText('passed')
   const requestsAtCompletion = fixture.logRequests
   await page.clock.runFor(6000)
   await delay(100)
   assert.equal(fixture.logRequests, requestsAtCompletion, 'completed runs must not restart polling')
   assert.equal(await page.locator('pre.log').evaluate(pre => pre === window.originalLog), true, 'keep the existing output element')
   assert.equal(await page.locator('pre.log').evaluate(pre => pre.scrollTop), 80)
+  await openRoute(page, '#/reports')
+  await expect(page.locator('#run-history tbody')).toContainText('passed')
 })
 
-test('dashboard shows regression, API and load before system health on home and run details',async t=>{
+test('dashboard lists the latest result per suite, and run details keep system health last',async t=>{
   const detail={runId:'ui-completion-regression',suite:'full',status:'failed',counts:{passed:2,failed:1},groups:[],
     steps:[{name:'api',fromSuite:'api'},{name:'load',fromSuite:'load'},{name:'web',fromSuite:'regression'}],
     tests:[{title:'API case',step:'api',status:'failed'},{title:'Load case',step:'load',status:'passed'},{title:'Regression case',step:'web',status:'passed'}],
     health:{ok:false,stack:{healthy:false,unhealthyServices:['web'],missingServices:[],services:[{service:'web',state:'exited'}]}}}
-  const history=['load','api','regression'].map(suite=>({runId:'ui-completion-regression',suite,env:'local-docker',status:'failed',finishedAt:'2026-10-23T07:00:00Z',counts:{passed:2,failed:1}}))
-  const {page}=await dashboard(t,{scheduled:true,runDetail:detail,history})
-  await expect(page.locator('#app > section > h2')).toContainText(['Regression testing','API testing'])
-  await page.getByRole('tab',{name:'History & health',exact:true}).click()
-  await expect(page.locator('#tabpanel-history')).toContainText('Load testing')
-  const headings=await page.locator('#tabpanel-history h2').allTextContents()
-  assert.equal(headings.at(-1),'System health')
-  await page.locator('a[href="#/runs/ui-completion-regression"]').first().click()
+  const categoryResults=['regression','api','load'].map(suite=>({suite,runId:'ui-completion-regression',env:'local-docker',status:'failed',finishedAt:'2026-10-23T07:00:00Z',counts:{passed:2,failed:1,skipped:0,blocked:0}}))
+  const {page}=await dashboard(t,{scheduled:true,runDetail:detail,categoryResults})
+  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Dashboard',exact:true}).click()
+  await expect(page.locator('#suites tbody tr')).toHaveCount(3)
+  await expect(page.locator('#suites tbody tr')).toContainText(['regression','api','load'])
+  await openRoute(page,'#/runs/ui-completion-regression')
   await expect(page.getByRole('heading',{name:'Tests (3)',exact:true})).toBeVisible()
   const titles=await page.locator('#test-results h3').allTextContents()
   assert.deepEqual(titles,['Regression testing','API testing','Load testing'])
@@ -101,16 +107,17 @@ test('dashboard shows regression, API and load before system health on home and 
 
 test('a run without recorded health never borrows current stack health',async t=>{
   const {page,runId}=await dashboard(t,{scheduled:true})
+  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Dashboard',exact:true}).click()
   await expect(page.locator('#system-health')).toContainText('healthy')
-  await page.locator(`a[href="#/runs/${runId}"]`).first().click()
+  await openRoute(page,`#/runs/${runId}`)
   await expect(page.locator('#system-health')).toContainText('not recorded')
   await expect(page.locator('#system-health')).not.toContainText('unhealthy')
 })
 
 test('empty category summaries do not fall back to executions without recorded checks',async t=>{
-  const history=[{runId:'no-checks',suite:'regression',env:'local-docker',status:'infra-failed',finishedAt:'2026-10-23T10:00:00Z',counts:{passed:0,failed:0}}]
-  const {page}=await dashboard(t,{scheduled:true,history,categoryResults:[]})
-  await expect(page.locator('#results-regression')).toContainText('No completed local run recorded.')
+  const {page}=await dashboard(t,{scheduled:true,categoryResults:[]})
+  await page.getByRole('navigation',{name:'Main'}).getByRole('link',{name:'Dashboard',exact:true}).click()
+  await expect(page.locator('#suites')).toContainText('No suite results yet')
 })
 
 test('leaving the home screen cancels an in-flight log response', async t => {

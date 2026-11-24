@@ -1,5 +1,6 @@
 {
   "local-docker": {
+    "project": "mpc",
     "description": "Existing isolated QA recovery stack. Shares state with the other local alias; run suites sequentially.",
     "baseUrl": "http://localhost:3460",
     "appOrigin": "http://localhost:3460",
@@ -26,6 +27,7 @@
     }
   },
   "web-isolated": {
+    "project": "mpc",
     "description": "Existing isolated QA recovery stack. Shares state with the other local alias; run suites sequentially.",
     "baseUrl": "http://localhost:3460",
     "appOrigin": "http://localhost:3460",
@@ -52,6 +54,7 @@
     }
   },
   "preview": {
+    "project": "mpc",
     "description": "Vercel preview deployment on BSC testnet. Read-only API checks and wallet UI tests.",
     "baseUrlEnv": "QA_PREVIEW_BASE_URL",
     "chainId": 97,
@@ -62,6 +65,7 @@
     "isolated": false
   },
   "staging": {
+    "project": "mpc",
     "description": "Staging (mainnet bundle, test contracts). Refuses same-origin writes; read-only. URL comes from QA_STAGING_BASE_URL; the former Vercel alias redirects to production and must not be used.",
     "baseUrlEnv": "QA_STAGING_BASE_URL",
     "chainId": 56,
@@ -71,6 +75,7 @@
     "isolated": false
   },
   "production": {
+    "project": "mpc",
     "description": "Production. Read-only smoke and UI regression only; never writes, load or seeded defects.",
     "baseUrl": "https://app.globalmpc.tech",
     "chainId": 56,
