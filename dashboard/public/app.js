@@ -164,31 +164,9 @@ function runForm() {
         catch (error) { msg.className = 'msg badge bad'; msg.textContent = error.message }
       } }, 'Send Slack test')),
     msg,
-    jiraSettingControl(),
     h('p', { class: 'hint' }, s.hosted
       ? 'Hosted deployment: runs target hosted environments only. UAT and load need the local Docker stack and are not offered here. Production API writes require the explicit checkbox and use test wallets. Administrator and seeded success cases still need fixtures.'
       : 'UAT and load run only against the isolated local Docker stack; the pipeline refuses them elsewhere. Production API writes require explicit per-run authorization.'))
-}
-
-// Jira ticket mode for admins: 0 = tickets are created by hand from the run page, 1 = created automatically for confirmed failures.
-function jiraSettingControl() {
-  if (state.status?.role !== 'admin' || !state.status?.jira?.configured) return ''
-  const msg = h('span', { class: 'hint', role: 'status' })
-  const select = h('select', { 'aria-label': 'Jira ticket creation', onchange: async e => {
-    const value = Number(e.currentTarget.value)
-    e.currentTarget.disabled = true
-    try {
-      const r = await api('/api/jira/settings', { method: 'PUT', body: JSON.stringify({ autoCreate: value }) })
-      state.status.jira = r.jira
-      msg.textContent = value === 1 ? 'Automatic ticket creation is on' : 'Manual ticket creation only'
-    } catch (error) {
-      msg.textContent = error.message
-      e.currentTarget.value = state.status.jira?.auto ? '1' : '0'
-    } finally { e.currentTarget.disabled = false }
-  } },
-  h('option', { value: '0', selected: !state.status.jira.auto }, '0 — manual (create from the run page)'),
-  h('option', { value: '1', selected: !!state.status.jira.auto }, '1 — automatic (confirmed failures)'))
-  return h('div', { class: 'actions' }, h('label', {}, 'Jira ticket creation ', select), msg)
 }
 
 function liveLog() {
