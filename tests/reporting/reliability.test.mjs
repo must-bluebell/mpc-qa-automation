@@ -133,6 +133,26 @@ test('the watchdog alerts once when silence starts and once when it clears', asy
   assert.deepEqual(sent.map(s => s.key), ['scheduler-silent', 'scheduler-recovered'])
 })
 
+test('a silent scheduler alerts once even when the watchdog state cannot be saved', async () => {
+  const sent = []
+  const notifyImpl = async (key) => { sent.push(key); return true }
+  const stale = new Date(NOW.getTime() - 200 * 60_000).toISOString()
+  const fresh = new Date(NOW.getTime() - 60_000).toISOString()
+  const base = { now: NOW, expectScheduler: true, schedules: { timezone: 'Asia/Seoul', schedules: [daily] }, balanceReader: async () => ({ ok: false, reason: 'skip' }), notifyImpl,
+    loadState: () => ({}), persistImpl: () => { throw Object.assign(new Error('disk full'), { code: 'ENOSPC' }) } }
+  const errors = []
+  const originalError = console.error
+  console.error = (...args) => errors.push(args.join(' '))
+  try {
+    await runWatchdog({ ...base, readHeartbeat: () => stale, readIndexImpl: () => [] })
+    await runWatchdog({ ...base, readHeartbeat: () => stale, readIndexImpl: () => [] })
+    await runWatchdog({ ...base, readHeartbeat: () => stale, readIndexImpl: () => [] })
+    await runWatchdog({ ...base, readHeartbeat: () => fresh, readIndexImpl: () => [] })
+  } finally { console.error = originalError }
+  assert.deepEqual(sent, ['scheduler-silent', 'scheduler-recovered'])
+  assert.ok(errors.some(e => /state not saved: ENOSPC/.test(e)))
+})
+
 // --- Item 5: test wallet ------------------------------------------------------------------------------------
 
 test('any balance above the allowed maximum is a finding', () => {

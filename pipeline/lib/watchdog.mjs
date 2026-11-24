@@ -131,6 +131,10 @@ async function raise(key, title, summary, severity) {
   return result.ok
 }
 
+// Alerts open in this process. Kept in memory as well as in runs/watchdog.json, so a state file that fails to save
+// cannot make the same alert repeat on every pass.
+const openAlerts = new Set()
+
 /**
  * One watchdog pass. Dependencies are injectable so the state machine is testable without Slack or RPC.
  * Returns the evaluated facts; persists alert state in runs/watchdog.json.
@@ -152,12 +156,17 @@ export async function runWatchdog({
 
   const scheduler = evaluateScheduler({ now, heartbeatAt: readHeartbeat(), index: readIndexImpl(), jobs: readJobs(), schedules: schedules.schedules, timezone: schedules.timezone, expected: expectScheduler })
   facts.scheduler = scheduler
-  if (scheduler.silent && !state.schedulerAlertOpenedAt) {
-    if (await notifyImpl('scheduler-silent', 'MPC QA scheduler is not running', `${scheduler.reason}. Scheduled checks are not running until it is restarted.`, 'critical'))
+  const schedulerAlertOpen = !!state.schedulerAlertOpenedAt || openAlerts.has('scheduler')
+  if (scheduler.silent && !schedulerAlertOpen) {
+    if (await notifyImpl('scheduler-silent', 'MPC QA scheduler is not running', `${scheduler.reason}. Scheduled checks are not running until it is restarted.`, 'critical')) {
       state.schedulerAlertOpenedAt = now.toISOString()
-  } else if (!scheduler.silent && state.schedulerAlertOpenedAt) {
-    if (await notifyImpl('scheduler-recovered', 'MPC QA scheduler is running again', `${scheduler.reason}.`, 'info'))
+      openAlerts.add('scheduler')
+    }
+  } else if (!scheduler.silent && schedulerAlertOpen) {
+    if (await notifyImpl('scheduler-recovered', 'MPC QA scheduler is running again', `${scheduler.reason}.`, 'info')) {
       delete state.schedulerAlertOpenedAt
+      openAlerts.delete('scheduler')
+    }
   }
   // Refused checks: one warning per schedule and reason, so the cause is named instead of read as a stopped scheduler.
   const refusedNow = new Map(scheduler.refused.map(r => [r.scheduleId, r.reason]))
@@ -198,6 +207,6 @@ export async function runWatchdog({
       facts.wallet = { checked: false, reason: read.reason }
     }
   }
-  persistImpl(state)
+  try { persistImpl(state) } catch (error) { console.error(`watchdog: state not saved: ${error.code ?? error.name ?? 'error'}`) }
   return facts
 }
