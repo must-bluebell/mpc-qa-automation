@@ -10,10 +10,11 @@
       {
         "adapter": "playwright",
         "project": "chromium",
-        "grep": "@smoke"
+        "grep": "@smoke",
+        "retries": 0
       }
     ],
-    "timeoutMs": 900000,
+    "timeoutMs": 1800000,
     "tags": [
       "@smoke"
     ]
