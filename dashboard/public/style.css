@@ -258,3 +258,50 @@ pre.log { margin: 0; max-height: 360px; overflow: auto; background: var(--bg); b
   table { font-size: 12px; }
   th { font-size: 11px; }
 }
+
+/* ---- Sidebar. Wide screens: a fixed column. Narrow screens: a drawer opened from the menu button. */
+.menu-btn { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; background: var(--panel-2); color: var(--ink); flex: none; }
+.menu-btn span { position: relative; width: 18px; height: 2px; border-radius: 2px; background: currentColor; }
+.menu-btn span::before, .menu-btn span::after { content: ""; position: absolute; left: 0; width: 18px; height: 2px; border-radius: 2px; background: currentColor; }
+.menu-btn span::before { top: -6px; }
+.menu-btn span::after { top: 6px; }
+.sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 20; width: 268px; max-width: 86vw; display: flex; flex-direction: column; gap: 18px; padding: 18px 14px; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); transform: translateX(-102%); transition: transform .25s cubic-bezier(.25, 1, .5, 1); }
+.sidebar.open { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .4); }
+.sidebar-brand { padding: 4px 6px; }
+.scrim { position: fixed; inset: 0; z-index: 19; background: rgba(0, 0, 0, .5); }
+.sidebar .nav { flex-direction: column; align-items: stretch; margin: 0; gap: 4px; width: auto; }
+.sidebar .navlink { display: block; padding: 10px 12px; border: 1px solid transparent; border-radius: 10px; }
+.sidebar .project-switch { flex-direction: column; align-items: stretch; gap: 6px; margin: 8px 0 0; padding: 0 2px; }
+.sidebar .project-switch select { width: 100%; padding: 9px 10px; }
+.sb-tabs { display: grid; gap: 10px; margin-top: auto; }
+.sb-tab { border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); overflow: hidden; }
+.sb-tab > summary { list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 11px 12px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.sb-tab > summary::-webkit-details-marker { display: none; }
+.sb-tab > summary::after { content: "›"; font-size: 16px; color: var(--muted); transition: transform .2s; }
+.sb-tab[open] > summary::after { transform: rotate(90deg); }
+.sb-summary { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--muted); }
+.sb-body { display: grid; gap: 10px; padding: 2px 12px 12px; }
+.status-row { display: grid; grid-template-columns: 8px minmax(0, auto) minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 12.5px; }
+.status-label { color: var(--muted); white-space: nowrap; }
+.status-value { min-width: 0; overflow-wrap: anywhere; }
+.dot { width: 8px; height: 8px; border-radius: 999px; background: var(--line-strong); align-self: center; }
+.dot.ok { background: var(--pass); }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--fail); }
+.dot.info { background: var(--info); }
+.sign-out { justify-self: start; }
+@media (min-width: 900px) {
+  body { padding-left: 268px; }
+  .top, .menu-btn, .scrim { display: none; }
+  .sidebar { transform: none; }
+}
+
+/* ---- Active tabs: an accent outline on a lightly tinted fill, for sidebar links and section tabs alike. */
+.sidebar .navlink[aria-current="page"], .tab[aria-selected="true"] {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+}
+.sidebar .navlink[aria-current="page"] { box-shadow: inset 0 0 0 1px var(--accent); }
+.tab[aria-selected="true"] { border: 1px solid var(--accent); border-radius: 8px; margin-bottom: 0; }
+.status-row.account-row { grid-template-columns: minmax(0, auto) minmax(0, 1fr); }

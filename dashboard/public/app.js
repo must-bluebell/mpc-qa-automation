@@ -4,6 +4,24 @@ const TOKEN = document.querySelector('meta[name="qa-token"]').content
 const app = document.getElementById('app')
 const chips = document.getElementById('chips')
 const nav = document.getElementById('nav')
+const sidebar = document.getElementById('sidebar')
+const scrim = document.getElementById('scrim')
+const menuBtn = document.getElementById('menu-btn')
+// The sidebar is always visible on wide screens. Below 900px it is a drawer opened from the menu button.
+const wideScreen = matchMedia('(min-width: 900px)')
+function setMenu(open) {
+  sidebar.classList.toggle('open', open)
+  scrim.hidden = !open
+  menuBtn.setAttribute('aria-expanded', String(open))
+  menuBtn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu')
+  sidebar.inert = !open && !wideScreen.matches
+}
+menuBtn.addEventListener('click', () => setMenu(!sidebar.classList.contains('open')))
+scrim.addEventListener('click', () => setMenu(false))
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false) })
+window.addEventListener('hashchange', () => setMenu(false))
+wideScreen.addEventListener('change', () => setMenu(sidebar.classList.contains('open')))
+setMenu(false)
 let state = { status: null, stack: null, projects: [], watching: null, notify: true, productionApiWrites: false }
 let pollTimer = null
 let stopPolling = () => {}
@@ -76,21 +94,38 @@ function renderNav() {
   nav.replaceChildren(...PAGES.map(p => h('a', { href: `#${p.path}${projectQuery(project)}`, class: 'navlink', 'aria-current': current === p.path ? 'page' : null }, p.label)), switcher)
 }
 
+// Sidebar tabs. Each tab's open state is kept, because the sidebar is rebuilt on every 10-second refresh.
+const sideTabOpen = {}
+function sideTab(title, summary, body, defaultOpen = false) {
+  return h('details', { class: 'sb-tab', open: sideTabOpen[title] ?? defaultOpen, ontoggle: e => { sideTabOpen[title] = e.currentTarget.open } },
+    h('summary', {}, h('span', { class: 'sb-title' }, title), h('span', { class: 'sb-summary' }, summary)),
+    h('div', { class: 'sb-body' }, body))
+}
+const statusRow = (label, value, tone) => h('div', { class: 'status-row' },
+  h('span', { class: `dot ${tone}`, 'aria-hidden': 'true' }),
+  h('span', { class: 'status-label' }, label),
+  h('span', { class: 'status-value' }, value))
+
 function renderChips() {
   const s = state.status
   chips.replaceChildren()
   if (!s) return
   const stack = state.stack
-  chips.append(
-    s.running ? h('span', { class: 'chip warn' }, `Running ${s.running.runId}`) : h('span', { class: 'chip ok' }, 'Idle'),
+  const rows = [
+    s.running ? ['Run', `Running ${s.running.runId}`, 'info'] : ['Run', 'Idle', 'ok'],
     s.stackAvailable !== false
-      ? (stack ? h('span', { class: `chip ${stack.healthy ? 'ok' : 'bad'}` }, `Stack ${stack.project}: ${stack.healthy ? 'healthy' : stack.error ?? 'unhealthy'}`) : h('span', { class: 'chip' }, 'Stack …'))
-      : h('span', { class: 'chip ok' }, `Target ${s.defaultEnv}`),
-    h('span', { class: `chip ${s.slack.valid ? 'ok' : s.slack.configured ? 'bad' : 'warn'}` }, `Slack ${s.slack.valid ? 'configured' : s.slack.configured ? s.slack.reason || 'invalid configuration' : 'not configured'}`),
-    h('span', { class: `chip ${s.ai.configured ? 'ok' : 'warn'}` }, `AI ${s.ai.configured ? `${s.ai.provider} · ${s.ai.model}` : 'not configured'}`),
-    s.viewerEmail ? h('span', { class: 'chip' }, `${s.role === 'admin' ? 'Signed in as' : 'Viewing as'} ${s.viewerEmail}`) : '',
-    s.viewerEmail ? h('a', { href: '/auth/logout' }, 'Sign out') : '',
-  )
+      ? (stack ? ['Stack', `${stack.project}: ${stack.healthy ? 'healthy' : stack.error ?? 'unhealthy'}`, stack.healthy ? 'ok' : 'bad'] : ['Stack', 'checking…', ''])
+      : ['Target', s.defaultEnv, 'ok'],
+    ['Slack', s.slack.valid ? 'configured' : s.slack.configured ? s.slack.reason || 'invalid configuration' : 'not configured', s.slack.valid ? 'ok' : s.slack.configured ? 'bad' : 'warn'],
+    ['AI', s.ai.configured ? `${s.ai.provider} · ${s.ai.model}` : 'not configured', s.ai.configured ? 'ok' : 'warn'],
+  ]
+  const attention = rows.filter(([, , tone]) => tone === 'bad' || tone === 'warn').length
+  chips.append(sideTab('System status', attention ? `${attention} to check` : 'All clear', rows.map(([label, value, tone]) => statusRow(label, value, tone)), true))
+  if (s.viewerEmail) {
+    chips.append(sideTab('Account', s.role === 'admin' ? 'Administrator' : 'Viewer', [
+      h('div', { class: 'status-row account-row' }, h('span', { class: 'status-label' }, s.role === 'admin' ? 'Signed in as' : 'Viewing as'), h('span', { class: 'status-value account-email' }, s.viewerEmail)),
+      h('a', { class: 'btn sign-out', href: '/auth/logout' }, 'Sign out')], true))
+  }
 }
 
 async function refresh() {
@@ -414,7 +449,7 @@ function opsTabs() {
 function homeHeader(o, days) {
   const scope = o.env ?? 'all'
   return h('section', { class: 'page-head' },
-    h('div', {}, h('p', { class: 'eyebrow' }, 'QA dashboard'), h('h1', {}, `${o.project} overview`),
+    h('div', {}, h('h1', {}, `${o.project.toUpperCase()} overview`),
       h('p', { class: 'hint' }, `${o.envs.length ? o.envs.join(', ') : 'No environments'} · last ${days} days`)),
     h('form', { class: 'filters', onsubmit: e => e.preventDefault() },
       h('label', {}, 'Environment', h('select', { name: 'env', onchange: e => go('/', { project: o.project, env: e.target.value, days }) },
@@ -458,7 +493,7 @@ async function renderHome(seq) {
   try { o = await overviewFor(project, days, env) } catch (error) { failure = error }
   if (seq !== renderSeq) return
   app.replaceChildren(
-    o ? homeHeader(o, days) : h('section', { class: 'page-head' }, h('div', {}, h('p', { class: 'eyebrow' }, 'QA dashboard'), h('h1', {}, `${project} overview`))),
+    o ? homeHeader(o, days) : h('section', { class: 'page-head' }, h('div', {}, h('h1', {}, `${project.toUpperCase()} overview`))),
     h('div', { id: 'kpi-slot' }),
     h('div', { class: 'equal-row' }, h('div', { id: 'project-slot', class: 'slot' }), runForm()),
     liveLog() ?? '',
