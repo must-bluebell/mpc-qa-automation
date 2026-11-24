@@ -102,6 +102,19 @@ test('an hourly slot that fell due with no scheduled run recorded is silent', ()
   assert.equal(result.dueInWindow, true)
 })
 
+test('hourly slots the scheduler recorded as missed (busy pipeline) are not a silent scheduler', () => {
+  const heartbeatAt = new Date(NOW.getTime() - 60_000).toISOString()
+  // Two hourly slots fall in the 90-minute window (00:00Z and 01:00Z); both were recorded, one missed and one queued.
+  const jobs = [
+    { id: `hourly-${Date.parse('2026-11-20T00:00:00Z')}`, scheduleId: 'hourly', status: 'missed', at: '2026-11-20T00:00:00.000Z' },
+    { id: `hourly-${Date.parse('2026-11-20T01:00:00Z')}`, scheduleId: 'hourly', status: 'queued', at: '2026-11-20T01:00:00.000Z' },
+  ]
+  const result = evaluateScheduler({ now: NOW, heartbeatAt, index: [], jobs, schedules: [hourly], expected: true })
+  assert.equal(result.silent, false)
+  assert.equal(result.dueInWindow, true)
+  assert.equal(result.reason, 'scheduler reporting')
+})
+
 test('a recent scheduled run clears the silence for an hourly schedule', () => {
   const heartbeatAt = new Date(NOW.getTime() - 60_000).toISOString()
   const index = [{ trigger: 'scheduled', startedAt: '2026-11-20T00:58:00Z', finishedAt: '2026-11-20T01:02:00Z' }]

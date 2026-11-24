@@ -20,7 +20,8 @@ const WALLET_CHECK_INTERVAL_MS = 60 * MINUTE
 /**
  * Pure rule for scheduler silence. The scheduler must be expected on this host (a host with the scheduler
  * switched off has nothing to be silent about). It is silent when its heartbeat is stale, or when a test
- * schedule fell due in the last window and no scheduled run has been recorded since.
+ * schedule slot fell due in the last window and the scheduler never recorded it. A slot the scheduler did
+ * record (queued, running, missed because the pipeline was busy, refused, or finished) shows it is working.
  */
 export function evaluateScheduler({ now, heartbeatAt, index = [], jobs = [], schedules = [], timezone = 'Asia/Seoul', expected, windowMinutes = SILENCE_MINUTES }) {
   const nowMs = now.getTime()
@@ -33,9 +34,9 @@ export function evaluateScheduler({ now, heartbeatAt, index = [], jobs = [], sch
   const heartbeatAgeMinutes = Number.isFinite(heartbeatMs) ? (nowMs - heartbeatMs) / MINUTE : null
   const scheduledActivity = index
     .filter(r => r.trigger === 'scheduled')
-    .map(r => Date.parse(r.finishedAt ?? r.startedAt))
-    .filter(Number.isFinite)
-  const lastScheduledMs = scheduledActivity.length ? Math.max(...scheduledActivity) : null
+    .map(r => ({ ms: Date.parse(r.finishedAt ?? r.startedAt), scheduleId: r.scheduleId ?? null }))
+    .filter(r => Number.isFinite(r.ms))
+  const lastScheduledMs = scheduledActivity.length ? Math.max(...scheduledActivity.map(r => r.ms)) : null
   const lastScheduledAgeMinutes = lastScheduledMs == null ? null : (nowMs - lastScheduledMs) / MINUTE
   const dueInWindow = schedules.filter(s => s.enabled && s.kind !== 'summary').some(s => {
     for (let at = Math.floor(nowMs / MINUTE) * MINUTE; at > nowMs - windowMs; at -= MINUTE) {
@@ -43,14 +44,26 @@ export function evaluateScheduler({ now, heartbeatAt, index = [], jobs = [], sch
     }
     return false
   })
+  // The scheduler loop enqueues a slot within about 15 seconds, so only slots older than this are judged.
+  const SLOT_SETTLE_MS = 2 * MINUTE
+  const jobIds = new Set(jobs.map(j => j.id))
+  const unrecordedSlot = schedules.filter(s => s.enabled && s.kind !== 'summary').some(s => {
+    for (let at = Math.floor((nowMs - SLOT_SETTLE_MS) / MINUTE) * MINUTE; at > nowMs - windowMs; at -= MINUTE) {
+      if (!cronMatches(s.cron, new Date(at), timezone)) continue
+      // Job IDs are `${scheduleId}-${slotMs}` (pipeline/scheduler.mjs enqueueDue).
+      if (jobIds.has(`${s.id}-${at}`)) continue
+      if (scheduledActivity.some(r => r.ms >= at && (r.scheduleId == null || r.scheduleId === s.id))) continue
+      return true
+    }
+    return false
+  })
   const heartbeatStale = heartbeatAgeMinutes == null || heartbeatAgeMinutes > windowMinutes
-  const noRecentRun = lastScheduledMs == null || nowMs - lastScheduledMs > windowMs
-  const silent = !!expected && (heartbeatStale || (dueInWindow && noRecentRun && refused.length === 0))
+  const silent = !!expected && (heartbeatStale || (unrecordedSlot && refused.length === 0))
   return {
     expected: !!expected, silent, heartbeatAgeMinutes, lastScheduledAgeMinutes, dueInWindow, refused,
     reason: !expected ? 'scheduler not enabled on this host'
       : heartbeatStale ? `no scheduler heartbeat for ${heartbeatAgeMinutes == null ? 'any recorded time' : `${Math.round(heartbeatAgeMinutes)} minutes`}`
-      : dueInWindow && noRecentRun && refused.length === 0 ? `a scheduled run was due but none was recorded in ${windowMinutes} minutes`
+      : unrecordedSlot && refused.length === 0 ? `a scheduled slot fell due in the last ${windowMinutes} minutes and the scheduler recorded no job for it`
       : refused.length ? `scheduled check refused: ${refused.map(r => `${r.scheduleId} (${r.reason})`).join('; ')}`
       : 'scheduler reporting',
   }
