@@ -50,7 +50,7 @@ services:
       - { key: QA_GOOGLE_PERSONAL_EMAILS, sync: false }
       - { key: QA_GOOGLE_ALLOW_ANY_ACCOUNT, sync: false }
       - { key: QA_GOOGLE_ADMIN_EMAILS, sync: false }
-      # Jira tickets for confirmed product failures. Tickets are created by hand unless QA_JIRA_AUTO=1.
+      # Jira tickets for confirmed product failures. People create tickets from the dashboard; runs never do.
       - { key: JIRA_BASE_URL, sync: false }
       - { key: JIRA_EMAIL, sync: false }
       - { key: JIRA_API_TOKEN, sync: false }

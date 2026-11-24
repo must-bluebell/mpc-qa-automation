@@ -11,7 +11,7 @@ https://qa-automation-bq3y.onrender.com. A local tooling check does not validate
 - The dashboard watchdog checks scheduler silence at a 90-minute threshold and periodically checks the configured wallet's native-token balance and the ERC-20 tokens listed in `QA_WALLET_TOKEN_ADDRESSES`; any positive token balance alerts. It sends opening/recovery alerts through configured Slack delivery. Keep the wallet empty. Tokens not listed are not inspected, malformed addresses are logged and skipped, and a failed lookup is reported as unchecked, never as funded. This does not monitor an outage of the entire Render service; an external uptime monitor is needed for the latter.
 - Dashboard trends show pass rate, first observed failure within the displayed history window, and flaky counts.
 - Company Google accounts are viewers; only the admin key allows mutations. `QA_GOOGLE_ALLOWED_EMAILS`, when set, restricts company accounts further and never admits outside-domain accounts. `QA_GOOGLE_PERSONAL_EMAILS` admits the listed personal (consumer) Google accounts as viewers, matched exactly; no other consumer accounts are admitted. `QA_GOOGLE_ALLOW_ANY_ACCOUNT=1` is an explicit opt-in that admits any verified Google account as a viewer and ignores the email lists; the server logs a warning at startup while it is on.
-- Jira starts in manual-confirmation mode. Automatic creation requires `QA_JIRA_AUTO=1`, a product classification, and a failed retry. Tickets are tracked by environment and test, so a preview pass cannot close a production defect. Existing tickets recover their environment from their original saved run. If that record is unavailable, review the existing ticket before creating another.
+- Jira tickets are created only by a person from the dashboard; no run creates one. Tickets are tracked by environment and test, so a preview pass cannot close a production defect. Existing tickets recover their environment from their original saved run. If that record is unavailable, review the existing ticket before creating another.
 - GitHub Markdown reports omit the empty previous-run comparison. No GitHub history synchronization is introduced.
 
 ## Settings to supply privately on Render
@@ -19,7 +19,7 @@ https://qa-automation-bq3y.onrender.com. A local tooling check does not validate
 Google viewers require `QA_GOOGLE_CLIENT_ID`, `QA_GOOGLE_CLIENT_SECRET`, and `QA_GOOGLE_ALLOWED_DOMAIN`; optionally set `QA_GOOGLE_ALLOWED_EMAILS` and `QA_GOOGLE_PERSONAL_EMAILS`. Register this redirect URI:
 `https://qa-automation-bq3y.onrender.com/auth/google/callback`.
 
-Jira requires `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN`. The default project is `ME`; keep `QA_JIRA_AUTO=0` while people confirm initial tickets. Existing Slack configuration is used for alerts. Wallet monitoring uses `WALLET_ADDRESS`, `QA_WALLET_CHAIN_ID` (or `QA_CHAIN_ID`), and optionally `QA_WALLET_RPC_URL`; the default permitted native balance is zero.
+Jira requires `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN`. The default project is `ME`; Existing Slack configuration is used for alerts. Wallet monitoring uses `WALLET_ADDRESS`, `QA_WALLET_CHAIN_ID` (or `QA_CHAIN_ID`), and optionally `QA_WALLET_RPC_URL`; the default permitted native balance is zero.
 
 Never put credentials in commits, command arguments, reports, or chat.
 

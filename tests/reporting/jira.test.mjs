@@ -56,7 +56,7 @@ test('jira stays off until all three settings are present and rejects a non-http
   const ok = jira.jiraConfig({ JIRA_BASE_URL: 'https://x.atlassian.net/', JIRA_EMAIL: 'a', JIRA_API_TOKEN: 't' })
   assert.equal(ok.baseUrl, 'https://x.atlassian.net')
   assert.equal(ok.projectKey, 'ME')
-  assert.deepEqual(jira.jiraStatus({}), { configured: false, auto: false })
+  assert.deepEqual(jira.jiraStatus({}), { configured: false })
 })
 
 test('new tickets are assigned only when JIRA_ASSIGNEE_ACCOUNT_ID is set', () => {
@@ -111,88 +111,36 @@ test('a test that passes again closes its ticket with a comment and the Done tra
   await jira.createTicket(config, first, first.tests[0], { fetchImpl: createFetch })
   const later = { runId: 'run-later', env: 'production', tests: [{ key: 'chromium:W01', title: 'W01', status: 'passed', flaky: false }] }
   const { calls, fetchImpl } = fakeJira()
-  const result = await jira.reconcileAfterRun(later, { config, fetchImpl, auto: false })
+  const result = await jira.reconcileAfterRun(later, { config, fetchImpl })
   assert.deepEqual(result.closed, ['ME-101'])
   assert.ok(calls.some(c => c.path === '/rest/api/3/issue/ME-101/comment'))
   assert.deepEqual(calls.at(-1).body, { transition: { id: '31' } })
   assert.equal(jira.listTickets().find(t => t.issueKey === 'ME-101').state, 'done')
 })
 
-test('automatic creation is off unless QA_JIRA_AUTO is on; a Jira outage is an error entry, not a crash', async () => {
-  const run = makeRun({ runId: 'run-auto', tests: [{ key: 'chromium:W09', title: 'W09', status: 'failed', retries: 1, flaky: false, classification: { kind: 'product' }, errors: ['e'], evidence: [] }], comparison: { newFailures: [{ key: 'chromium:W09' }], newVariants: [], persisting: [] } })
-  const off = fakeJira()
-  const none = await jira.reconcileAfterRun(run, { config, fetchImpl: off.fetchImpl, auto: false })
-  assert.deepEqual(none.created, [])
-  const down = fakeJira({ failOn: ['/rest/api/3/issue'] })
-  const outage = await jira.reconcileAfterRun(run, { config, fetchImpl: down.fetchImpl, auto: true })
-  assert.equal(outage.errors[0].code, 'jira_http_500')
-  assert.doesNotMatch(JSON.stringify(outage), /boom with secret/)
-})
-
-function autoRun(id, tests, { newFailures = [], persisting = [], critical = [] } = {}) {
-  return {
-    runId: id, suite: 'regression', env: 'production', versions: { app: { id: 'abc' } }, tests,
-    comparison: { newFailures: newFailures.map(key => ({ key })), newVariants: [], persisting: persisting.map(key => ({ key, since: 'earlier' })) },
-    coverage: { requirements: critical.map(id => ({ id, critical: true })) },
-  }
-}
-const failed = (key, extra = {}) => ({ key, title: key, status: 'failed', retries: 1, flaky: false, classification: { kind: 'product' }, errors: ['e'], signature: 'sig-A', requirementIds: [], ...extra })
-
-test('automatic tickets are limited to new failures or critical failures that persist, one per cause, capped per run', async () => {
+test('no run creates a ticket, even with QA_JIRA_AUTO set; people open tickets from the dashboard', async () => {
   resetStore()
-  const tests = [
-    failed('new-one', { signature: 'sig-1' }),
-    failed('persisting-noncritical', { signature: 'sig-2' }),
-    failed('persisting-critical', { signature: 'sig-3', requirementIds: ['WALLET-01'] }),
-    failed('same-cause-as-new-one', { signature: 'sig-1' }),
-    failed('new-two', { signature: 'sig-4' }),
-    failed('new-three', { signature: 'sig-5' }),
-  ]
-  const run = autoRun('run-rules-1', tests, { newFailures: ['new-one', 'same-cause-as-new-one', 'new-two', 'new-three'], persisting: ['persisting-noncritical', 'persisting-critical'], critical: ['WALLET-01'] })
-  const api = fakeJira()
-  process.env.JIRA_AUTO_MAX_PER_RUN = '2'
+  process.env.QA_JIRA_AUTO = '1'
   try {
-    const result = await jira.reconcileAfterRun(run, { config, fetchImpl: api.fetchImpl, auto: true })
-    assert.equal(result.created.length, 2)
-    const reasons = Object.fromEntries(result.skipped.map(s => [s.testKey, s.reason]))
-    assert.equal(reasons['persisting-noncritical'], 'not_new_or_critical_persisting')
-    assert.equal(reasons['same-cause-as-new-one'], 'same_cause_as_ticketed_test')
-    assert.equal(reasons['new-three'], 'over_run_limit')
-    assert.equal(result.tickets.length, 2)
-  } finally { delete process.env.JIRA_AUTO_MAX_PER_RUN }
+    const run = makeRun({ runId: 'run-no-auto', tests: [{ key: 'chromium:W09', title: 'W09', status: 'failed', retries: 1, flaky: false, classification: { kind: 'product' }, errors: ['e'], evidence: [] }], comparison: { newFailures: [{ key: 'chromium:W09' }], newVariants: [], persisting: [] } })
+    const api = fakeJira()
+    const result = await jira.reconcileAfterRun(run, { config, fetchImpl: api.fetchImpl })
+    assert.equal(api.calls.filter(c => c.path === '/rest/api/3/issue').length, 0)
+    assert.deepEqual(result.created, [])
+  } finally { delete process.env.QA_JIRA_AUTO }
 })
 
-test('a persisting critical failure gets a ticket even when it is not new', async () => {
-  resetStore()
-  const run = autoRun('run-rules-2', [failed('critical-old', { signature: 'sig-9', requirementIds: ['WALLET-02'] })], { persisting: ['critical-old'], critical: ['WALLET-02'] })
-  const result = await jira.reconcileAfterRun(run, { config, fetchImpl: fakeJira().fetchImpl, auto: true })
-  assert.equal(result.created.length, 1)
-})
+const failed = (key, extra = {}) => ({ key, title: key, status: 'failed', retries: 1, flaky: false, classification: { kind: 'product' }, errors: ['e'], signature: 'sig-A', requirementIds: [], ...extra })
 
 test('a shared ticket stays open while another test with the same cause still fails', async () => {
   resetStore()
-  const first = autoRun('run-share-1', [failed('share-a', { signature: 'sig-share' }), failed('share-b', { signature: 'sig-share' })], { newFailures: ['share-a'] })
-  await jira.reconcileAfterRun(first, { config, fetchImpl: fakeJira().fetchImpl, auto: true })
+  const seeded = { runId: 'run-share-1', env: 'production', tests: [failed('share-a', { signature: 'sig-share' }), failed('share-b', { signature: 'sig-share' })] }
+  await jira.createTicket(config, seeded, seeded.tests[0], { fetchImpl: fakeJira().fetchImpl })
   const api = fakeJira()
   const second = { runId: 'run-share-2', env: 'production', tests: [{ ...failed('share-a', { signature: 'sig-share' }), status: 'passed' }, failed('share-b', { signature: 'sig-share' })] }
-  const result = await jira.reconcileAfterRun(second, { config, fetchImpl: api.fetchImpl, auto: false })
+  const result = await jira.reconcileAfterRun(second, { config, fetchImpl: api.fetchImpl })
   assert.deepEqual(result.closed, [])
   assert.equal(api.calls.length, 0)
-})
-
-test('the dashboard setting decides automatic creation, rejects anything but 0 or 1, and falls back to QA_JIRA_AUTO', () => {
-  const file = join(RUNS_DIR, 'jira-settings.json')
-  rmSync(file, { force: true })
-  assert.equal(jira.autoCreateEnabled({ QA_JIRA_AUTO: '1' }), true)
-  assert.equal(jira.setAutoCreate(0), false)
-  assert.equal(jira.autoCreateEnabled({ QA_JIRA_AUTO: '1' }), false)
-  assert.equal(jira.setAutoCreate(1), true)
-  assert.equal(jira.autoCreateEnabled({ QA_JIRA_AUTO: '0' }), true)
-  assert.equal(jira.jiraStatus({ QA_JIRA_AUTO: '0' }).auto, true)
-  assert.throws(() => jira.setAutoCreate(2), error => error.status === 400)
-  assert.throws(() => jira.setAutoCreate('1'), error => error.status === 400)
-  rmSync(file, { force: true })
-  assert.equal(jira.autoCreateEnabled({ QA_JIRA_AUTO: '1' }), true)
 })
 
 test('a manual ticket for a passing or unknown test is refused with a clear status', async () => {
@@ -202,16 +150,6 @@ test('a manual ticket for a passing or unknown test is refused with a clear stat
 })
 
 test.after(() => rmSync(runsDir, { recursive: true, force: true }))
-
-test('automatic Jira confirmation requires a failed retry', async () => {
-  resetStore()
-  const run = makeRun()
-  run.tests[0].retries = 0
-  const api = fakeJira()
-  const result = await jira.reconcileAfterRun(run, { config, fetchImpl: api.fetchImpl, auto: true })
-  assert.deepEqual(result.created, [])
-  assert.equal(api.calls.length, 0)
-})
 
 test('passing in another environment does not close a production defect', async () => {
   resetStore()

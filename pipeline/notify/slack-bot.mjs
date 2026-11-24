@@ -120,7 +120,7 @@ function flakyLines(checks=[]) {
   const names=flaky.slice(0,5).map(t=>`${t.name} (${t.attempts} attempts)`).join(', ')
   return [`🟡 *Flaky — passed on retry:* ${names}${flaky.length>5?` and ${flaky.length-5} more`:''}. Evidence for each attempt is in the report.`,'']
 }
-function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures,jiraTickets=[]}) {
+function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures}) {
   const c=s.counts,total=c.passed+c.failed+c.skipped+c.blocked
   const rows=s.sections.length?s.sections.map(r=>({label:r.label,status:r.status,counts:r.counts}))
     :groups.map(([label,checks])=>({label,status:checks.some(t=>t.status==='failed')?'failed':checks.some(t=>t.status==='blocked')?'blocked':checks.some(t=>t.status==='passed')?'passed':'blocked',
@@ -140,18 +140,17 @@ function renderSummary(s,groups,critical,o,{actionable,recovered,newFailures,jir
     ...(actionable?[`🚨 *Failure alert:* ${newFailures?`${newFailures} new failure${newFailures===1?'':'s'} need attention`:'required checks could not run; investigate the prerequisites'}${/^U[A-Z0-9]+$/.test(o.owner??'')?` <@${o.owner}>`:''}.`]:[]),
     ...(recovered.length?[`✅ *Recovered:* ${recovered.slice(0,5).join(', ')}${recovered.length>5?` and ${recovered.length-5} more`:''}`]:[]),
     `*Critical:* ${critical.length?`confirmed defects mapped to ${critical.join(', ')}`:'No confirmed critical defects'}`,
-    ...(jiraTickets.length?[`*Jira:* ${jiraTickets.length} open ticket${jiraTickets.length===1?'':'s'} — ${jiraTickets.slice(0,5).map(t=>`<${t.url}|${t.issueKey}>`).join(', ')}${jiraTickets.length>5?` and ${jiraTickets.length-5} more (see thread)`:''}`]:[]),
     reportLink(o,s),
     ...(total?['🧵 Every test case and its result is in the thread.']:[])].join('\n')
 }
 /** Every check, grouped by category; a reason shared by all of a category's failures is printed once. Split to stay readable in Slack. */
-function renderCases(groups,jiraByCheck=new Map()) {
+function renderCases(groups) {
   const result=[]
   for(const [category,checks] of groups) {
     for(const [status,label] of [['failed','Failed cases'],['blocked','Blocked cases'],['skipped','Skipped cases'],['passed','Passed cases']]) {
       const selected=checks.filter(t=>t.status===status)
       if(!selected.length)continue
-      const sections=[`*${category}* — ${selected.length} ${status}`,...selected.map(t=>{const jira=jiraByCheck.get(t.id);return `${CHECK_ICONS[t.status]} ${t.name}${t.critical?' *(critical)*':''}${(t.reason??t.detail)?`\n      ↳ ${t.reason??t.detail}`:''}${jira?`\n      ↳ Jira: <${jira.url}|${jira.issueKey}>`:''}`})]
+      const sections=[`*${category}* — ${selected.length} ${status}`,...selected.map(t=>`${CHECK_ICONS[t.status]} ${t.name}${t.critical?' *(critical)*':''}${(t.reason??t.detail)?`\n      ↳ ${t.reason??t.detail}`:''}`)]
       result.push(...splitThreadText(`*${label}*`,sections.join('\n')))
     }
   }
@@ -197,14 +196,12 @@ function queueRun(state,run,o) {
   const critical=[...new Set(s.checks.filter(t=>t.critical).flatMap(t=>t.requirementIds))]
   const groups=groupChecks(s.checks)
   const newFailures=s.checks.filter(t=>t.status==='failed').length&&actionable?(s.pipeline.comparison?.newFailures.length||failureGroups.size):0
-  const jiraTickets=run.jira?.tickets??[]
-  const jiraByCheck=new Map(jiraTickets.map(t=>[opaqueId(t.testKey),t]))
-  const summary=renderSummary(s,groups,critical,o,{actionable,recovered,newFailures,jiraTickets})
+  const summary=renderSummary(s,groups,critical,o,{actionable,recovered,newFailures})
   const load=s.loadMetrics
   const metrics=load?`\n\n*Load metrics*\n${load.totalRequests??'unavailable'} requests · ${load.throughputRps??'unavailable'} requests/s · functional check rate ${load.checkPassRate===null?'unavailable':`${(load.checkPassRate*100).toFixed(1)}%`}\n${load.endpoints.map(r=>`• ${r.name}: p95 ${r.p95Ms??'unavailable'}ms · error rate ${r.errorRate===null?'unavailable':`${(r.errorRate*100).toFixed(2)}%`}${r.baselineP95Ms!==null?` · baseline ${r.baselineP95Ms}ms${r.p95ChangePct!==null?` (${r.p95ChangePct>=0?'+':''}${r.p95ChangePct}%)`:''}`:''}${r.baselineErrorRate!==null?` · baseline error ${(r.baselineErrorRate*100).toFixed(2)}%`:''}`).join('\n')}\nBaseline: ${load.baselineRunId??'no previous baseline'} · ${load.baselineAction}`:''
   const sources=s.sections.map(r=>`• ${r.label}: source ${r.sourceRunId} · ${r.finishedAt}`).join('\n')
   const details=`*Incidents & diagnostics*\n${notes.slice(0,35).join('\n')||'No new actionable failures or recoveries.'}${notes.length>35?'\nAdditional checks are in the sanitized report.':''}${metrics}${sources?`\n\n*Source runs*\n${sources}`:''}`
-  const thread=[...renderCases(groups,jiraByCheck).map((text,i)=>[`cases-${i+1}`,text]),['details',details],...renderAiReview(run,o.stateDir).map((text,i)=>[`ai-${i+1}`,text]),['pipeline',renderPipeline(s)]]
+  const thread=[...renderCases(groups).map((text,i)=>[`cases-${i+1}`,text]),['details',details],...renderAiReview(run,o.stateDir).map((text,i)=>[`ai-${i+1}`,text]),['pipeline',renderPipeline(s)]]
   const parentId=`${runKey}:summary`
   if(changesOnly)state.alertThreads[scope]=Object.keys(incidents).length?parentId:null
   state.runs[runKey]={queuedAt:o.now}
