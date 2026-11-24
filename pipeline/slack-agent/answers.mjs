@@ -1,23 +1,44 @@
 import { readIndex, readRun } from '../lib/run-store.mjs'
 import { readLock } from '../lib/lock.mjs'
-import { config } from '../lib/env.mjs'
+import { config, RUNS_DIR } from '../lib/env.mjs'
 import { publicSummary, safeText, dashboardRunUrl } from '../lib/safe-output.mjs'
 import { explainEvidence } from './explain.mjs'
 import { answerPullRequest } from './pr-evidence.mjs'
 import { runStatus } from '../lib/run-status.mjs'
+import { recentRuns, highPriorityCases, healthReport } from './insights.mjs'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 export const plain = value => safeText(value).replace(/[<>&`]/g,'').slice(0,2800)
-const help = 'Ask about my testing capabilities, reporting repository, latest test results, failed cases, last passing run, evidence, testing schedules, or the last tested/merged PR. For example: “what can you do?”, “how did the tests go?”, or “who merged the code?”. To request a rerun: “rerun api” (also smoke, regression, uat, load, full). A rerun requires authorization and confirmation.'
+const help = 'Ask about my capabilities, recent test runs, latest results, failed or high-priority cases, last passing run, evidence, schedules, system health (for example “system health last 7 days”), or recently tested and merged PRs. To request a rerun: “rerun api” (also smoke, regression, uat, load, full). Reruns and test case drafts require an authorized user; reruns also need confirmation.'
 const capabilities = `I am MPC QA Agent. My role is testing:
-1. Request reruns of browser, API, regression, UAT, and load tests.
-2. Show the latest results: passed, failed, skipped, and blocked checks.
-3. Report failures and share recorded test evidence.
-4. Find the last passing test run.
-5. Show testing schedules and scheduler status.
-6. Show the last tested PR and its QA check results.
-7. Show the last merged PR, who merged it, and recorded merge details.
+1. Request reruns of API, browser, regression, UAT, load, and full suites. Authorized users only; each rerun needs confirmation.
+2. Show recent test runs: suite, environment, status, pass and fail counts, and how each run was started.
+3. Show the latest results: passed, failed, skipped, and blocked checks.
+4. List failed and blocked cases, with recorded evidence and report links.
+5. Show the last passing test run.
+6. List high-priority cases (tests tagged @critical in the test suite).
+7. Show system health for a period, for example "system health last 7 days" (1 to 30 days).
+8. Show testing schedules and scheduler status.
+9. Show recently tested PRs, the last tested PR and its QA checks, and the last merged PR and who merged it.
+10. Create draft test cases for authorized users. Drafts are saved to testplans/drafts and are not committed.
+11. Answer general QA questions when AI is enabled.
 
-Test reruns require authorization and confirmation. Ask “show the latest report” for results or “rerun api” to request a test run.`
+Ask “show the latest report” for results, or “rerun api” to request a test run.`
+const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, fourteen: 14, thirty: 30 }
+// Health window in days: "last 7 days" → 7, "last week" → 7, default 1 (24 hours). Capped at 30.
+function healthWindow(q) {
+  const m = q.match(/\b(\d{1,3}|one|two|three|four|five|six|seven|fourteen|thirty)\s*(?:days?|d)\b/)
+  if (m) return Math.min(30, Math.max(1, Number(m[1]) || NUMBER_WORDS[m[1]] || 1))
+  if (/\b(?:last|past|this) week\b|\bweekly\b/.test(q)) return 7
+  if (/\b(?:last|past|this) month\b|\bmonthly\b/.test(q)) return 30
+  return 1
+}
+function schedulerJobs() {
+  try { return JSON.parse(readFileSync(join(RUNS_DIR, 'scheduler-state.json'), 'utf8')).jobs ?? [] } catch { return [] }
+}
+const finishedRuns = (index, read, limit) => index().slice(-limit).reverse().map(r => read(r.runId))
+  .filter(r => r && r.finishedAt && r.status !== 'running' && !r.seededDefect && !r.reportOnly)
 function repositoryScope(environment) {
   const repository=environment.QA_SLACK_PR_REPOSITORY
   return /^[\w.-]+\/[\w.-]+$/.test(repository||'')
@@ -48,11 +69,22 @@ export function parseRequest(value) {
   if(has(/\b(?:repos?|repositories|repository)\b/)
     &&(has(/\b(?:access|permissions?|connected|scope)\b/)
       ||has(/\b(?:which|what)\b.*\b(?:test|testing|check|support)\b/)))return simple('repositories')
-  if(has(/\b(?:pr|pull request)\b/)
+  if(has(/\b(?:create|write|draft|generate|make|add)\b/)&&has(/\b(?:test cases?|test plans?|test scenarios?|test scripts?|test suites?)\b/))
+    return simple('create-tests')
+  if(has(/\b(?:prs?|pull requests?)\b/)
     ||(has(/\b(?:who|how)\b/)&&has(/\b(?:merged?|landed|integrated)\b/)&&has(/\bcode\b/))) {
     if(has(/\b(?:merged?|landed|integrated)\b/))return simple('pr-merged')
+    if(has(/\b(?:prs|pull requests)\b/)&&has(/\b(?:tests?|tested|testing|checks?|checked|qa)\b/)&&!has(/\b(?:last|latest|most recent)\b/))return simple('pr-list')
     if(has(/\b(?:test(?:ed|ing)?|check(?:ed)?|verified|validated|fail(?:ed|ures?)?|last|latest|recently)\b/))return simple('pr-tested')
   }
+  if(has(/\b(?:health|healthy|unhealthy|system status|stack status|how is (?:the )?(?:system|stack|qa))\b/))
+    return {...simple('health'),days:healthWindow(q)}
+  if((has(/\b(?:priority|priorities|p0|p1)\b/)||(has(/\b(?:critical|high)\b/)&&has(/\b(?:cases?|tests?)\b/)))
+    &&!has(/\b(?:fail|failed|failing|failure|failures|broken)\b/))return simple('priority')
+  // Run listings only when the question does not ask for a result, status, or specific kind of run.
+  if(has(/\b(?:recent|past|all|list)\b.*\bruns?\b|\bruns? (?:history|log|list)\b|\blast \d+ runs?\b|\bwho (?:ran|runs|triggered|started|kicked off)\b/)
+    &&!has(/\b(?:results?|outcomes?|status|pass(?:ed|ing)?|successful|green|fail(?:ed|ures?)?|evidence|most recent|latest)\b/))
+    return simple('runs')
   const suite=has(/\b(?:api|endpoints?)\b/)?'api':has(/\b(?:uat|acceptance)\b/)?'uat'
     :has(/\b(?:load|performance|stress)\b/)?'load':has(/\bnightly\b/)?'nightly-regression'
     :has(/\b(?:web|browser|regression|ui|e2e)\b|\bend to end\b/)?'regression'
@@ -72,6 +104,7 @@ export function parseRequest(value) {
       ||has(/\bhow did (?:the )?(?:qa |api |uat |load |browser |ui )?(?:tests?|testing|checks?) go\b/)?'latest':'help'
   return {kind,suite,runId,text}
 }
+const qaScope=text=>/\b(?:qa|quality|tests?|testing|tested|checks?|regressions?|smoke|uat|acceptance|load|performance|stress|api|endpoints?|e2e|browser|ui|playwright|k6|coverage|assertions?|flaky|bugs?|defects?|failures?|failing|scenarios?|automation|fixtures?|runs?|results?|reports?|evidence|traces?|screenshots?|schedules?|scheduler|pr|pull requests?|merged?)\b/i.test(questionWords(String(text||'')))
 export function reportLink(id, environment=process.env) {
   try {
     const base=new URL(environment.QA_REPORT_BASE_URL)
@@ -116,12 +149,19 @@ function passingEvidence(run,suite) {
 }
 export async function answerQuestion(question, options={}) {
   const {index=readIndex,read=readRun,scheduler=()=>readLock('scheduler'),schedules=config.schedules,environment=process.env,
-    ai=false,explain=explainEvidence,prEvidence=answerPullRequest}=options
+    ai=false,explain=explainEvidence,prEvidence=answerPullRequest,jobs=schedulerJobs}=options
   const parsed=parseRequest(question)
   if(parsed.kind==='capabilities') return `${capabilities}\n\n${repositoryScope(environment)}`
+  if(parsed.kind==='runs') return recentRuns(finishedRuns(index,read,100))
+  if(parsed.kind==='priority') return highPriorityCases()
+  if(parsed.kind==='health') return healthReport({runs:finishedRuns(index,read,500),days:parsed.days,schedules:schedules(),jobs:jobs(),
+    reportBase:environment.QA_REPORT_BASE_URL})
+  // Creating drafts changes the working tree, so only the Slack agent handler runs it after an authorization check.
+  if(parsed.kind==='create-tests') return 'Test case drafts can be created only by an authorized QA user. Ask an authorized user to make the request.'
   if(parsed.kind==='repositories') return repositoryScope(environment)
   if(parsed.kind.startsWith('pr-'))return prEvidence(parsed.kind.slice(3),{repository:environment.QA_SLACK_PR_REPOSITORY})
-  if(['help','invalid-rerun','rerun'].includes(parsed.kind)) return help
+  // Unmatched questions reach AI only when they look like QA; everything else keeps the deterministic help text.
+  if(['invalid-rerun','rerun'].includes(parsed.kind)||(parsed.kind==='help'&&(!ai||!qaScope(parsed.text)))) return help
   if(parsed.kind==='scheduler') {
     const lock=scheduler()
     return lock&&!lock.stale?'Scheduler is running. This describes the worker process; it does not prove the application stack is healthy.':'Scheduler is stopped or its process lock is stale.'
@@ -133,19 +173,24 @@ export async function answerQuestion(question, options={}) {
   const runs=index().slice(-100).reverse().map(r=>read(r.runId)).filter(r=>r&&r.finishedAt&&r.status!=='running'&&!r.seededDefect&&!r.reportOnly)
   const relevant=runs.filter(r=>(!parsed.runId||r.runId===parsed.runId)&&(!parsed.suite||r.suite===parsed.suite||suiteTests(r,parsed.suite).length))
   const chosen=parsed.kind==='last-pass'?relevant.find(r=>passingEvidence(r,parsed.suite)):relevant[0]
-  if(parsed.kind==='explain') {
+  if(parsed.kind==='explain'||parsed.kind==='help') {
     if(!ai) return `${help}\nAI explanations are disabled; recorded facts are available through the questions above.`
+    const general=parsed.kind==='help'
     const evidence=relevant.slice(0,5).map(r=>{
       const s=publicSummary(r)
       return {runId:s.runId,suite:s.suite,environment:s.environment,status:s.status,finishedAt:s.finishedAt,counts:s.counts,
         health:s.pipeline.environment.health,stack:s.pipeline.environment.stack,checks:s.checks.slice(0,20)}
     })
-    if(!evidence.length) return 'No recorded evidence is available for that question.'
+    if(!evidence.length&&!general) return 'No recorded evidence is available for that question.'
     try {
-      const result=await explain({question:plain(parsed.text).slice(0,800),runs:evidence})
-      if(!result||typeof result.answer!=='string'||!result.answer.trim()||result.answer.length>2000||!Array.isArray(result.runIds)||!result.runIds.length
-        ||result.runIds.some(id=>!evidence.some(r=>r.runId===id))) throw new Error('Unvalidated explanation')
-      return `Advisory explanation (suspected causes require investigation):\n${plain(result.answer).replace(/https?:\/\/\S+/g,'[link omitted]')}\n${result.runIds.map(id=>`Source: ${id} · ${reportLink(id,environment)}`).join('\n')}`
+      const result=await explain({question:plain(parsed.text).slice(0,800),runs:evidence,general})
+      if(!result||typeof result.answer!=='string'||!result.answer.trim()||result.answer.length>2000||!Array.isArray(result.runIds)
+        ||(!general&&!result.runIds.length)||result.runIds.some(id=>!evidence.some(r=>r.runId===id))) throw new Error('Unvalidated explanation')
+      const body=plain(result.answer).replace(/https?:\/\/\S+/g,'[link omitted]')
+      const sources=result.runIds.map(id=>`Source: ${id} · ${reportLink(id,environment)}`)
+      return general
+        ? [`AI QA answer (general guidance is not from recorded runs; cited runs are listed below):`,body,...sources].join('\n')
+        : `Advisory explanation (suspected causes require investigation):\n${body}\n${sources.join('\n')}`
     } catch {return 'AI explanation is unavailable or could not be validated. Ask for the latest run, failures, or evidence to see recorded results.'}
   }
   if(!chosen) return 'No matching recorded run or passing evidence was found in the latest 100 runs.'

@@ -6,6 +6,7 @@ import { readRun, readIndex } from '../lib/run-store.mjs'
 import { agentSettings, authorize, conversationAllowed } from './policy.mjs'
 import { AgentStore } from './store.mjs'
 import { answerQuestion, parseRequest, plain, reportLink } from './answers.mjs'
+import { draftTestCases } from './drafts.mjs'
 
 const hash=value=>createHash('sha256').update(value).digest('hex').slice(0,32)
 const timestamp=value=>/^\d+\.\d+$/.test(value||'')
@@ -44,7 +45,14 @@ export function createAgent({store=new AgentStore(),settings=agentSettings,post,
             {type:'button',text:{type:'plain_text',text:'Confirm rerun'},style:'primary',action_id:'qa_rerun_confirm',value:r.id},
             {type:'button',text:{type:'plain_text',text:'Cancel'},action_id:'qa_rerun_cancel',value:r.id},
           ]}]
-        } else if(request.kind==='explain'&&cfg.ai) {
+        } else if(request.kind==='create-tests') {
+          if(!authorize(identity,cfg,true)) text='Only authorized QA users can create test case drafts.'
+          else if(!cfg.ai) text='Test case drafting needs AI enabled for this agent.'
+          else {
+            const draft=await draftTestCases(event.text)
+            text=`Created ${draft.count} draft test cases at ${plain(draft.path)}. Drafts are not reviewed or committed.\n${draft.titles.slice(0,12).map(t=>`• ${plain(t)}`).join('\n')}`
+          }
+        } else if((request.kind==='explain'||request.kind==='help')&&cfg.ai) {
           if(explaining)text='An AI explanation is already in progress. Ask for latest results, failures, or scheduler status while it finishes.'
           else {
             explaining=true

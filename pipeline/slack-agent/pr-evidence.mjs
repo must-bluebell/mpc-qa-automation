@@ -30,6 +30,17 @@ export async function answerPullRequest(kind,{repository,exec=execute}={}) {
     return 'GitHub PR evidence is unavailable. Check GitHub CLI installation, authentication, and read access to the configured repository. No PR testing or merge outcome is inferred.'
   }
   const scope=`Repository: ${repository}. Scope: latest 100 updated PRs and their current-head checks.`
+  if(kind==='list') {
+    const tested=prs.filter(pr=>completedChecks(pr).length)
+      .sort((a,b)=>Math.max(...completedChecks(b).map(checkTime))-Math.max(...completedChecks(a).map(checkTime))).slice(0,5)
+    if(!tested.length)return `${scope}\nNo PR with a completed QA check was found in this scope.`
+    return [`Recently tested PRs (latest ${tested.length} with QA checks):`,scope,
+      ...tested.map(pr=>{
+        const checks=completedChecks(pr),outcomes=[...new Set(checks.map(c=>clean(c.conclusion||c.state)))].join(', ')
+        return `#${pr.number} — ${clean(pr.title)} · ${outcomes} · ${new Date(Math.max(...checks.map(checkTime))).toISOString()}`
+      }),
+      'Individual test cases are not in PR metadata; ask for the last tested PR or open the linked QA report for case-level detail.'].join('\n').slice(0,2800)
+  }
   const pr=kind==='merged'
     ? prs.filter(pr=>timestamp(pr.mergedAt)).sort((a,b)=>timestamp(b.mergedAt)-timestamp(a.mergedAt))[0]
     : prs.filter(pr=>completedChecks(pr).length).sort((a,b)=>Math.max(...completedChecks(b).map(checkTime))-Math.max(...completedChecks(a).map(checkTime)))[0]

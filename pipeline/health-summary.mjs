@@ -14,9 +14,11 @@ const safeStatus=value=>['passed','failed','blocked','infra-failed','crashed','t
 const inWindow=(value,start,end)=>Date.parse(value)>=start&&Date.parse(value)<end
 
 /** Aggregate actual executions, never insert a synthetic test run into history. Rates are fractions. */
-export function buildHealthSummary({end,env,schedules=[],runs=[],jobs=[],timezone='Asia/Seoul'}) {
-  const cutoff=Date.parse(end),start=cutoff-86_400_000
+export function buildHealthSummary({end,env,schedules=[],runs=[],jobs=[],timezone='Asia/Seoul',days=1}) {
+  const cutoff=Date.parse(end)
   if(!Number.isFinite(cutoff))throw new Error('Invalid summary cutoff')
+  if(!Number.isInteger(days)||days<1||days>30)throw new Error('Health window must be 1 to 30 days')
+  const start=cutoff-days*86_400_000
   const eligible=runs.filter(r=>r.env===env&&!r.seededDefect&&!r.reportOnly&&r.status!=='running'&&Date.parse(r.finishedAt)<cutoff)
   const window=eligible.filter(r=>inWindow(r.finishedAt,start,cutoff))
   const categories={api:counts(),uat:counts(),web:counts(),load:counts(),other:counts()},total=counts()
@@ -102,7 +104,7 @@ export function buildHealthSummary({end,env,schedules=[],runs=[],jobs=[],timezon
   }
   const unresolvedFailures=[...unresolved.values()]
   const attention=unresolvedFailures.length||executionFailures||total.failed||total.skipped||total.blocked||scheduled.some(s=>s.missed||s.pending||s.missing)
-  return {start:new Date(start).toISOString(),end:new Date(cutoff).toISOString(),env:safeId(env),
+  return {start:new Date(start).toISOString(),end:new Date(cutoff).toISOString(),env:safeId(env),days,
     runs:{total:window.length,ids:window.map(r=>safeId(r.runId))},categories,counts:total,executionFailures,failureEvents,schedules:scheduled,unresolvedFailures,
     passRate:executed?total.passed/executed:null,executionRate:checks?executed/checks:null,
     latestNightly:latest('nightly-regression'),latestLoad:latest('load'),health:unresolvedFailures.length?'attention':window.length?(attention?'attention':'healthy'):'no-data'}
@@ -119,7 +121,7 @@ export function renderHealthSummary(report,{reportBase}={}) {
   const rate=value=>value===null?'n/a':`${(100*value).toFixed(1)}%`
   const latest=(name,run)=>`${name}: ${run?`${run.status} · ${kstTime(run.finishedAt)} · ${Math.round(run.ageHours)}h old${link(run.runId,reportBase)}`:'no recorded result'}`
   return [`MPC QA daily health — ${report.health} · ${report.env}`,
-    `${kstTime(report.start)} ≤ completion < ${kstTime(report.end)} (24 hours)`,
+    `${kstTime(report.start)} ≤ completion < ${kstTime(report.end)} (${(report.days??1)===1?'24 hours':`${report.days} days`})`,
     `${report.runs.total} actual runs · pass rate ${rate(report.passRate)} · execution coverage ${rate(report.executionRate)}`,
     ...Object.entries(report.categories).map(([name,c])=>`${name==='api'?'API':name==='uat'?'UAT':name}: ${c.passed} passed · ${c.failed} failed · ${c.skipped} skipped · ${c.blocked} blocked`),
     `Execution/infrastructure failures: ${report.executionFailures}`,
@@ -128,7 +130,8 @@ export function renderHealthSummary(report,{reportBase}={}) {
     ...report.schedules.map(s=>`${s.id}: ${s.expected} expected · ${s.completed} completed · ${s.missed} missed · ${s.pending} pending · ${s.missing} absent`),
     `Failure events: ${report.failureEvents.new} new · ${report.failureEvents.recurring} recurring · ${report.failureEvents.newVariants} new variants · ${report.failureEvents.recovered} recovered`,
     latest('Latest nightly',report.latestNightly),latest('Latest load',report.latestLoad),
-    ...report.runs.ids.map(id=>`Run ${id}${link(id,reportBase)}`)].join('\n')
+    ...report.runs.ids.slice(0,(report.days??1)>1?10:undefined).map(id=>`Run ${id}${link(id,reportBase)}`),
+    ...((report.days??1)>1&&report.runs.ids.length>10?[`${report.runs.ids.length-10} more runs in the window are in the private dashboard.`]:[])].join('\n')
 }
 export async function generateHealthSummary(job,state,spec) {
   const dir=join(RUNS_DIR,'health');mkdirSync(dir,{recursive:true,mode:0o700})

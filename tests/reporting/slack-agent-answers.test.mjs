@@ -15,7 +15,7 @@ test('capability questions describe testing only without requiring evidence or A
     const answer=await answerQuestion(question,{...deps([]),ai:true,
       index:()=>{throw new Error('Capabilities must not need run history')},
       explain:()=>{throw new Error('Capabilities must not need AI')}})
-    assert.match(answer,/browser, API, regression, UAT, and load tests/)
+    assert.match(answer,/API, browser, regression, UAT, load/)
     assert.match(answer,/passed, failed, skipped, and blocked/i)
     assert.match(answer,/evidence/i)
     assert.match(answer,/schedule/i)

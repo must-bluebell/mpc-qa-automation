@@ -32,6 +32,16 @@ services:
       - { key: SLACK_CHANNEL_ID, sync: false }
       - { key: SLACK_ALERT_WEBHOOK_URL, sync: false }
       - { key: QA_DASHBOARD_URL, sync: false }
+      # MPC QA Agent listener. Keep QA_SLACK_AGENT_ENABLED at "0" until every sync:false value below is set:
+      # services.mjs stops the whole container if the listener exits, including the dashboard and scheduler.
+      - { key: SLACK_APP_TOKEN, sync: false }
+      - { key: QA_SLACK_TEAM_ID, sync: false }
+      # "*" lets anyone on the team ask questions in channels the bot has joined. Reruns and test drafts still need QA_SLACK_ALLOWED_USER_IDS.
+      - { key: QA_SLACK_ALLOWED_CHANNEL_IDS, value: "*" }
+      - { key: QA_SLACK_ALLOWED_USER_IDS, sync: false }
+      - { key: QA_SLACK_ALLOW_DMS, value: "1" }
+      - { key: QA_SLACK_AGENT_AI, value: "1" }
+      - { key: ANTHROPIC_API_KEY, sync: false }
       # Google sign-in for dashboard viewers (read-only). Leave unset to keep the access key as the only login.
       - { key: QA_GOOGLE_CLIENT_ID, sync: false }
       - { key: QA_GOOGLE_CLIENT_SECRET, sync: false }
