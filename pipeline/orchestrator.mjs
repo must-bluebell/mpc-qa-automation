@@ -131,7 +131,10 @@ export async function runPipeline({ suite: suiteName, env: envName, trigger = 'm
           const name = `${String(i + 1).padStart(2, '0')}-${step.adapter}${step.project ? `-${step.project}` : ''}${step.script ? `-${step.script}` : ''}`
           const stepDir = join(dir, 'steps', name)
           mkdirSync(stepDir, { recursive: true })
-          const remainingMs = () => Math.max(5_000, timeoutMs - (Date.now() - started))
+          // Fair share: each step may use an equal part of the time left, so a slow first step (API) cannot starve the
+          // later ones (regression). Time an earlier step leaves unused flows to the steps after it.
+          const stepCapAt = Date.now() + Math.max(5_000, Math.floor((timeoutMs - (Date.now() - started)) / (steps.length - i)))
+          const remainingMs = () => Math.max(5_000, Math.min(stepCapAt, started + timeoutMs) - Date.now())
           const ctx = { runId: id, runDir: dir, stepDir, env, targetUrl, suite: suiteName, versions: run.versions, remainingMs, seededDefect, echo, productionApiWrites }
           const stepStarted = Date.now()
           let result
