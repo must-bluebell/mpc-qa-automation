@@ -468,12 +468,35 @@ async function renderHome(seq) {
   else document.getElementById('home-body').replaceChildren(h('section', { class: 'panel' }, `Dashboard unavailable: ${failure.message}`))
 }
 
-// ---- Reports: every run for one project, newest first. Each row drills into the run.
-function outcomeMatches(run, outcome) {
-  if (outcome === 'passed') return run.status === 'passed'
-  if (outcome === 'not-passed') return !['passed', 'running'].includes(run.status)
-  if (outcome === 'running') return run.status === 'running'
-  return true
+// ---- Reports: choose a project, then read its latest test report per suite and its execution history.
+// Every list is scoped to the selected project, so runs from other projects never mix in.
+function projectPicker(project) {
+  return h('section', { class: 'panel', id: 'project-picker', 'aria-labelledby': 'project-picker-title' },
+    h('div', { class: 'panel-head' }, h('h2', { id: 'project-picker-title' }, 'Projects'),
+      h('span', { class: 'hint' }, `${state.projects.length} project${state.projects.length === 1 ? '' : 's'} · select one to see its reports`)),
+    h('div', { class: 'project-options' }, state.projects.map(p => h('a', {
+      class: 'project-option', href: `#/reports?project=${encodeURIComponent(p.id)}`,
+      'aria-current': p.id === project ? 'page' : null,
+    },
+    h('span', { class: 'po-name' }, p.id),
+    h('span', { class: 'hint' }, `${p.envs.join(', ') || 'No environment'} · ${p.runs} run${p.runs === 1 ? '' : 's'}`),
+    h('span', { class: 'po-foot' }, p.latest ? badge(p.latest.status) : h('span', { class: 'badge' }, 'No runs yet'),
+      p.latest ? h('span', { class: 'hint' }, when(p.latest.finishedAt)) : null)))))
+}
+
+function suiteReports(o) {
+  return h('section', { class: 'panel', id: 'suite-reports' },
+    h('div', { class: 'panel-head' }, h('h2', {}, 'Latest test report by suite'),
+      h('span', { class: 'hint' }, o.env ? `Environment: ${o.env}` : 'All environments')),
+    o.suites.length ? h('div', { class: 'suite-grid' }, o.suites.map(s => h('article', { class: 'suite-card' },
+      h('div', { class: 'suite-head' }, h('strong', {}, s.suite), badge(s.status)),
+      h('p', { class: 'hint' }, `${s.env ?? '—'} · finished ${when(s.finishedAt)}`),
+      h('dl', { class: 'mini-stats' },
+        h('div', {}, h('dt', {}, 'Passed'), h('dd', {}, s.counts.passed)),
+        h('div', {}, h('dt', {}, 'Failed'), h('dd', {}, s.counts.failed)),
+        h('div', {}, h('dt', {}, 'Blocked'), h('dd', {}, s.counts.blocked))),
+      h('div', { class: 'actions' }, h('a', { class: 'btn primary-link', href: `#/runs/${encodeURIComponent(s.runId)}` }, 'Open report'))))) :
+      emptyState('No suite reports yet', 'Each suite appears here after its first completed run in this project.'))
 }
 
 async function renderReports(seq) {
@@ -484,42 +507,66 @@ async function renderReports(seq) {
   const params = route().params
   const env = params.get('env') || 'all'
   const outcome = params.get('outcome') || 'all'
-  let runs
+  let runs, overview
   try {
-    runs = await api(`/api/runs?${new URLSearchParams({ project, ...(env !== 'all' ? { env } : {}) })}`)
+    [runs, overview] = await Promise.all([
+      api(`/api/runs?${new URLSearchParams({ project, ...(env !== 'all' ? { env } : {}) })}`),
+      api(`/api/overview?${new URLSearchParams({ project, days: '30', env })}`),
+    ])
   } catch (error) {
-    if (seq === renderSeq) app.replaceChildren(h('section', { class: 'panel' }, `Reports unavailable: ${error.message}`))
+    if (seq === renderSeq) app.replaceChildren(projectPickerOr(project), h('section', { class: 'panel' }, `Reports unavailable: ${error.message}`))
     return
   }
   if (seq !== renderSeq) return
   const info = state.projects.find(p => p.id === project)
   const filtered = runs.filter(r => outcomeMatches(r, outcome))
   const shown = filtered.slice(0, reportLimit)
+  const newest = overview.latest
   app.replaceChildren(
     h('section', { class: 'page-head' },
-      h('div', {}, h('h1', {}, `${project} reports`), h('p', { class: 'hint' }, `${runs.length} run${runs.length === 1 ? '' : 's'} in this project · newest first`)),
-      h('form', { class: 'filters', onsubmit: e => e.preventDefault() },
-        h('label', {}, 'Environment', h('select', { name: 'env', onchange: e => { reportLimit = 50; go('/reports', { project, env: e.target.value, outcome }) } },
-          h('option', { value: 'all', selected: env === 'all' }, 'All environments'),
-          (info?.envs ?? []).map(name => h('option', { value: name, selected: env === name }, name)))),
-        h('label', {}, 'Outcome', h('select', { name: 'outcome', onchange: e => { reportLimit = 50; go('/reports', { project, env, outcome: e.target.value }) } },
-          [['all', 'All'], ['passed', 'Passed'], ['not-passed', 'Not passed'], ['running', 'Running']].map(([v, label]) => h('option', { value: v, selected: outcome === v }, label)))))),
+      h('div', {}, h('p', { class: 'eyebrow' }, 'Reports'), h('h1', {}, 'Test reports'),
+        h('p', { class: 'hint' }, 'Pick a project to see its latest test reports and execution history.'))),
+    projectPicker(project),
+    h('section', { class: 'panel project-summary', 'aria-label': `${project} summary` },
+      h('div', {}, h('p', { class: 'eyebrow' }, 'Selected project'), h('h2', {}, project)),
+      h('p', { class: 'hint' }, `${info?.envs.length ? info.envs.join(', ') : 'No environments'} · ${runs.length} run${runs.length === 1 ? '' : 's'} · last finished ${newest ? when(newest.finishedAt) : '—'}`)),
+    suiteReports(overview),
     h('section', { class: 'panel', id: 'run-history' },
-      h('div', { class: 'panel-head' }, h('h2', {}, 'Runs'), h('span', { class: 'hint' }, `Showing ${shown.length} of ${filtered.length}`)),
+      h('div', { class: 'panel-head' }, h('h2', {}, 'Execution history'),
+        h('form', { class: 'filters filters-inline', onsubmit: e => e.preventDefault() },
+          h('label', {}, 'Environment', h('select', { name: 'env', onchange: e => { reportLimit = 50; go('/reports', { project, env: e.target.value, outcome }) } },
+            h('option', { value: 'all', selected: env === 'all' }, 'All environments'),
+            (info?.envs ?? []).map(name => h('option', { value: name, selected: env === name }, name)))),
+          h('label', {}, 'Outcome', h('select', { name: 'outcome', onchange: e => { reportLimit = 50; go('/reports', { project, env, outcome: e.target.value }) } },
+            [['all', 'All'], ['passed', 'Passed'], ['not-passed', 'Not passed'], ['running', 'Running']].map(([v, label]) => h('option', { value: v, selected: outcome === v }, label)))))),
+      h('p', { class: 'hint' }, `Showing ${shown.length} of ${filtered.length}`),
       filtered.length ? runsTable(shown) : emptyState(runs.length ? 'No runs match these filters' : 'No runs yet', runs.length ? 'Change the environment or outcome filter.' : 'Runs started from this dashboard or by a schedule appear here.'),
       filtered.length > shown.length ? h('button', { type: 'button', class: 'more', onclick: () => { reportLimit += 50; render() } }, 'Show 50 more') : null))
 }
 
+function projectPickerOr(project) {
+  return state.projects.length ? projectPicker(project) : emptyState('No projects yet', 'Add a "project" to an environment in pipeline/config/environments.json.')
+}
+
+function outcomeMatches(run, outcome) {
+  if (outcome === 'passed') return run.status === 'passed'
+  if (outcome === 'not-passed') return !['passed', 'running'].includes(run.status)
+  if (outcome === 'running') return run.status === 'running'
+  return true
+}
+
+
 function runsTable(rows) {
   const admin = state.status?.role === 'admin'
-  const headers = ['Started', 'Suite', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration', 'Slack', ...(admin ? [''] : [])]
+  const headers = ['Started', 'Suite', 'Env', 'Status', 'Pass', 'Fail', 'Blocked', 'Duration', 'Report', 'Slack', ...(admin ? [''] : [])]
   return h('div', { class: 'tablewrap' }, h('table', {},
     h('thead', {}, h('tr', {}, headers.map(t => h('th', { class: ['Pass', 'Fail', 'Blocked', 'Duration'].includes(t) ? 'num' : null }, t)))),
     h('tbody', {}, rows.map(r => h('tr', { class: 'click', onclick: () => { location.hash = `#/runs/${r.runId}` } },
-      h('td', {}, when(r.startedAt)), h('td', {}, h('a', { href: `#/runs/${r.runId}`, onclick: e => e.stopPropagation() }, r.suite), r.seededDefect ? ` · ${r.seededDefect}` : ''),
+      h('td', {}, when(r.startedAt)), h('td', {}, r.suite, r.seededDefect ? ` · ${r.seededDefect}` : ''),
       h('td', {}, r.env), h('td', {}, badge(r.status)),
       h('td', { class: 'num' }, r.counts?.passed ?? 0), h('td', { class: 'num' }, r.counts?.failed ?? 0), h('td', { class: 'num' }, r.counts?.blocked ?? 0),
       h('td', { class: 'num' }, secs(r.durationMs)),
+      h('td', {}, h('a', { href: `#/runs/${r.runId}`, onclick: e => e.stopPropagation() }, 'Open report')),
       h('td', {}, r.slack?.length ? r.slack.map(n => h('span', { class: `badge ${n.ok ? 'ok' : 'warn'}` }, `${n.kind}: ${n.ok ? 'sent' : n.code}`)) : '—'),
       admin ? h('td', {}, deleteRunButton(r)) : null)))))
 }

@@ -325,3 +325,13 @@ test('home is the dashboard: the project card and run form share one row at equa
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0)
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Reports', exact: true })).toBeVisible()
 })
+
+test('reports are organised by project: the picker marks the selected project, and each run links to its report', async t => {
+  const history = [{ runId: 'report-run-1', project: 'mpc', suite: 'regression', env: 'local-docker', status: 'passed', startedAt: '2026-11-20T01:00:00Z', finishedAt: '2026-11-20T01:10:00Z', durationMs: 600000, counts: { passed: 3, failed: 0, skipped: 0, blocked: 0, flaky: 0 } }]
+  const { page } = await dashboard(t, { history })
+  await openRoute(page, '#/reports?project=mpc')
+  await expect(page.locator('#project-picker .project-option[aria-current="page"]')).toContainText('mpc')
+  await expect(page.locator('#run-history tbody tr')).toHaveCount(1)
+  await expect(page.locator('#run-history a', { hasText: 'Open report' })).toHaveAttribute('href', '#/runs/report-run-1')
+  await expect(page.locator('#suite-reports')).toContainText('No suite reports yet')
+})

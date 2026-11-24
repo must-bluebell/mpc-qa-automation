@@ -231,3 +231,23 @@ pre.log { margin: 0; max-height: 360px; overflow: auto; background: var(--bg); b
 /* ---- Operations tabs sit under the main dashboard. */
 .ops { display: grid; gap: 16px; min-width: 0; }
 .tab-panel[hidden] { display: none !important; }
+
+/* ---- Reports: project picker, selected-project summary, latest report per suite. */
+.project-options { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.project-option { display: flex; flex-direction: column; gap: 6px; padding: 14px; min-width: 0; border: 1px solid var(--line); border-top: 2px solid var(--line-strong); border-radius: 12px; background: var(--panel-2); color: var(--ink); }
+.project-option:hover { border-color: var(--accent); text-decoration: none; }
+.project-option[aria-current="page"] { border-top-color: var(--accent); background: var(--panel); box-shadow: inset 0 0 0 1px var(--accent); }
+.po-name { font-family: var(--font-display); font-size: 20px; font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
+.po-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
+.project-summary { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.project-summary h2 { margin: 0; font-family: var(--font-display); font-size: 24px; line-height: 1.15; }
+.project-summary .hint { margin: 4px 0 0; }
+.suite-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.suite-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.suite-card .mini-stats { padding: 10px 0; }
+.suite-card .actions { margin-top: auto; }
+.suite-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.suite-head strong { font-family: var(--font-display); font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.suite-card .hint { margin: 0; }
+.filters-inline { margin: 0; }
+.filters-inline label { min-width: 150px; }
